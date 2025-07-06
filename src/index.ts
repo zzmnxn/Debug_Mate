@@ -10,6 +10,7 @@ import typia, { Primitive } from "typia";
 
 import { SGlobal } from "./SGlobal";
 import { BbsArticleService } from "./services/BbsArticleService";
+import { ErrorDiagnosisService } from "./services/ErrorDiagnosisService";
 
 
 
@@ -30,7 +31,9 @@ const main = async (): Promise<void> => {
     IAgenticaRpcService<"chatgpt">,
     IAgenticaRpcListener
   > = new WebSocketServer();
-  await server.open(Number(SGlobal.env.PORT), async (acceptor) => {
+  const port = Number(SGlobal.env.PORT) || 3000;
+  console.log(`🚀 서버가 포트 ${port}에서 시작됩니다...`);
+  await server.open(port, async (acceptor) => {
     const url: URL = new URL(`http://localhost${acceptor.path}`);
     const agent: Agentica<"chatgpt"> = new Agentica({
       model: "chatgpt",
@@ -45,7 +48,12 @@ const main = async (): Promise<void> => {
           application: typia.llm.application<BbsArticleService, "chatgpt">(),
           execute: new BbsArticleService(),
         },
-        
+        {
+          protocol: "class",
+          name: "errorDiagnosis",
+          application: typia.llm.application<ErrorDiagnosisService, "chatgpt">(),
+          execute: new ErrorDiagnosisService(),
+        },
       ],
       histories:
         // check {id} parameter
@@ -57,7 +65,11 @@ const main = async (): Promise<void> => {
       agent,
       listener: acceptor.getDriver(),
     });
+    console.log(`🔧 Agentica 서비스 설정 중...`);
     await acceptor.accept(service);
+    console.log(`✅ 클라이언트 연결됨: ${acceptor.path}`);
+    console.log(`📋 등록된 컨트롤러: bbs, errorDiagnosis`);
   });
+  console.log(`🎯 WebSocket 서버가 포트 ${port}에서 실행 중입니다.`);
 };
 main().catch(console.error);
