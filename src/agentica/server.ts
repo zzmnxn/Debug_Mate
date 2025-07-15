@@ -1,35 +1,20 @@
 import { Agentica } from "@agentica/core";
-import {
-  AgenticaRpcService,
-  IAgenticaRpcListener,
-  IAgenticaRpcService,
-} from "@agentica/rpc";
+import { AgenticaRpcService, IAgenticaRpcListener, IAgenticaRpcService } from "@agentica/rpc";
 import OpenAI from "openai";
 import { WebSocketServer } from "tgrid";
 import typia from "typia";
-import { SGlobal } from "./SGlobal";
-import { ErrorDiagnosisService } from "./agentica/functions";
-
-const getPromptHistories = async (
-  id: string,
-): Promise<any[]> => {
-  id;
-  return [];
-};
+import { ErrorDiagnosisService } from "./functions";
+import { SGlobal } from "../SGlobal";
 
 const main = async (): Promise<void> => {
-  if (SGlobal.env.OPENAI_API_KEY === undefined)
-    console.error("env.OPENAI_API_KEY is not defined.");
-
+  const port = Number(SGlobal.env.PORT);
   const server: WebSocketServer<
     null,
     IAgenticaRpcService<"chatgpt">,
     IAgenticaRpcListener
   > = new WebSocketServer();
-  const port = Number(SGlobal.env.PORT);
   console.log(`Agentica function server running on port ${port}`);
   await server.open(port, async (acceptor) => {
-    const url: URL = new URL(`http://localhost${acceptor.path}`);
     const agent: Agentica<"chatgpt"> = new Agentica({
       model: "chatgpt",
       vendor: {
@@ -44,10 +29,7 @@ const main = async (): Promise<void> => {
           execute: new ErrorDiagnosisService(),
         },
       ],
-      histories:
-        url.pathname === "/"
-          ? []
-          : await getPromptHistories(url.pathname.slice(1)),
+      histories: [],
     });
     const service: AgenticaRpcService<"chatgpt"> = new AgenticaRpcService({
       agent,
@@ -60,4 +42,4 @@ const main = async (): Promise<void> => {
   });
   console.log(`WebSocket server running on port ${port}.`);
 };
-main().catch(console.error); 
+main().catch(console.error);

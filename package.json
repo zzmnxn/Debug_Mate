@@ -20,18 +20,19 @@
   "author": "Wrtn Technologies",
   "license": "ISC",
   "dependencies": {
-    "@agentica/core": "^0.29.4",
+    "@agentica/core": "^0.29.6",
     "@agentica/rpc": "^0.29.5",
     "@samchon/openapi": "^4.3.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "dotenv-expand": "^12.0.1",
     "express": "^5.1.0",
-    "openai": "^5.8.2",
+    "openai": "^5.9.0",
     "tgrid": "^1.1.0",
     "tstl": "^3.0.0",
     "typia": "^9.3.1",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^5.2.2",
