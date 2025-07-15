@@ -18,8 +18,8 @@ const getPromptHistories = async (
 };
 
 const main = async (): Promise<void> => {
-  if (SGlobal.env.OPENAI_API_KEY === undefined)
-    console.error("env.OPENAI_API_KEY is not defined.");
+  if (SGlobal.env.GEMINI_API_KEY === undefined)
+    console.error("env.GEMINI_API_KEY is not defined.");
 
   const server: WebSocketServer<
     null,
@@ -33,7 +33,7 @@ const main = async (): Promise<void> => {
     const agent: Agentica<"chatgpt"> = new Agentica({
       model: "chatgpt",
       vendor: {
-        api: new OpenAI({ apiKey: SGlobal.env.OPENAI_API_KEY }),
+        api: new OpenAI({ apiKey: SGlobal.env.GEMINI_API_KEY }),
         model: "gpt-4o-mini",
       },
       controllers: [
