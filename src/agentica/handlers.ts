@@ -4,14 +4,25 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
 
 export async function diagnoseError({ errorMessage }: { errorMessage: string }) {
-  const prompt = `Explain the cause of the following compiler error message and suggest the reason and a fix.\n\n${errorMessage}`; 
+  const prompt = `
+  Explain the cause of the following compiler error message and suggest the reason and a fix.
+  Respond in Korean. Keep the explanation short and intuitive, but clearly explain how to fix the error.
+  
+  ${errorMessage}
+  `;
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
   return { explanation: result.response.text() };
 }
 
 export async function debugHint({ output }: { output: string }) {
-  const prompt = `Analyze the following program output, infer what might be wrong, and suggest a debugging hint.\n\n${output}`;
+  const prompt = `
+Analyze the following program output, infer what might be wrong, and suggest a debugging hint.
+Respond in Korean. Keep the explanation short and intuitive, but clearly explain the likely cause and how to proceed with debugging.
+
+${output}
+`;
+
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
   return { hint: result.response.text() };
