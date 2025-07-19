@@ -2,15 +2,15 @@ import "dotenv/config";
 import * as fs from "fs";
 import * as path from "path";
 
-import { runLoopCheck } from "./tests/test_loopcheck";
-import { runDiagnoseError } from "./tests/test_diagnoseerror";
-import { runDebugHint } from "./tests/test_debughint";
+import { runLoopCheck } from "./tests/test_loopCheck";
+import { runDiagnoseError } from "./tests/test_diagnoseError";
+import { runDebugHint } from "./tests/test_debugHint";
 
 async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
-    console.error("❌ 분석할 .c 파일을 입력하세요.");
+    console.error("❌ 분석할 파일명을 입력하세요.");
     console.error("예시: npx ts-node test_driver.ts test.c");
     process.exit(1);
   }
