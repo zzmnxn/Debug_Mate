@@ -1,4 +1,5 @@
 import { SGlobal } from "../SGlobal";
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
@@ -36,4 +37,15 @@ export async function loopCheck({ code }: { code: string }) {
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
   return { result: result.response.text() };
+}
+
+
+// moonjeong's hw
+export async function suggestFix({ code }: { code: string }) {
+  const prompt = `Analyze the following code and explain what is wrong and suggest a way to fix it.
+  If code is correct, answer that there is no particular problem. Respond in Korean. Keep the explanation short and intuitive, but clearly explain. \`\`\`${code}\`\`\``;
+
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(prompt);
+  return { suggestion: result.response.text() };
 }

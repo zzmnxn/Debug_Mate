@@ -1,4 +1,4 @@
-import { diagnoseError, debugHint, loopCheck } from "./handlers";
+import { diagnoseError, debugHint, loopCheck, suggestFix } from "./handlers";
 import typia from "typia";
 
 export class ErrorDiagnosisService {
@@ -11,4 +11,9 @@ export class ErrorDiagnosisService {
   async loopCheck({ code }: { code: string }) {
     return loopCheck({ code });
   }
+
+  async suggestFix({ code }: { code: string }) {
+    return suggestFix({ code });
+  }
+
 }
