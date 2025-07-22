@@ -1,6 +1,6 @@
 import { WebSocketServer } from "tgrid";
 import { SGlobal } from "../SGlobal";
-import { diagnoseError, debugHint } from "./handlers";
+import { diagnoseError, debugHint, loopCheck, suggestFix, traceVar } from "./handlers";
 
 const main = async (): Promise<void> => {
   const port = Number(SGlobal.env.PORT);
@@ -11,6 +11,9 @@ const main = async (): Promise<void> => {
     await acceptor.accept({
       diagnoseError,
       debugHint,
+      loopCheck,
+      suggestFix,
+      traceVar
     });
     console.log(`Connection accepted: ${acceptor.path}`);
     console.log(`Available controllers: diagnoseError, debugHint`);

@@ -1,4 +1,4 @@
-import { diagnoseError, debugHint } from "./handlers";
+import { diagnoseError, debugHint, loopCheck } from "./handlers";
 import typia from "typia";
 
 export class ErrorDiagnosisService {
@@ -8,6 +8,13 @@ export class ErrorDiagnosisService {
   async debugHint({ output }: { output: string }) {
     return debugHint({ output });
   }
+  async loopCheck({ code }: { code: string }) {
+    return loopCheck({ code });
+  }
+  async suggestFix({ code }: { code: string }) {
+    return suggestFix({ code });
+  }
+  async traceVar({ code }: { code: string }) {
+    return traceVar({ code });
+  }
 }
-
-// typia.llm.application<ErrorDiagnosisService, "chatgpt">()로 agentica에 등록해서 사용 

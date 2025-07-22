@@ -2,15 +2,15 @@ import "dotenv/config";
 import { diagnoseError, debugHint } from "./src/agentica/handlers";
 
 async function main() {
-  // ¿¹½Ã: ÄÄÆÄÀÏ·¯ ¿¡·¯ ¸Ş½ÃÁö Å×½ºÆ®
+  // ì˜ˆì‹œ: ì»´íŒŒì¼ëŸ¬ ì—ëŸ¬ ë©”ì‹œì§€ í…ŒìŠ¤íŠ¸
   const errorMessage = "error: expected ';' before 'return'";
   const diagnoseResult = await diagnoseError({ errorMessage });
-  console.log("diagnoseError °á°ú:", diagnoseResult.explanation);
+  console.log("diagnoseError ê²°ê³¼:", diagnoseResult.explanation);
 
-  // ¿¹½Ã: ÇÁ·Î±×·¥ Ãâ·Â Å×½ºÆ® (debugHint)
-  const output = "ÇÁ·Î±×·¥ÀÌ ¹«ÇÑ·çÇÁ¿¡ ºüÁø °Í °°½À´Ï´Ù.";
+  // ì˜ˆì‹œ: í”„ë¡œê·¸ë¨ ì¶œë ¥ í…ŒìŠ¤íŠ¸ (debugHint)
+  const output = "í”„ë¡œê·¸ë¨ì´ ë¬´í•œë£¨í”„ì— ë¹ ì§„ ê²ƒ ê°™ìŠµë‹ˆë‹¤.";
   const debugResult = await debugHint({ output });
-  console.log("debugHint °á°ú:", debugResult.hint);
+  console.log("debugHint ê²°ê³¼:", debugResult.hint);
 }
 
-main(); 
+main();
