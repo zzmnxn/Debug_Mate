@@ -1,6 +1,6 @@
 import { WebSocketServer } from "tgrid";
 import { SGlobal } from "../SGlobal";
-import { diagnoseError, debugHint, loopCheck, suggestFix, traceVar } from "./handlers";
+import { diagnoseError, debugHint, loopCheck, suggestFix, traceVar, testBreak } from "./handlers";
 
 const main = async (): Promise<void> => {
   const port = Number(SGlobal.env.PORT);

@@ -1,4 +1,4 @@
-import { diagnoseError, debugHint, loopCheck } from "./handlers";
+import { diagnoseError, debugHint, loopCheck, suggestFix, testBreak, traceVar } from "./handlers";
 import typia from "typia";
 
 export class ErrorDiagnosisService {
