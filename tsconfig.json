@@ -103,6 +103,6 @@
     ],
     "strictNullChecks": true
   },
-  "include": ["src"],
+  "include": ["src", "test_driver.ts"],
   "exclude": ["node_modules"]
 }

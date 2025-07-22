@@ -31,8 +31,8 @@ ${output}
 
 // uuyeong's hw
 export async function loopCheck({ code }: { code: string }) {
-  const prompt = `Analyze the following loop and determine if the termination condition is valid.
-  If it's not valid, explain the issue briefly and suggest how to fix it. Respond in Korean. Keep the explanation short and intuitive. \`\`\`${code}\`\`\``;
+  const prompt = `Review the following loop code and determine if its termination condition is valid. If there is an issue, provide a concise explanation and a corrected example snippet. Respond in Korean, focusing on the core insights.
+  \`\`\`${code}\`\`\``;
 
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
