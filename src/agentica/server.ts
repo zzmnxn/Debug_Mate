@@ -13,7 +13,8 @@ const main = async (): Promise<void> => {
       debugHint,
       loopCheck,
       suggestFix,
-      traceVar
+      traceVar,
+      testBreak
     });
     console.log(`Connection accepted: ${acceptor.path}`);
     console.log(`Available controllers: diagnoseError, debugHint`);

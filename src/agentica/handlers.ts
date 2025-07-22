@@ -59,3 +59,59 @@ export async function traceVar({ code }: { code: string }) {
   const result = await model.generateContent(prompt);
   return { variableTrace: result.response.text() };
 }
+
+// jimin's hw
+export async function testBreak({ codeSnippet }: { codeSnippet: string }) {
+  const prompt = buildPrompt(codeSnippet);
+
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(prompt);
+
+  const responseText = result.response.text().trim();
+
+  try {
+    const parsed = JSON.parse(responseText);
+    return parsed;
+  } catch (err) {
+    throw new Error(`Failed to parse model output as JSON:\n${responseText}`);
+  }
+}
+
+function buildPrompt(codeSnippet: string): string {
+  return `
+You are a static analysis expert specializing in detecting undefined behavior and runtime bugs in C/C++ code.
+
+Analyze the following code snippet or function and determine whether it is likely to cause any critical issue during execution.
+
+The issues you must consider include (but are not limited to):
+
+- Null pointer dereference
+- Division by zero
+- Out-of-bound memory access
+- Use of uninitialized variables
+- Use-after-free
+- Memory leaks (e.g., missing free or delete)
+- Infinite or non-terminating loops
+- Recursion with no base case
+- Dangerous type coercion or overflow
+- Dead code or unreachable branches
+
+If the code is buggy, explain the reason and how to fix it.
+If the code is safe, explain why it does not cause any problem.
+
+⚠️ Your response must strictly follow this JSON format:
+
+{
+  "isBuggy": true or false,
+  "reason": "string (describe why the code is buggy or safe)",
+  "suggestion": "string (how to fix, or null if safe)"
+}
+
+❗ Do not include anything outside this JSON object.
+Do not add comments, explanations, markdown formatting, or any additional prose.
+
+Now analyze the following code:
+
+${codeSnippet}
+  `.trim();
+}

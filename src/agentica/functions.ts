@@ -17,4 +17,7 @@ export class ErrorDiagnosisService {
   async traceVar({ code }: { code: string }) {
     return traceVar({ code });
   }
+  async testBreak({ codeSnippet }: { codeSnippet: string }) {
+    return testBreak({ codeSnippet });
+  }
 }
