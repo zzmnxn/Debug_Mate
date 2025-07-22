@@ -1,4 +1,4 @@
-import { SGlobal } from "../SGlobal";
+import { SGlobal } from "../config/SGlobal";
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
