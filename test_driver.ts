@@ -3,11 +3,11 @@ import "dotenv/config";
 import * as fs from "fs";
 import * as path from "path";
 
-import { runLoopCheck } from "./tests/test_loopCheck";
-import { runDiagnoseError } from "./tests/test_diagnoseError";
-import { runDebugHint } from "./tests/test_debugHint";
-import { runSuggestFix } from "./tests/test_suggestFix";
-import { runTraceVar } from "./tests/test_traceVar";
+import { runLoopCheck } from "./tests/test_loopcheck";
+import { runDiagnoseError } from "./tests/test_diagnoseerror";
+import { runDebugHint } from "./tests/test_debughint";
+import { runSuggestFix } from "./tests/test_suggestfix";
+import { runTraceVar } from "./tests/test_tracevar";
 
 async function main() {
   const args = process.argv.slice(2);
