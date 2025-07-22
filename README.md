@@ -1,3 +1,10 @@
+git remote remove origin
+
+git remote -v 
+로 삭제된 거 확인
+
+git remote add origin https://github.com/zzmnxn/Debug_Mate
+
 # 최신 main으로 이동
 git checkout main
 git pull origin main  # 최신화
