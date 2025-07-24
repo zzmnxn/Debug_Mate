@@ -1,3 +1,4 @@
+
 import { WebSocketServer } from "tgrid";
 import { SGlobal } from "../config/SGlobal";
 import { afterDebug, loopCheck, traceVar, testBreak } from "./handlers";
@@ -20,3 +21,4 @@ const main = async (): Promise<void> => {
   console.log(`WebSocket server running on port ${port}.`);
 };
 main().catch(console.error);
+
