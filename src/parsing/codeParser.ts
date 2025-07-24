@@ -1,3 +1,4 @@
+
 // 코드 파싱 및 분석 유틸리티 예시
 
 /**
@@ -11,4 +12,5 @@ export function extractFunctionNames(code: string): string[] {
     result.push(match[1]);
   }
   return result;
+
 } 

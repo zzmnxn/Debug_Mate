@@ -1,35 +1,60 @@
 import { SGlobal } from "../config/SGlobal";
-
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { CompilerError, CompilerWarning } from '../parsing/compilerResultParser';
 
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
 
-export async function diagnoseError({ errorMessage }: { errorMessage: string }) {
-  const prompt = `
-  Explain the cause of the following compiler error message and suggest the reason and a fix.
-  Respond in Korean. Keep the explanation short and intuitive, but clearly explain how to fix the error.
-  
-  ${errorMessage}
-  `;
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-  return { explanation: result.response.text() };
+
+//jm hw
+export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): string {
+  const MAX_ITEMS = 3;
+
+  const formatError = (e: CompilerError, i: number) =>
+    `[Error ${i + 1}] (${e.severity.toUpperCase()} - ${e.type}) ${e.message}${e.file ? ` at ${e.file}:${e.line}:${e.column}` : ''}`;
+
+  const formatWarning = (w: CompilerWarning, i: number) =>
+    `[Warning ${i + 1}] (${w.type}) ${w.message}${w.file ? ` at ${w.file}:${w.line}:${w.column}` : ''}`;
+
+  const errorText = errors.slice(0, MAX_ITEMS).map(formatError).join('\n');
+  const warningText = warnings.slice(0, MAX_ITEMS).map(formatWarning).join('\n');
+
+  return `
+You are a senior compiler engineer and static analysis expert.
+Your task is to analyze the compiler output and runtime log from a C/C++ program and determine whether the code has any critical problems that need to be addressed before deployment.
+
+=== Summary ===
+${logSummary}
+
+=== Compiler Errors ===
+${errorText || 'None'}
+
+=== Compiler Warnings ===
+${warningText || 'None'}
+
+ IMPORTANT NOTES:
+- Do NOT hallucinate issues not supported by the log.
+-If no critical issues: Say clearly "No critical issues detected"
+- If issues are present: State the most likely cause and suggest a concrete fix (1–2 lines).
+- Do NOT guess beyond the given log. If something is unclear, say so briefly (e.g., "Based on the log alone, it's unclear").
+- Use Korean to response.
+
+Format your response in the following structure:
+
+[Result] {Short message: "Critical issue detected" or "No critical issues detected"}
+[Reason] {Brief explanation of why (e.g., undeclared variable, safe log, etc.)}
+[Suggestion] {Fix or say "No fix required" if none needed}
+Do not add anything outside this format.
+`.trim();
 }
 
-export async function debugHint({ output }: { output: string }) {
-  const prompt = `
-Analyze the following program output, infer what might be wrong, and suggest a debugging hint.
-Respond in Korean. Keep the explanation short and intuitive, but clearly explain the likely cause and how to proceed with debugging.
-
-${output}
-`;
-
+export async function afterDebug(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): Promise<string> {
+  const prompt = buildAfterDebugPrompt(logSummary, errors, warnings);
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
-  return { hint: result.response.text() };
+  return result.response.text().trim();
 }
 
-// uuyeong's hw
+
 export async function loopCheck({ code }: { code: string }) {
   const prompt = `Review the following loop code and determine if its termination condition is valid. If there is an issue, provide a concise explanation and a corrected example snippet. Respond in Korean, focusing on the core insights.
   \`\`\`${code}\`\`\``;
@@ -39,16 +64,6 @@ export async function loopCheck({ code }: { code: string }) {
   return { result: result.response.text() };
 }
 
-
-// moonjeong's hw
-export async function suggestFix({ code }: { code: string }) {
-  const prompt = `Analyze the following code and explain what is wrong and suggest a way to fix it.
-  If code is correct, answer that there is no particular problem. Respond in Korean. Keep the explanation short and intuitive, but clearly explain. \`\`\`${code}\`\`\``;
-
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-  return { suggestion: result.response.text() };
-}
 
 // sohyeon's hw
 export async function traceVar({ code }: { code: string }) {
