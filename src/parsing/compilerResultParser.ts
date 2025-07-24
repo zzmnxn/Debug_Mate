@@ -108,8 +108,8 @@ export interface CompilerResult {
       }
   
       // Optional: sort errors/warnings by line
-      errors.sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
-      warnings.sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
+      //errors.sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
+      //warnings.sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
   
       return {
         success,
