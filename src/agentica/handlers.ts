@@ -1,4 +1,4 @@
-import { SGlobal } from "../SGlobal";
+import { SGlobal } from "../config/SGlobal";
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
@@ -52,9 +52,23 @@ export async function suggestFix({ code }: { code: string }) {
 
 // sohyeon's hw
 export async function traceVar({ code }: { code: string }) {
-  const prompt = `Analyze the following code snippet and trace the flow of variables. For each variable, explain how its value changes throughout the code execution.
-  If a variable is not used, state that. Respond in Korean. Keep the explanation short and intuitive, but clearly explain. \`\`\`${code}\`\`\``;
+  const prompt = `Analyze the following code snippet and trace the flow of variables.
 
+  **Response Format:**
+  - **If no variables are used in the code,** please respond only with "No variables are used."
+  - **If variables are used in the code,** please provide a concise explanation for each variable in the following format:
+    \`\`\`
+    Variable 1: [Variable Name]
+    - [Concise and intuitive explanation of variable value changes]
+    Variable 2: [Variable Name]
+    - [Concise and intuitive explanation of variable value changes]
+    ...
+    \`\`\`
+    The explanation should be short and intuitive, but clearly explain the changes in variable values.
+
+  Please respond in Korean.
+
+  \`\`\`${code}\`\`\``;
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
   return { variableTrace: result.response.text() };
