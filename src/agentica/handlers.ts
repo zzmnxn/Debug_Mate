@@ -42,7 +42,9 @@ Based on this information, please answer the following:
 
  IMPORTANT NOTES:
 - Do NOT hallucinate issues not supported by the log.
-- If you're unsure, say so (e.g., "Based on the log alone, it's unclear").
+-If no critical issues: Say clearly "No critical issues are present based on the given log."
+- If issues are present: State the most likely cause and suggest a concrete fix (1–2 lines).
+- Do NOT guess beyond the given log. If something is unclear, say so briefly (e.g., "Based on the log alone, it's unclear").
 - Use plain English without markdown, bullet points, or extra decoration.
 - Be short but precise.
 `.trim();
