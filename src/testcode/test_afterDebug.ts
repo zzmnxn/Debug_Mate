@@ -1,5 +1,7 @@
+// src/testcode/run_afterDebug_test.ts
 
 import { afterDebug } from "../agentica/handlers";
+import { CompilerResultParser } from "../parsing/compilerResultParser";
 
 const sampleOutput_success = `
 main.c: In function ‘main’:
@@ -25,15 +27,19 @@ main.c: In function ‘main’:
 Compilation successful. No warnings or errors.
 `;
 
+async function runAfterDebugTest(rawOutput: string, label: string) {
+  const parsed = CompilerResultParser.parseCompilerOutput(rawOutput);
+  const summary = CompilerResultParser.generateSummary(parsed);
+
+  console.log(`\n==== ${label} ====`);
+  const response = await afterDebug(summary, parsed.errors, parsed.warnings);
+  console.log(response);
+}
+
 async function main() {
-  console.log("==== 경고만 있는 경우 ====");
-  console.log(await afterDebug(sampleOutput_success, [], []));
-
-  console.log("\n==== 에러/크래시가 있는 경우 ====");
-  console.log(await afterDebug(sampleOutput_withError, [], []));
-
-  console.log("\n==== 완전히 깨끗한 경우 ====");
-  console.log(await afterDebug(sampleOutput_clean, [], []));
+  await runAfterDebugTest(sampleOutput_success, "✅ 경고만 있는 경우");
+  await runAfterDebugTest(sampleOutput_withError, "❌ 에러/크래시가 있는 경우");
+  await runAfterDebugTest(sampleOutput_clean, "✅ 완전히 깨끗한 경우");
 }
 
 main();
