@@ -71,7 +71,7 @@ export async function afterDebugFromCode(code: string): Promise<string> {
 
   try {
     // 컴파일 단계
-    compileLog = execSync(`gcc ${tmpFile} -o /tmp/a.out`, {
+    compileLog = execSync(`gcc -Wall -Wextra -Wpedantic -O2 -Wdiv-by-zero -fanalyzer -fsanitize=undefined ${tmpFile} -o /tmp/a.out`,{
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
     });
