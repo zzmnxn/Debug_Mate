@@ -1,7 +1,7 @@
 
 import { WebSocketServer } from "tgrid";
 import { SGlobal } from "../config/SGlobal";
-import { afterDebug, loopCheck, traceVar, testBreak } from "./handlers";
+import { afterDebug, afterDebugFromCode, loopCheck, traceVar, testBreak } from "./handlers";
 
 const main = async (): Promise<void> => {
   const port = Number(SGlobal.env.PORT);
@@ -11,6 +11,7 @@ const main = async (): Promise<void> => {
   await server.open(port, async (acceptor) => {
     await acceptor.accept({
       afterDebug,
+      afterDebugFromCode,
       loopCheck,
       traceVar,
       testBreak
