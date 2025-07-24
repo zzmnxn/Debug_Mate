@@ -1,5 +1,5 @@
 import { WebSocketServer } from "tgrid";
-import { SGlobal } from "../SGlobal";
+import { SGlobal } from "../config/SGlobal";
 import { diagnoseError, debugHint, loopCheck, suggestFix, traceVar, testBreak } from "./handlers";
 
 const main = async (): Promise<void> => {
