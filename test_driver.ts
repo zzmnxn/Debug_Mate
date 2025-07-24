@@ -4,14 +4,13 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { runLoopCheck } from "./src/testcode/test_loopCheck";
-import { runSuggestFix } from "./src/testcode/test_afterDebug";
 import { runTraceVar } from "./src/testcode/test_traceVar";
 
 async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
-    console.error("❌ 분석할 파일명을 입력하세요.");
+    console.error("❌ 분석할 파일명을 입력하세요 .");
     console.error("예시: npx ts-node test_driver.ts test.c");
     process.exit(1);
   }
@@ -29,7 +28,6 @@ async function main() {
   console.log(`✅ '${filename}'에 대한 분석을 시작합니다.\n`);
 
   await runLoopCheck(code);
-  await runSuggestFix(code);
   await runTraceVar(code);
 
   console.log("\n✅ 모든 분석이 완료되었습니다.");
