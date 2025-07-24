@@ -1,7 +1,10 @@
 import { SGlobal } from "../config/SGlobal";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { CompilerError, CompilerWarning } from '../parsing/compilerResultParser';
-
+import { CompilerError, CompilerWarning, CompilerResultParser } from '../parsing/compilerResultParser';
+import { execSync } from "child_process";
+import { spawnSync } from "child_process";
+import fs from "fs";
+import path from "path";
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
 
 
@@ -47,12 +50,56 @@ Do not add anything outside this format.
 `.trim();
 }
 
+/**
+ * 1. afterDebug: 에러/경고 로그 + 요약을 받아 Gemini 분석 수행
+ */
 export async function afterDebug(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): Promise<string> {
   const prompt = buildAfterDebugPrompt(logSummary, errors, warnings);
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
   return result.response.text().trim();
 }
+
+/**
+ * 2. afterDebugFromCode: 코드 입력 → 컴파일 → 로그 파싱 → Gemini 분석까지 자동 수행
+ */
+export async function afterDebugFromCode(code: string): Promise<string> {
+  const tmpFile = path.join("/tmp", `code_${Date.now()}.c`);
+  fs.writeFileSync(tmpFile, code);
+
+  let compileLog = "";
+
+  try {
+    // 컴파일 단계
+    compileLog = execSync(`gcc ${tmpFile} -o /tmp/a.out`, {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    // 실행 단계
+    compileLog += "\n\n=== Runtime Output ===\n";
+    const run = spawnSync("/tmp/a.out", { encoding: "utf-8" });
+
+    compileLog += run.stdout || "";
+    compileLog += run.stderr || "";
+
+    if (run.error) {
+      compileLog += `\n[Runtime Error] ${run.error.message}`;
+    }
+
+  } catch (err: any) {
+    // 컴파일 에러
+    compileLog += "\n\n=== Compile Error ===\n";
+    compileLog += err.stderr?.toString?.() || err.message;
+  }
+  //디버깅 문장장
+  //console.log("=== 🧾 GCC + Runtime 로그 ===");
+  //console.log(compileLog);
+  const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
+  const summary = CompilerResultParser.generateSummary(parsed);
+  return afterDebug(summary, parsed.errors, parsed.warnings);
+}
+
 
 
 export async function loopCheck({ code }: { code: string }) {
