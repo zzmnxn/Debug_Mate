@@ -69,9 +69,9 @@ export async function loopCheck({ code }: { code: string }) {
 export async function traceVar({ code }: { code: string }) {
   const prompt = `Analyze the following code snippet and trace the flow of variables.
 
-Response Format:
-- If no variables are used in the code, please respond only with "No variables are used."
-- If variables are used in the code, please provide a concise explanation for each variable in the following format:
+  **Response Format:**
+  - **If no variables are used in the code,** please respond only with "No variables are used."
+  - **If variables are used in the code,** please provide a concise explanation for each variable in the following format:
     \`\`\`
     Variable 1: [Variable Name]
     - [Concise and intuitive explanation of variable value changes]
