@@ -4,9 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { runLoopCheck } from "./src/testcode/test_loopCheck";
-import { runDiagnoseError } from "./src/testcode/test_diagnoseError";
-import { runDebugHint } from "./src/testcode/test_debugHint";
-import { runSuggestFix } from "./src/testcode/test_suggestFix";
+import { runSuggestFix } from "./src/testcode/test_afterDebug";
 import { runTraceVar } from "./src/testcode/test_traceVar";
 
 async function main() {
@@ -31,8 +29,6 @@ async function main() {
   console.log(`✅ '${filename}'에 대한 분석을 시작합니다.\n`);
 
   await runLoopCheck(code);
-  await runDiagnoseError(code);
-  await runDebugHint(code);
   await runSuggestFix(code);
   await runTraceVar(code);
 
