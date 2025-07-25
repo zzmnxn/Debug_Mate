@@ -42,6 +42,11 @@ export interface CompilerResult {
       'stack overflow',
       'aborted',
       'assertion failed',
+      'division by zero',
+      'runtime error',
+      'undefined behavior',
+      'buffer overflow',
+      'null pointer dereference',
     ];
   
     static parseCompilerOutput(rawOutput: string): CompilerResult {
@@ -91,17 +96,58 @@ export interface CompilerResult {
           continue;
         }
   
-        // Runtime crash detection
+        // Memory leak detection
+        if (/leak|memory leak|AddressSanitizer.*leak/i.test(trimmedLine)) {
+          success = false;
+          errors.push({
+            type: 'runtime',
+            severity: 'fatal',
+            message: 'Memory leak detected by AddressSanitizer or log',
+          });
+        }
+        // Dangerous cast detection
+        if (/invalid cast|bad address|runtime error:.*cast|pointer.*from.*integer|dangerous cast|segmentation fault|SIGSEGV|bus error|dereference|invalid pointer|cannot access memory/i.test(trimmedLine)) {
+          success = false;
+          errors.push({
+            type: 'runtime',
+            severity: 'fatal',
+            message: 'Dangerous type cast or invalid pointer usage detected',
+          });
+        }
+        // Infinite loop detection (timeout)
+        if (/execution timed out|possible infinite loop|loopcheck\(\)/i.test(trimmedLine)) {
+          success = false;
+          errors.push({
+            type: 'runtime',
+            severity: 'fatal',
+            message: 'Infinite loop or intractable execution detected (timeout)',
+          });
+        }
+        // Runtime crash detection (improved: extract line/col/message)
         for (const keyword of this.runtimeKeywords) {
           if (trimmedLine.toLowerCase().includes(keyword)) {
             success = false;
             if (!executionResult) executionResult = { exitCode: -1, crashed: true };
             executionResult.crashed = true;
-            errors.push({
-              type: 'runtime',
-              severity: 'fatal',
-              message: `Runtime error: ${keyword}`,
-            });
+            // Try to extract file, line, column, and message
+            const runtimeRegex = /([^:]+):(\d+):(\d+): (runtime error|undefined behavior):? (.+)?/i;
+            const match = runtimeRegex.exec(trimmedLine);
+            if (match) {
+              errors.push({
+                file: match[1],
+                line: parseInt(match[2]),
+                column: parseInt(match[3]),
+                type: 'runtime',
+                severity: 'fatal',
+                message: match[5] ? match[5].trim() : keyword,
+              });
+            } else {
+              errors.push({
+                type: 'runtime',
+                severity: 'fatal',
+                message: `Runtime error: ${keyword}`,
+              });
+            }
             break;
           }
         }

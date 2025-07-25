@@ -47,7 +47,16 @@ Format your response in the following structure:
 [Reason] {Brief explanation of why (e.g., undeclared variable, safe log, etc.)}
 [Suggestion] {Fix or say "No fix required" if none needed}
 Do not add anything outside this format.
+
+=== Analysis Rules ===
+- If error type is "undeclared" or message contains "undeclared", always treat as critical.
+- If a warning or message contains "memory leak" or "leaked", treat it as a critical issue.
+- For unused variable warnings, if variable name is vague (like 'temp'), suggest renaming or removal.
+- If runtime log contains "runtime error", check if it follows a dangerous cast (e.g., int to pointer). If the code contains a dangerous cast pattern (예: (char*)정수, (int*)정수 등), 반드시 Reason에 'dangerous cast 의심'을 명시하고, Suggestion에 포인터 변환 및 역참조 코드를 점검하라고 안내할 것.
+- If the summary or runtime log contains "[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.", do NOT analyze the cause. Just output the hint exactly as the Suggestion and say "Critical issue detected" in Result.
+
 `.trim();
+///다른 함수를 이용해야할 거 같으면 [Hint] ~~ 을 사용해보세요라고 유도 함////////
 }
 
 /**
@@ -70,31 +79,62 @@ export async function afterDebugFromCode(code: string): Promise<string> {
   let compileLog = "";
 
   try {
-    // 컴파일 단계
-    compileLog = execSync(`gcc -Wall -Wextra -Wpedantic -O2 -Wdiv-by-zero -fanalyzer -fsanitize=undefined ${tmpFile} -o /tmp/a.out`,{
+    // 컴파일 단계 - spawnSync 사용으로 변경하여 stderr 확실히 캡처
+    const compileResult = spawnSync("gcc", [
+      "-Wall", "-Wextra", "-Wpedantic", "-O2", "-Wdiv-by-zero", 
+      "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address", tmpFile, "-o", "/tmp/a.out"
+    ], {
       encoding: "utf-8",
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"]
     });
 
-    // 실행 단계
-    compileLog += "\n\n=== Runtime Output ===\n";
-    const run = spawnSync("/tmp/a.out", { encoding: "utf-8" });
+    // 컴파일 결과 로그 수집
+    if (compileResult.stdout) {
+      compileLog += compileResult.stdout;
+    }
+    if (compileResult.stderr) {
+      compileLog += compileResult.stderr;
+    }
 
-    compileLog += run.stdout || "";
-    compileLog += run.stderr || "";
+    // 컴파일 성공 시에만 실행
+    if (compileResult.status === 0) {
+      compileLog += "\n\n=== Runtime Output ===\n";
+      const runResult = spawnSync("/tmp/a.out", [], { encoding: "utf-8", timeout: 1000 }); // 1초 제한
 
-    if (run.error) {
-      compileLog += `\n[Runtime Error] ${run.error.message}`;
+      if (runResult.stdout) {
+        compileLog += runResult.stdout;
+      }
+      if (runResult.stderr) {
+        compileLog += runResult.stderr;
+      }
+      if (runResult.stderr.includes("runtime error:")) {
+        compileLog += `\n[Runtime Type] UndefinedBehaviorSanitizer runtime error (UB 가능성)`;
+      }
+      if (runResult.error) {
+        const errorAny = runResult.error as any;
+        if (errorAny && errorAny.code === 'ETIMEDOUT') {
+          compileLog += `\n[Runtime Error] Execution timed out (possible infinite loop)\n loopCheck() 함수를 사용해보세요`;
+        } else {
+          compileLog += `\n[Runtime Error] ${runResult.error.message}`;
+        }
+      }
+    } else {
+      // 컴파일 실패
+      compileLog += "\n\n=== Compile Failed ===\n";
+      if (compileResult.error) {
+        compileLog += `[Compile Process Error] ${compileResult.error.message}\n`;
+      }
     }
 
   } catch (err: any) {
-    // 컴파일 에러
-    compileLog += "\n\n=== Compile Error ===\n";
-    compileLog += err.stderr?.toString?.() || err.message;
+    // 예상치 못한 에러
+    compileLog += "\n\n=== Unexpected Error ===\n";
+    compileLog += err.message || err.toString();
   }
-  //디버깅 문장장
-  //console.log("=== 🧾 GCC + Runtime 로그 ===");
-  //console.log(compileLog);
+  // 디버깅용 로그 (필요시 주석 해제)
+  // console.log("=== 🧾 GCC + Runtime 로그 ===");
+  // console.log(compileLog);
+
   const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
   const summary = CompilerResultParser.generateSummary(parsed);
   return afterDebug(summary, parsed.errors, parsed.warnings);
