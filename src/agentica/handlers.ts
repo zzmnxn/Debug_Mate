@@ -47,7 +47,16 @@ Format your response in the following structure:
 [Reason] {Brief explanation of why (e.g., undeclared variable, safe log, etc.)}
 [Suggestion] {Fix or say "No fix required" if none needed}
 Do not add anything outside this format.
+
+=== Analysis Rules ===
+- If error type is "undeclared" or message contains "undeclared", always treat as critical.
+- If a warning or message contains "memory leak" or "leaked", treat it as a critical issue.
+- For unused variable warnings, if variable name is vague (like 'temp'), suggest renaming or removal.
+- If runtime log contains "runtime error", check if it follows a dangerous cast (e.g., int to pointer). If the code contains a dangerous cast pattern (예: (char*)정수, (int*)정수 등), 반드시 Reason에 'dangerous cast 의심'을 명시하고, Suggestion에 포인터 변환 및 역참조 코드를 점검하라고 안내할 것.
+- If the summary or runtime log contains "[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.", do NOT analyze the cause. Just output the hint exactly as the Suggestion and say "Critical issue detected" in Result.
+
 `.trim();
+///다른 함수를 이용해야할 거 같으면 [Hint] ~~ 을 사용해보세요라고 유도 함////////
 }
 
 /**
@@ -73,7 +82,7 @@ export async function afterDebugFromCode(code: string): Promise<string> {
     // 컴파일 단계 - spawnSync 사용으로 변경하여 stderr 확실히 캡처
     const compileResult = spawnSync("gcc", [
       "-Wall", "-Wextra", "-Wpedantic", "-O2", "-Wdiv-by-zero", 
-      "-fanalyzer", "-fsanitize=undefined", tmpFile, "-o", "/tmp/a.out"
+      "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address", tmpFile, "-o", "/tmp/a.out"
     ], {
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"]
@@ -90,7 +99,7 @@ export async function afterDebugFromCode(code: string): Promise<string> {
     // 컴파일 성공 시에만 실행
     if (compileResult.status === 0) {
       compileLog += "\n\n=== Runtime Output ===\n";
-      const runResult = spawnSync("/tmp/a.out", [], { encoding: "utf-8" });
+      const runResult = spawnSync("/tmp/a.out", [], { encoding: "utf-8", timeout: 1000 }); // 1초 제한
 
       if (runResult.stdout) {
         compileLog += runResult.stdout;
@@ -98,8 +107,16 @@ export async function afterDebugFromCode(code: string): Promise<string> {
       if (runResult.stderr) {
         compileLog += runResult.stderr;
       }
+      if (runResult.stderr.includes("runtime error:")) {
+        compileLog += `\n[Runtime Type] UndefinedBehaviorSanitizer runtime error (UB 가능성)`;
+      }
       if (runResult.error) {
-        compileLog += `\n[Runtime Error] ${runResult.error.message}`;
+        const errorAny = runResult.error as any;
+        if (errorAny && errorAny.code === 'ETIMEDOUT') {
+          compileLog += `\n[Runtime Error] Execution timed out (possible infinite loop)\n loopCheck() 함수를 사용해보세요`;
+        } else {
+          compileLog += `\n[Runtime Error] ${runResult.error.message}`;
+        }
       }
     } else {
       // 컴파일 실패
