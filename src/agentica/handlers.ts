@@ -114,9 +114,9 @@ export async function afterDebugFromCode(code: string): Promise<string> {
     compileLog += "\n\n=== Unexpected Error ===\n";
     compileLog += err.message || err.toString();
   }
-
-  console.log("=== 🧾 GCC + Runtime 로그 ===");
-  console.log(compileLog);
+  // 디버깅용 로그 (필요시 주석 해제)
+  // console.log("=== 🧾 GCC + Runtime 로그 ===");
+  // console.log(compileLog);
 
   const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
   const summary = CompilerResultParser.generateSummary(parsed);
