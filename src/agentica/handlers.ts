@@ -70,31 +70,54 @@ export async function afterDebugFromCode(code: string): Promise<string> {
   let compileLog = "";
 
   try {
-    // 컴파일 단계
-    compileLog = execSync(`gcc -Wall -Wextra -Wpedantic -O2 -Wdiv-by-zero -fanalyzer -fsanitize=undefined ${tmpFile} -o /tmp/a.out`,{
+    // 컴파일 단계 - spawnSync 사용으로 변경하여 stderr 확실히 캡처
+    const compileResult = spawnSync("gcc", [
+      "-Wall", "-Wextra", "-Wpedantic", "-O2", "-Wdiv-by-zero", 
+      "-fanalyzer", "-fsanitize=undefined", tmpFile, "-o", "/tmp/a.out"
+    ], {
       encoding: "utf-8",
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"]
     });
 
-    // 실행 단계
-    compileLog += "\n\n=== Runtime Output ===\n";
-    const run = spawnSync("/tmp/a.out", { encoding: "utf-8" });
+    // 컴파일 결과 로그 수집
+    if (compileResult.stdout) {
+      compileLog += compileResult.stdout;
+    }
+    if (compileResult.stderr) {
+      compileLog += compileResult.stderr;
+    }
 
-    compileLog += run.stdout || "";
-    compileLog += run.stderr || "";
+    // 컴파일 성공 시에만 실행
+    if (compileResult.status === 0) {
+      compileLog += "\n\n=== Runtime Output ===\n";
+      const runResult = spawnSync("/tmp/a.out", [], { encoding: "utf-8" });
 
-    if (run.error) {
-      compileLog += `\n[Runtime Error] ${run.error.message}`;
+      if (runResult.stdout) {
+        compileLog += runResult.stdout;
+      }
+      if (runResult.stderr) {
+        compileLog += runResult.stderr;
+      }
+      if (runResult.error) {
+        compileLog += `\n[Runtime Error] ${runResult.error.message}`;
+      }
+    } else {
+      // 컴파일 실패
+      compileLog += "\n\n=== Compile Failed ===\n";
+      if (compileResult.error) {
+        compileLog += `[Compile Process Error] ${compileResult.error.message}\n`;
+      }
     }
 
   } catch (err: any) {
-    // 컴파일 에러
-    compileLog += "\n\n=== Compile Error ===\n";
-    compileLog += err.stderr?.toString?.() || err.message;
+    // 예상치 못한 에러
+    compileLog += "\n\n=== Unexpected Error ===\n";
+    compileLog += err.message || err.toString();
   }
-  //디버깅 문장장
-  //console.log("=== 🧾 GCC + Runtime 로그 ===");
-  //console.log(compileLog);
+
+  console.log("=== 🧾 GCC + Runtime 로그 ===");
+  console.log(compileLog);
+
   const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
   const summary = CompilerResultParser.generateSummary(parsed);
   return afterDebug(summary, parsed.errors, parsed.warnings);
