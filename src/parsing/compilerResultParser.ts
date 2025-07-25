@@ -96,6 +96,33 @@ export interface CompilerResult {
           continue;
         }
   
+        // Memory leak detection
+        if (/leak|memory leak|AddressSanitizer.*leak/i.test(trimmedLine)) {
+          success = false;
+          errors.push({
+            type: 'runtime',
+            severity: 'fatal',
+            message: 'Memory leak detected by AddressSanitizer or log',
+          });
+        }
+        // Dangerous cast detection
+        if (/invalid cast|bad address|runtime error:.*cast|pointer.*from.*integer|dangerous cast|segmentation fault|SIGSEGV|bus error|dereference|invalid pointer|cannot access memory/i.test(trimmedLine)) {
+          success = false;
+          errors.push({
+            type: 'runtime',
+            severity: 'fatal',
+            message: 'Dangerous type cast or invalid pointer usage detected',
+          });
+        }
+        // Infinite loop detection (timeout)
+        if (/execution timed out|possible infinite loop|loopcheck\(\)/i.test(trimmedLine)) {
+          success = false;
+          errors.push({
+            type: 'runtime',
+            severity: 'fatal',
+            message: 'Infinite loop or intractable execution detected (timeout)',
+          });
+        }
         // Runtime crash detection (improved: extract line/col/message)
         for (const keyword of this.runtimeKeywords) {
           if (trimmedLine.toLowerCase().includes(keyword)) {
