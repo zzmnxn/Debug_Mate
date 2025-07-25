@@ -1,55 +1,114 @@
 import { afterDebugFromCode } from "../agentica/handlers";
-
-const undeclaredVar = `
-#include <stdio.h>
-
+const tests = [
+   {
+     name: "❌ Syntax Error (missing semicolon)",
+     code: `
+ #include <stdio.h>
+ int main() {
+     printf("Hello")
+     return 0;
+ }
+ `,
+   },
+   {
+     name: "❌ Undeclared Variable",
+     code: `
+ #include <stdio.h>
+ int main() {
+     printf("%d", x);  // x is undeclared
+     return 0;
+ }
+ `,
+   },
+   {
+     name: "❌ Division by Zero",
+     code: `
+ #include <stdio.h>
+ int main() {
+     int a = 10;
+     int b = 0;
+     int c = a / b;
+     printf("%d", c);
+     return 0;
+ }
+`,
+  },
+   {
+     name: "❌ Null Pointer Dereference",
+     code: `
+ #include <stdio.h>
+ int main() {
+     int *p = NULL;
+     printf("%d", *p);  // segfault
+     return 0;
+ }
+ `,
+   },
+  {
+    name: "❌ Memory Leak",
+    code: `
+#include <stdlib.h>
 int main() {
-    printf("%d", x);  // x is undeclared
+    int *arr = (int*)malloc(10 * sizeof(int));
+    arr[0] = 42; // but never freed
     return 0;
 }
-`;
-
-const divideByZero = `
+`,
+  },
+  {
+    name: "❌ Use After Free",
+    code: `
+#include <stdlib.h>
 #include <stdio.h>
-
 int main() {
-    int a = 10;
-    int b = 0;
-    int c = a / b;  // Division by zero
-    printf("%d", c);
+    int *ptr = (int*)malloc(sizeof(int));
+    free(ptr);
+    *ptr = 5; // use after free
+    printf("%d", *ptr);
     return 0;
 }
-`;
-
-const syntaxError = `
-#include <stdio.h>
-
-int main() {
-    printf("Hello"
-    return 0;
-}
-`;
-
-const unusedVar = `
+`,
+  },
+  {
+    name: "❌ Unused Variable",
+    code: `
 #include <stdio.h>
 
 int main() {
     int temp = 42;
     return 0;
 }
-`;
-
-async function test(name: string, code: string) {
-  console.log(`\n==== 🧪 ${name} ====\n`);
-  const result = await afterDebugFromCode(code);
-  console.log(result);
+`,
+  },
+  {
+    name: "❌ Dangerous Type Cast",
+    code: `
+#include <stdio.h>
+int main() {
+    char *p = (char)123456; // invalid cast
+    printf("%c", *p);
+    return 0;
 }
+`,
+  },
+  {
+    name: "❌ Infinite Loop",
+    code: `
+int main() {
+    while(1) {}
+    return 0;
+}
+`,
+  },
+];
 
 async function main() {
-  await test("❌ Undeclared variable", undeclaredVar);
-  await test("❌ Division by zero", divideByZero);
-  await test("❌ Syntax error (missing semicolon)", syntaxError);
-  await test("⚠️ Unused variable warning", unusedVar);
+  for (const { name, code } of tests) {
+    console.log(`\n==== 🧪 ${name} ====\n`);
+    const result = await afterDebugFromCode(code);
+    console.log(result);
+  }
 }
 
 main().catch(console.error);
+
