@@ -6,7 +6,7 @@ const main = async (): Promise<void> => {
   const port = Number(SGlobal.env.PORT);
   const server = new WebSocketServer();
 
-  console.log(`Gemini function server running on port ${port}`);
+  console.log(`Groq function server running on port ${port}`);
   await server.open(port, async (acceptor) => {
     await acceptor.accept({
       diagnoseError,
