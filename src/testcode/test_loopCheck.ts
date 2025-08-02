@@ -1,3 +1,4 @@
+
 import { ErrorDiagnosisService } from "../agentica/functions";
 import { extractLoopsFromCode } from "../parsing/loopExtractor";
 
@@ -12,4 +13,5 @@ export async function runLoopCheck(code: string) {
     const result = await service.loopCheck({ code: loop });
     console.log("[루프 체크 결과]", result.result);
   }
+
 } 
