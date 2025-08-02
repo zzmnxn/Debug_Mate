@@ -9,5 +9,11 @@ int main() {
         printf("wow\n");
     }
 
+    int a = 1;
+    while(a){
+        printf("holly\n");
+        a = 0;
+    }
+
     return 0;
 }

@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SGlobal } from "../config/SGlobal";
+import { extractLoopsFromCode } from "../parsing/loopExtractor";
 
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY!);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -22,9 +23,23 @@ export async function debugHint({ output }: { output: string }) {
 }
 
 export async function loopCheck({ code }: { code: string }) {
-  const prompt = `Review the following loop code and determine if its termination condition is valid. If there is an issue, provide a concise explanation and a corrected example snippet. Respond in Korean, focusing on the core insights.\n\n${code}`;
-  const result = await model.generateContent(prompt);
-  return { result: result.response.text() };
+  const loops = extractLoopsFromCode(code);
+  
+  if (loops.length === 0) {
+    return { result: "코드에서 for/while 루프를 찾을 수 없습니다." };
+  }
+  
+  const results = [];
+  for (let i = 0; i < loops.length; i++) {
+    const loop = loops[i];
+    const prompt = `Review the following loop code and determine if its termination condition is valid. If there is an issue, provide a concise explanation and a corrected example snippet. Respond in Korean, focusing on the core insights.\n\n${loop}`;
+    const result = await model.generateContent(prompt);
+    const analysis = result.response.text();
+    
+    results.push(`**루프 ${i + 1}**:\n\`\`\`\n${loop.trim()}\n\`\`\`\n\n**분석 결과**:\n${analysis}`);
+  }
+  
+  return { result: `루프 분석 완료 (총 ${loops.length}개)\n\n${results.join('\n\n---\n\n')}` };
 }
 
 export async function suggestFix({ code }: { code: string }) {

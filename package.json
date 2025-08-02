@@ -9,7 +9,8 @@
     "start": "node lib",
     "start:http": "ts-node src/http-server.ts",
     "start:http:js": "node http-server.js",
-    "test:http": "ts-node http-test.ts"
+    "test:http": "ts-node http-test.ts",
+    "debug": "ts-node src/agentica/DebugAgent.ts"
   },
   "keywords": [
     "agentica",
