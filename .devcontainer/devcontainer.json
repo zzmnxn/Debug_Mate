@@ -1,0 +1,16 @@
+{
+  "name": "agentica-codespace",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "settings": {
+    "terminal.integrated.defaultProfile.linux": "bash"
+  },
+  "extensions": [
+    "ms-vscode.cpptools",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint"
+  ],
+  "postCreateCommand": "sudo apt update && sudo apt install -y build-essential && npm install -g typescript ts-node typia",
+  "forwardPorts": [3000, 5173]
+}
