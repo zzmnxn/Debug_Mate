@@ -109,9 +109,7 @@ async function main() {
     console.log("[AI 분석 결과]\n" + analysis);
     console.log("[마킹된 파일 경로]", markedFilePath);
     if (markedFilePath) {
-      const fs = require("fs");
-      const markedContent = fs.readFileSync(markedFilePath, "utf8");
-      console.log("[마킹된 코드 예시]\n" + markedContent.split("\n").slice(0, 10).join("\n") + (markedContent.split("\n").length > 10 ? "\n..." : ""));
+      console.log(`[마킹된 코드 파일이 저장되었습니다: ${markedFilePath}]`);
     }
   }
 }
