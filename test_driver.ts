@@ -3,8 +3,10 @@ import "dotenv/config";
 import * as fs from "fs";
 import * as path from "path";
 
+import { runBeforeDebug } from "./src/testcode/test_beforeDebug";
 import { runLoopCheck } from "./src/testcode/test_loopCheck";
 import { runTraceVar } from "./src/testcode/test_traceVar";
+
 
 async function main() {
   const args = process.argv.slice(2);
@@ -27,6 +29,7 @@ async function main() {
 
   console.log(`✅ '${filename}'에 대한 분석을 시작합니다.\n`);
 
+  await runBeforeDebug(code);
   await runLoopCheck(code);
   await runTraceVar(code);
 

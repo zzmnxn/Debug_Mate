@@ -248,6 +248,66 @@ export async function testBreak({ codeSnippet }: { codeSnippet: string }) {
   }
 }
 
+// moonjeong's hw
+export async function beforeDebug({ code }: { code: string }) {
+  const prompt = `
+당신은 C 언어 전문가입니다. 아래는 사용자가 작성 중인 전체 코드입니다.
+
+코드가 아직 실행되기 전 상태로, 문법 오류, 누락된 세미콜론, 선언되지 않은 변수, 함수 호출 오류, 누락된 return 문 등 명백한 문제점이 있는지 확인해주세요.
+
+가능하면 줄 번호를 포함해 수정 제안을 해주세요. 아직 작성 중일 수 있으므로 유연하게 판단해주세요.
+
+답변은 다음 형식을 지켜주세요:
+
+[Result] 문제가 감지되었는지 여부 (예: "문제 있음", "문제 없음")
+[Issues] 줄 번호와 함께 발견된 주요 문제 요약 (없으면 "없음")
+[Suggestions] 각 문제에 대한 간단한 수정 제안 (없으면 "없음")
+
+아래는 코드입니다:
+\`\`\`c
+${code}
+\`\`\`
+`;
+
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(prompt);
+  return { result: result.response.text() };
+}
+
+// moonjeong's hw
+export async function inProgressDebug(code: string): Promise<string> {
+  const prompt = `
+당신은 C 언어 디버깅 전문가입니다.
+
+사용자가 코드를 작성하는 도중입니다. 아직 완성되지 않은 코드일 수 있습니다.
+현재까지 작성된 코드에서 다음을 찾아주세요:
+
+1. 문법 오류나 괄호 누락
+2. 변수 선언 누락
+3. 흐름상 부자연스러운 부분
+4. 명확한 개선점이 있는 코드
+
+🎯 [응답 형식]
+[문제 요약]
+- 문제1
+- 문제2 (있다면)
+
+[개선 제안]
+- 코드 일부 수정 예시 또는 간결한 설명
+
+주의: 코드가 완전하지 않아도 분석해야 합니다.
+
+작성 중인 코드:
+\`\`\`c
+${code}
+\`\`\`
+`.trim();
+
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(prompt);
+  return result.response.text().trim();
+}
+
 function buildPrompt(codeSnippet: string): string {
   return `
 You are a static analysis expert specializing in detecting undefined behavior and runtime bugs in C/C++ code.
