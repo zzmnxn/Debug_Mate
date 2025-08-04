@@ -62,7 +62,9 @@ async function main() {
       const result = await loopCheck({ code });
       resultText = result.result ?? "";
     } else if (selectedTool === "afterDebugFromCode") {
-      resultText = await afterDebugFromCode(code);
+      // 파일명은 main.c로 고정하거나, 필요시 인자로 받을 수 있음
+      const { analysis, markedFilePath } = await afterDebugFromCode(code, "main.c");
+      resultText = analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "");
     } else if (selectedTool === "testBreak") {
       const result = await testBreak({ codeSnippet: code });
       resultText = JSON.stringify(result, null, 2);
