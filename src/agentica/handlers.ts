@@ -198,7 +198,7 @@ function padLeft(str: string, length: number, padChar: string = ' '): string {
  * @param warnings - 파싱된 컴파일러 경고 목록
  * @returns 생성된 파일의 경로
  */
-export function markErrorsInCodeToFile(
+export function markErrors(
   originalFilePath: string,
   code: string,
   errors: CompilerError[],
@@ -250,15 +250,13 @@ export function markErrorsInCodeToFile(
         let indicator = '';
         if (error.column) {
           indicator = ' '.repeat(error.column - 1) + '^';
-          comments.push(`// ERROR: ${error.message}`);
           if (error.code) {
-            comments.push(`//   Code: ${error.code}`);
+            comments.push(`// ${error.code}`);
           }
           outputLine += `\n${indicator}`;
         } else {
-          comments.push(`// ERROR: ${error.message}`);
           if (error.code) {
-            comments.push(`//   Code: ${error.code}`);
+            comments.push(`// ${error.code}`);
           }
         }
       });
@@ -267,15 +265,13 @@ export function markErrorsInCodeToFile(
         let indicator = '';
         if (warning.column) {
           indicator = ' '.repeat(warning.column - 1) + '^';
-          comments.push(`// WARNING: ${warning.message}`);
           if (warning.code) {
-            comments.push(`//   Code: ${warning.code}`);
+            comments.push(`// ${warning.code}`);
           }
           outputLine += `\n${indicator}`;
         } else {
-          comments.push(`// WARNING: ${warning.message}`);
           if (warning.code) {
-            comments.push(`//   Code: ${warning.code}`);
+            comments.push(`// ${warning.code}`);
           }
         }
       });
@@ -302,6 +298,97 @@ export function markErrorsInCodeToFile(
   fs.writeFileSync(outputPath, markedCode, 'utf8');
   
   return outputPath;
+}
+
+
+/**
+ * 코드를 임시 파일로 저장, 컴파일, 에러/경고를 파싱해 마킹된 파일을 생성하는 함수
+ * @param code - 컴파일할 C/C++ 코드 문자열
+ * @param originalFilePath - 원본 파일명(확장자 포함)
+ * @param compilerPath - 사용할 컴파일러 경로 (기본값: gcc)
+ * @returns 마킹된 파일 경로
+ */
+export async function compileAndMarkCode(
+  code: string,
+  originalFilePath: string,
+  compilerPath: string = "gcc"
+): Promise<string> {
+  const tmp = require("os").tmpdir();
+  const fs = require("fs");
+  const path = require("path");
+  const { CompilerResultParser } = require("../parsing/compilerResultParser");
+  const sourcePath = path.join(tmp, `debugmate_tmp_${Date.now()}.c`);
+  fs.writeFileSync(sourcePath, code, "utf8");
+
+  // 컴파일 (출력 파일은 무시)
+  const execSync = require("child_process").execSync;
+  let compilerOutput = "";
+  try {
+    compilerOutput = execSync(`${compilerPath} -Wall -o NUL "${sourcePath}"`, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+  } catch (e: any) {
+    // 컴파일 에러/경고는 stderr에 있음
+    compilerOutput = e.stdout + "\n" + e.stderr;
+  }
+
+  // 파싱
+  const parser = new CompilerResultParser();
+  const result = parser.parseCompilerOutput(compilerOutput);
+
+  // 마킹 파일 생성
+  const markedPath = markErrors(
+    originalFilePath,
+    code,
+    result.errors,
+    result.warnings
+  );
+
+  // 임시 파일 정리(선택)
+  try { fs.unlinkSync(sourcePath); } catch {}
+
+  return markedPath;
+}
+
+// afterDebugFromCode 수정: 마킹 파일 경로도 반환
+export async function afterDebugFromCode(code: string): Promise<{ analysis: string, markedFilePath: string }> {
+  // 기존 코드 참고 (임시 파일 저장, 컴파일, 파싱 등)
+  const tmp = require("os").tmpdir();
+  const fs = require("fs");
+  const path = require("path");
+  const { CompilerResultParser } = require("../parsing/compilerResultParser");
+  const sourcePath = path.join(tmp, `debugmate_tmp_${Date.now()}.c`);
+  fs.writeFileSync(sourcePath, code, "utf8");
+
+  // 컴파일 (출력 파일은 무시)
+  const execSync = require("child_process").execSync;
+  let compilerOutput = "";
+  try {
+    compilerOutput = execSync(`gcc -Wall -o NUL "${sourcePath}"`, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+  } catch (e: any) {
+    compilerOutput = e.stdout + "\n" + e.stderr;
+  }
+
+  // 파싱
+  const parser = new CompilerResultParser();
+  const result = parser.parseCompilerOutput(compilerOutput);
+
+  // AI 분석
+  const analysis = await afterDebug(
+    parser.generateSummary(result),
+    result.errors,
+    result.warnings
+  );
+
+  // 마킹 파일 생성
+  const markedFilePath = markErrors(
+    "main.c",
+    code,
+    result.errors,
+    result.warnings
+  );
+
+  try { fs.unlinkSync(sourcePath); } catch {}
+
+  return { analysis, markedFilePath };
 }
 
 // uuyeong's hw
