@@ -1,5 +1,6 @@
 실행 방법
  npx ts-node test_driver.ts test.c
+npx ts-node src/testcode/test_afterDebugFromCode.ts
 
 --- Git 협업 가이드 ---
 원격 저장소 삭제 확인
