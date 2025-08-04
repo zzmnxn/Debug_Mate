@@ -67,7 +67,7 @@ async function main() {
       const result = await testBreak({ codeSnippet: code });
       resultText = JSON.stringify(result, null, 2);
     } else if (selectedTool === "traceVar") {
-      const result = await traceVar({ code });
+      const result = await traceVar({ code, userQuery });
       resultText = result.variableTrace ?? "";
     }
 
