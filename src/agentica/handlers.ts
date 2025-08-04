@@ -311,8 +311,7 @@ export async function compileAndMarkCode(
   }
 
   // 파싱
-  const parser = new CompilerResultParser();
-  const result = parser.parseCompilerOutput(compilerOutput);
+  const result = CompilerResultParser.parseCompilerOutput(compilerOutput);
 
   // 마킹 파일 생성
   const markedPath = markErrors(
@@ -348,12 +347,11 @@ export async function afterDebugFromCode(code: string): Promise<{ analysis: stri
   }
 
   // 파싱
-  const parser = new CompilerResultParser();
-  const result = parser.parseCompilerOutput(compilerOutput);
+  const result = CompilerResultParser.parseCompilerOutput(compilerOutput);
 
   // AI 분석
   const analysis = await afterDebug(
-    parser.generateSummary(result),
+    CompilerResultParser.generateSummary(result),
     result.errors,
     result.warnings
   );
