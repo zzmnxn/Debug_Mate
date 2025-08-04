@@ -189,19 +189,8 @@ function padLeft(str: string, length: number, padChar: string = ' '): string {
   return padLength > 0 ? padChar.repeat(padLength) + str : str;
 }
 
-// ANSI 색상 코드 상수
-const ANSI_COLORS = {
-  RED: '\x1b[31m',      // 에러용 빨간색
-  YELLOW: '\x1b[33m',   // 경고용 노란색
-  BRIGHT_RED: '\x1b[91m',  // 밝은 빨간색 (심각한 에러)
-  BRIGHT_YELLOW: '\x1b[93m', // 밝은 노란색 (중요한 경고)
-  RESET: '\x1b[0m',     // 색상 리셋
-  BOLD: '\x1b[1m',      // 굵게
-  UNDERLINE: '\x1b[4m'  // 밑줄
-};
-
 /**
- * 코드에서 에러와 경고 위치를 색상으로 표시하고 파일로 저장하는 함수
+ * 코드에서 에러와 경고 위치를 주석으로 표시하고 파일로 저장하는 함수
  * 
  * @param originalFilePath - 원본 파일 경로 (예: "main.c")
  * @param code - 원본 코드 문자열
@@ -209,7 +198,7 @@ const ANSI_COLORS = {
  * @param warnings - 파싱된 컴파일러 경고 목록
  * @returns 생성된 파일의 경로
  */
-export function markErrors(
+export function markErrorsInCodeToFile(
   originalFilePath: string,
   code: string,
   errors: CompilerError[],
@@ -244,61 +233,64 @@ export function markErrors(
   });
   
   // 헤더 추가
-  markedLines.push(`${ANSI_COLORS.BOLD}=== 에러/경고 위치 표시 파일 ===${ANSI_COLORS.RESET}`);
-  markedLines.push(`${ANSI_COLORS.BOLD}원본 파일: ${originalFilePath}${ANSI_COLORS.RESET}`);
-  markedLines.push(`${ANSI_COLORS.RED}● 에러${ANSI_COLORS.RESET} | ${ANSI_COLORS.YELLOW}● 경고${ANSI_COLORS.RESET}`);
+  markedLines.push(`// === 에러/경고 위치 표시 파일 ===`);
+  markedLines.push(`// 원본 파일: ${originalFilePath}`);
+  markedLines.push(`// ● ERROR | ● WARNING`);
   markedLines.push('');
   
   // 각 라인 처리
   lines.forEach((line, index) => {
     const lineNum = index + 1;
     const issues = lineIssues.get(lineNum);
-    
+    let outputLine = line;
+    let comments: string[] = [];
     if (issues) {
-      const hasErrors = issues.errors.length > 0;
-      const hasWarnings = issues.warnings.length > 0;
-      
-      // 라인 번호와 코드 표시 (색상 적용)
-      let coloredLine = '';
-      if (hasErrors) {
-        coloredLine = `${ANSI_COLORS.BRIGHT_RED}${ANSI_COLORS.BOLD}${padLeft(lineNum.toString(), 4)}: ${line}${ANSI_COLORS.RESET}`;
-      } else if (hasWarnings) {
-        coloredLine = `${ANSI_COLORS.BRIGHT_YELLOW}${ANSI_COLORS.BOLD}${padLeft(lineNum.toString(), 4)}: ${line}${ANSI_COLORS.RESET}`;
-      }
-      markedLines.push(coloredLine);
-      
       // 에러 메시지들 표시
       issues.errors.forEach(error => {
-        const indicator = error.column ? ' '.repeat(6 + (error.column - 1)) + '^' : '';
-        markedLines.push(`${ANSI_COLORS.RED}      ${indicator}${ANSI_COLORS.RESET}`);
-        markedLines.push(`${ANSI_COLORS.RED}      ● ERROR: ${error.message}${ANSI_COLORS.RESET}`);
-        if (error.code) {
-          markedLines.push(`${ANSI_COLORS.RED}        Code: ${error.code}${ANSI_COLORS.RESET}`);
+        let indicator = '';
+        if (error.column) {
+          indicator = ' '.repeat(error.column - 1) + '^';
+          comments.push(`// ERROR: ${error.message}`);
+          if (error.code) {
+            comments.push(`//   Code: ${error.code}`);
+          }
+          outputLine += `\n${indicator}`;
+        } else {
+          comments.push(`// ERROR: ${error.message}`);
+          if (error.code) {
+            comments.push(`//   Code: ${error.code}`);
+          }
         }
       });
-      
       // 경고 메시지들 표시
       issues.warnings.forEach(warning => {
-        const indicator = warning.column ? ' '.repeat(6 + (warning.column - 1)) + '^' : '';
-        markedLines.push(`${ANSI_COLORS.YELLOW}      ${indicator}${ANSI_COLORS.RESET}`);
-        markedLines.push(`${ANSI_COLORS.YELLOW}      ● WARNING: ${warning.message}${ANSI_COLORS.RESET}`);
-        if (warning.code) {
-          markedLines.push(`${ANSI_COLORS.YELLOW}        Code: ${warning.code}${ANSI_COLORS.RESET}`);
+        let indicator = '';
+        if (warning.column) {
+          indicator = ' '.repeat(warning.column - 1) + '^';
+          comments.push(`// WARNING: ${warning.message}`);
+          if (warning.code) {
+            comments.push(`//   Code: ${warning.code}`);
+          }
+          outputLine += `\n${indicator}`;
+        } else {
+          comments.push(`// WARNING: ${warning.message}`);
+          if (warning.code) {
+            comments.push(`//   Code: ${warning.code}`);
+          }
         }
       });
-      
-      markedLines.push(''); // 빈 줄 추가
+      markedLines.push(outputLine + (comments.length > 0 ? '  ' + comments.join(' ') : ''));
     } else {
       // 일반 라인 (문제 없음)
-      markedLines.push(`${padLeft(lineNum.toString(), 4)}: ${line}`);
+      markedLines.push(line);
     }
   });
   
   // 요약 정보 추가
   markedLines.push('');
-  markedLines.push(`${ANSI_COLORS.BOLD}=== 요약 ===${ANSI_COLORS.RESET}`);
-  markedLines.push(`${ANSI_COLORS.RED}에러: ${errors.length}개${ANSI_COLORS.RESET}`);
-  markedLines.push(`${ANSI_COLORS.YELLOW}경고: ${warnings.length}개${ANSI_COLORS.RESET}`);
+  markedLines.push(`// === 요약 ===`);
+  markedLines.push(`// 에러: ${errors.length}개`);
+  markedLines.push(`// 경고: ${warnings.length}개`);
   
   // 파일명 생성 (원본 파일명 기반)
   const parsedPath = path.parse(originalFilePath);
