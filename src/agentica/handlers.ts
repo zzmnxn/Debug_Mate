@@ -102,27 +102,7 @@ export async function afterDebug(logSummary: string, errors: CompilerError[], wa
  * @throws Error - 파일 시스템 오류, 컴파일러 오류, AI API 오류 등
  * 
  */
-export async function afterDebugFromCode(code: string): Promise<string> {
-  const tmpFile = path.join("/tmp", `code_${Date.now()}.c`);
-  const outputFile = "/tmp/a.out";
-  
-  try {
-    // 임시 파일에 코드 저장
-    fs.writeFileSync(tmpFile, code);
-    
-    // 컴파일 실행
-    const compileLog = await compileAndRun(tmpFile, outputFile);
-    
-    // 결과 파싱 및 분석
-    const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
-    const summary = CompilerResultParser.generateSummary(parsed);
-    return afterDebug(summary, parsed.errors, parsed.warnings);
-    
-  } finally {
-    // 임시 파일 정리
-    cleanupTempFiles(tmpFile, outputFile);
-  }
-}
+
 
 /**
  * 컴파일 및 실행을 수행하고 로그를 반환하는 헬퍼 함수
