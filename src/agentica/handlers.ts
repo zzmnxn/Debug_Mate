@@ -328,7 +328,7 @@ export async function compileAndMarkCode(
 }
 
 // afterDebugFromCode 수정: 마킹 파일 경로도 반환
-export async function afterDebugFromCode(code: string): Promise<{ analysis: string, markedFilePath: string }> {
+export async function afterDebugFromCode(code: string, originalFilePath: string = "main.c"): Promise<{ analysis: string, markedFilePath: string }> {
   // 기존 코드 참고 (임시 파일 저장, 컴파일, 파싱 등)
   const tmp = require("os").tmpdir();
   const fs = require("fs");
@@ -358,7 +358,7 @@ export async function afterDebugFromCode(code: string): Promise<{ analysis: stri
 
   // 마킹 파일 생성
   const markedFilePath = markErrors(
-    "main.c",
+    originalFilePath,
     code,
     result.errors,
     result.warnings
