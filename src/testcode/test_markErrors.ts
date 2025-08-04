@@ -1,6 +1,6 @@
 // src/testcode/test_markErrorsInCodeToFile.ts
 
-import { markErrorsInCodeToFile } from "../agentica/handlers";
+import { markErrors } from "../agentica/handlers";
 import { CompilerError, CompilerWarning } from "../parsing/compilerResultParser";
 
 // 테스트용 샘플 코드
@@ -20,9 +20,9 @@ const sampleErrors: CompilerError[] = [
         line: 5,
         column: 17,
         type: "semantic",
-        severity: "error",
         message: "'y' undeclared (first use in this function)",
-        code: "undeclared-variable"
+        code: "undeclared-variable",
+        severity: "error"
     }
 ];
 
@@ -30,21 +30,21 @@ const sampleErrors: CompilerError[] = [
 const sampleWarnings: CompilerWarning[] = [
     {
         file: "main.c",
-        line: 6,
+        line: 6,    
         column: 9,
         type: "unused",
-        severity: "warning",
         message: "unused variable 'z'",
-        code: "-Wunused-variable"
+        code: "-Wunused-variable",
+        severity: "warning"
     }
 ];
 
-async function testMarkErrorsInCodeToFile() {
-    console.log("=== markErrorsInCodeToFile 함수 테스트 ===\n");
+async function testMarkErrors() {
+    console.log("=== markErrors 함수 테스트 ===\n");
     
     try {
         // 함수 실행
-        const outputPath = markErrorsInCodeToFile(
+        const outputPath = markErrors(
             "main.c",
             sampleCode,
             sampleErrors,
@@ -77,7 +77,7 @@ int main() {
 }`;
     
     try {
-        const outputPath = markErrorsInCodeToFile(
+        const outputPath = markErrors(
             "hello.c",
             cleanCode,
             [], // 에러 없음
@@ -93,7 +93,7 @@ int main() {
 }
 
 async function main() {
-    await testMarkErrorsInCodeToFile();
+    await testMarkErrors();
     await testWithNoIssues();
 }
 

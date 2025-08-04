@@ -209,7 +209,7 @@ const ANSI_COLORS = {
  * @param warnings - 파싱된 컴파일러 경고 목록
  * @returns 생성된 파일의 경로
  */
-export function markErrorsInCodeToFile(
+export function markErrors(
   originalFilePath: string,
   code: string,
   errors: CompilerError[],
