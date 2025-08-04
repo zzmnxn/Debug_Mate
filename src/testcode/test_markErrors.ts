@@ -34,8 +34,7 @@ const sampleWarnings: CompilerWarning[] = [
         column: 9,
         type: "unused",
         message: "unused variable 'z'",
-        code: "-Wunused-variable",
-        severity: "warning"
+        code: "-Wunused-variable"
     }
 ];
 
