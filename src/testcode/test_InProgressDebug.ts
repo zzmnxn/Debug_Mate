@@ -15,7 +15,7 @@ export async function runInProgressDebug() {
   console.log(result);
 }
 
-//runInProgressDebug();
+runInProgressDebug();
 
 
 /*
