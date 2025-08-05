@@ -72,7 +72,7 @@ export async function afterDebug(logSummary: string, errors: CompilerError[], wa
 /**
  * 2. afterDebugFromCode: 코드 입력 → 컴파일 → 로그 파싱 → Gemini 분석까지 자동 수행
  */
-export async function afterDebugFromCode(code: string): Promise<string> {
+export async function afterDebugFromCode(code: string, originalFileName: string = "input.c"): Promise<{ analysis: string, markedFilePath: string }> {
   const tmpFile = path.join("/tmp", `code_${Date.now()}.c`);
   fs.writeFileSync(tmpFile, code);
 
@@ -84,11 +84,8 @@ export async function afterDebugFromCode(code: string): Promise<string> {
       "-Wall", "-Wextra", "-Wpedantic", "-O2", "-Wdiv-by-zero", 
       "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address", tmpFile, "-o", "/tmp/a.out"
     ], {
-      encoding: "utf-8",
-      stdio: ["ignore", "pipe", "pipe"]
+      encoding: "utf-8"
     });
-
-    // 컴파일 결과 로그 수집
     if (compileResult.stdout) {
       compileLog += compileResult.stdout;
     }
@@ -137,7 +134,15 @@ export async function afterDebugFromCode(code: string): Promise<string> {
 
   const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
   const summary = CompilerResultParser.generateSummary(parsed);
-  return afterDebug(summary, parsed.errors, parsed.warnings);
+  const analysis = await afterDebug(summary, parsed.errors, parsed.warnings);
+  // AI 분석 결과에서 [Result] X면 Reason/Suggestion을 markErrors에 넘김
+  let aiAnalysisForMark = undefined;
+  const resultMatch = analysis.match(/\[Result\]\s*([OX])/);
+  if (resultMatch && resultMatch[1] === "X") {
+    aiAnalysisForMark = analysis;
+  }
+  const markedFilePath = markErrors(originalFileName, code, parsed.errors, parsed.warnings, aiAnalysisForMark);
+  return { analysis, markedFilePath };
 }
 
 
@@ -149,13 +154,15 @@ export async function afterDebugFromCode(code: string): Promise<string> {
  * @param code - 원본 코드 문자열
  * @param errors - 파싱된 컴파일러 에러 목록
  * @param warnings - 파싱된 컴파일러 경고 목록
+ * @param aiAnalysis - AI 분석 결과 (에러가 있는 경우 Reason/Suggestion을 포함)
  * @returns 생성된 파일의 경로
  */
 export function markErrors(
   originalFilePath: string,
   code: string,
   errors: CompilerError[],
-  warnings: CompilerWarning[]
+  warnings: CompilerWarning[],
+  aiAnalysis?: string
 ): string {
   const lines = code.split("\n");
   const markedLines: string[] = [];
@@ -188,10 +195,23 @@ export function markErrors(
     }
   });
 
-  // 헤더 추가
-  markedLines.push(`// ====== 에러/경고/런타임 오류 위치 표시 파일 ======`);
-  markedLines.push(`// 원본 파일: ${originalFilePath}`);
-  markedLines.push("");
+  // AI 분석 결과가 치명적(X)이면 파일 상단에 Reason/Suggestion 주석 추가
+  if (aiAnalysis) {
+    const resultMatch = aiAnalysis.match(/\[Result\]\s*([OX])/);
+    if (resultMatch && resultMatch[1] === "X") {
+      // Reason, Suggestion 추출
+      const reasonMatch = aiAnalysis.match(/\[Reason\](.*?)(\[Suggestion\]|$)/s);
+      const suggestionMatch = aiAnalysis.match(/\[Suggestion\](.*)/s);
+      if (reasonMatch) {
+        markedLines.push(`// [AI 분석: 치명적 문제 감지]`);
+        markedLines.push(`// Reason: ${reasonMatch[1].trim()}`);
+      }
+      if (suggestionMatch) {
+        markedLines.push(`// Suggestion: ${suggestionMatch[1].trim()}`);
+      }
+      markedLines.push("");
+    }
+  }
 
   // 각 라인 처리
   lines.forEach((line, index) => {
