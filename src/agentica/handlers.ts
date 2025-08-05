@@ -165,6 +165,8 @@ export async function loopCheck({
     targetLoops = [loops[0]];
   } else if (target === "second") {
     targetLoops = loops.length > 1 ? [loops[1]] : [];
+  } else if (target === "last") {
+    targetLoops = [loops[loops.length - 1]];
   } else if (target === "specific" && details.loopType) {
     // 특정 타입의 루프만 필터링
     targetLoops = loops.filter(loop => {
@@ -172,6 +174,8 @@ export async function loopCheck({
         return loop.trim().startsWith("for");
       } else if (details.loopType === "while") {
         return loop.trim().startsWith("while");
+      } else if (details.loopType === "do-while") {
+        return loop.trim().startsWith("do");
       }
       return true;
     });
@@ -184,15 +188,16 @@ export async function loopCheck({
   const results = [];
   for (let i = 0; i < targetLoops.length; i++) {
     const loop = targetLoops[i];
-    const prompt = `Review the following loop code and determine if its termination condition is valid. If there is an issue, provide a concise explanation and a corrected example snippet. Respond in Korean, focusing on the core insights.\n\n${loop}`;
+    const prompt = `Review the following loop code and determine if its termination condition is valid. If there is an issue, first explain the problem briefly, then provide suggestions in numbered format like "수정 제안 1 :", "수정 제안 2:" etc. Do not include code examples, just provide brief explanations for each suggestion. If there is no problem, simply respond with "문제가 없습니다." (include the period). Respond in Korean.\n\n${loop}`;
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
     const analysis = result.response.text();
     
-    results.push(analysis);
+    results.push(`- 반복문 ${i + 1}\n${analysis}`);
   }
   
-  return { result: results.join('\n\n') };
+  const formattedResult = `검사한 반복문 수 : ${targetLoops.length}\n\n${results.join('\n\n')}`;
+  return { result: formattedResult };
 }
 
 
