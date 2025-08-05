@@ -141,6 +141,160 @@ export async function afterDebugFromCode(code: string): Promise<string> {
 }
 
 
+
+/**
+ * 코드에서 에러와 경고 위치를 주석으로 표시하고 파일로 저장하는 함수
+ *
+ * @param originalFilePath - 원본 파일 경로 (예: "main.c")
+ * @param code - 원본 코드 문자열
+ * @param errors - 파싱된 컴파일러 에러 목록
+ * @param warnings - 파싱된 컴파일러 경고 목록
+ * @returns 생성된 파일의 경로
+ */
+export function markErrors(
+  originalFilePath: string,
+  code: string,
+  errors: CompilerError[],
+  warnings: CompilerWarning[]
+): string {
+  const lines = code.split("\n");
+  const markedLines: string[] = [];
+
+  // 각 라인별로 에러/경고 정보 수집
+  const lineIssues = new Map<
+    number,
+    { errors: CompilerError[]; warnings: CompilerWarning[] }
+  >();
+
+  // 에러 정보 수집
+  errors.forEach((error) => {
+    if (error.line) {
+      const lineNum = error.line;
+      if (!lineIssues.has(lineNum)) {
+        lineIssues.set(lineNum, { errors: [], warnings: [] });
+      }
+      lineIssues.get(lineNum)!.errors.push(error);
+    }
+  });
+
+  // 경고 정보 수집
+  warnings.forEach((warning) => {
+    if (warning.line) {
+      const lineNum = warning.line;
+      if (!lineIssues.has(lineNum)) {
+        lineIssues.set(lineNum, { errors: [], warnings: [] });
+      }
+      lineIssues.get(lineNum)!.warnings.push(warning);
+    }
+  });
+
+  // 헤더 추가
+  markedLines.push(`// ====== 에러/경고/런타임 오류 위치 표시 파일 ======`);
+  markedLines.push(`// 원본 파일: ${originalFilePath}`);
+  markedLines.push("");
+
+  // 각 라인 처리
+  lines.forEach((line, index) => {
+    const lineNum = index + 1;
+    const issues = lineIssues.get(lineNum);
+    let outputLine = line;
+    let comments: string[] = [];
+    if (issues) {
+      // 에러 메시지들 표시 (컴파일 타임 + 런타임)
+      issues.errors.forEach((error) => {
+        let indicator = "";
+        const isRuntimeError = error.type === 'runtime';
+        const errorPrefix = isRuntimeError ? '[RUNTIME ERROR]' : '[ERROR]';
+        
+        if (error.column) {
+          indicator = " ".repeat(Math.max(0, error.column - 1)) + "^";
+          if (error.code) {
+            comments.push(`${errorPrefix} ${error.code}: ${error.message}`);
+          } else {
+            comments.push(`${errorPrefix} ${error.message}`);
+          }
+          // 런타임 에러의 경우 화살표 표시 추가
+          if (isRuntimeError) {
+            outputLine += `\n${indicator} // ${error.message}`;
+          } else {
+            outputLine += `\n${indicator}`;
+          }
+        } else {
+          // 컬럼 정보가 없는 경우
+          if (error.code) {
+            comments.push(`${errorPrefix} ${error.code}: ${error.message}`);
+          } else {
+            comments.push(`${errorPrefix} ${error.message}`);
+          }
+          // 런타임 에러인데 컬럼이 없는 경우
+          if (isRuntimeError) {
+            outputLine += `  // ${error.message}`;
+          }
+        }
+      });
+      
+      // 경고 메시지들 표시
+      issues.warnings.forEach((warning) => {
+        let indicator = "";
+        if (warning.column) {
+          indicator = " ".repeat(Math.max(0, warning.column - 1)) + "^";
+          if (warning.code) {
+            comments.push(`[WARNING] ${warning.code}: ${warning.message}`);
+          } else {
+            comments.push(`[WARNING] ${warning.message}`);
+          }
+          outputLine += `\n${indicator}`;
+        } else {
+          if (warning.code) {
+            comments.push(`[WARNING] ${warning.code}: ${warning.message}`);
+          } else {
+            comments.push(`[WARNING] ${warning.message}`);
+          }
+        }
+      });
+      markedLines.push(outputLine);
+      if (comments.length > 0) {
+        comments.forEach((comment) => {
+          markedLines.push(`// ${"=".repeat(50)}`);
+          markedLines.push(comment);
+        });
+      }
+    } else {
+      // 일반 라인 (문제 없음)
+      markedLines.push(line);
+    }
+  });
+
+  // 요약 정보 추가
+  markedLines.push("");
+  markedLines.push(`// ====== 요약 ======`);
+  const runtimeErrorCount = errors.filter(e => e.type === 'runtime').length;
+  const compileErrorCount = errors.length - runtimeErrorCount;
+  
+  if (runtimeErrorCount > 0) {
+    markedLines.push(`// 런타임 오류: ${runtimeErrorCount}개`);
+  }
+  if (compileErrorCount > 0) {
+    markedLines.push(`// 컴파일 에러: ${compileErrorCount}개`);
+  }
+  if (warnings.length > 0) {
+    markedLines.push(`// 경고: ${warnings.length}개`);
+  }
+  
+
+
+  // 파일명 생성 (원본 파일명 기반)
+  const parsedPath = path.parse(originalFilePath);
+  const outputFileName = `${parsedPath.name}_with_errors${parsedPath.ext}`;
+  const outputPath = path.join(parsedPath.dir || ".", outputFileName);
+
+  // 파일로 저장
+  const markedCode = markedLines.join("\n");
+  fs.writeFileSync(outputPath, markedCode, "utf8");
+
+  return outputPath;
+}
+
 // uuyeong's hw
 export async function loopCheck({ code }: { code: string }) {
   const loops = extractLoopsFromCode(code);
