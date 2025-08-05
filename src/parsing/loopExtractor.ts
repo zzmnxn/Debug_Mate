@@ -55,41 +55,50 @@ export function extractLoopsWithNesting(code: string): LoopInfo[] {
   // 시작 위치로 정렬
   positions.sort((a, b) => a.start - b.start);
   
-  // 중첩 레벨 계산
-  const levelCounters: number[] = [0]; // 각 레벨별 카운터
-  
+  // 중첩 레벨 계산 및 부모-자식 관계 설정
   for (let i = 0; i < positions.length; i++) {
     const current = positions[i];
     let level = 0;
-    let parentIndex: number | undefined;
+    let directParentIndex: number | undefined;
     
-    // 현재 루프를 포함하는 부모 루프 찾기
+    // 직접적인 부모 루프 찾기 (가장 가까운 포함 루프)
     for (let j = i - 1; j >= 0; j--) {
       const potential = positions[j];
       if (potential.start < current.start && current.end <= potential.end) {
-        level++;
-        parentIndex = j;
+        // 이미 찾은 부모가 없거나, 더 가까운 부모를 찾은 경우
+        if (directParentIndex === undefined || 
+            positions[j].start > positions[directParentIndex].start) {
+          directParentIndex = j;
+        }
       }
     }
     
-    // 레벨별 카운터 조정
-    while (levelCounters.length <= level) {
-      levelCounters.push(0);
+    // 레벨 계산 (부모가 있으면 부모의 레벨 + 1)
+    if (directParentIndex !== undefined) {
+      level = loops[directParentIndex].level + 1;
     }
-    
-    // 더 깊은 레벨의 카운터 리셋
-    for (let k = level + 1; k < levelCounters.length; k++) {
-      levelCounters[k] = 0;
-    }
-    
-    levelCounters[level]++;
     
     loops.push({
       code: current.code,
       level: level,
-      parentIndex: parentIndex,
-      index: levelCounters[level]
+      parentIndex: directParentIndex,
+      index: 0 // 임시값, 나중에 계산
     });
+  }
+  
+  // 같은 부모를 가진 루프들의 인덱스 계산
+  const parentChildMap = new Map<number | undefined, number>();
+  
+  for (let i = 0; i < loops.length; i++) {
+    const loop = loops[i];
+    const parentKey = loop.parentIndex;
+    
+    if (!parentChildMap.has(parentKey)) {
+      parentChildMap.set(parentKey, 0);
+    }
+    
+    parentChildMap.set(parentKey, parentChildMap.get(parentKey)! + 1);
+    loop.index = parentChildMap.get(parentKey)!;
   }
   
   return loops;

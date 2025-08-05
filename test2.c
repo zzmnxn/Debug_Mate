@@ -11,10 +11,19 @@ int main(void) {
         printf("normal for loop: %d\n", j);
     }
     
-    // 3. 이중 반복문 (중첩)
+    // 3. 이중 반복문 (중첩) - 여러 중첩 루프 포함
     for(int x=0; x<3; x++) {
         for(int y=0; y<2; y++) {
             printf("nested: %d,%d\n", x, y);
+        }
+        
+        for(int z=0; z<1; z++) {
+            printf("second nested: %d,%d\n", x, z);
+        }
+        
+        while(x < 1) {
+            printf("while nested: %d\n", x);
+            break; // 무한루프 방지
         }
     }
     

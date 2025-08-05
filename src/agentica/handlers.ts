@@ -186,23 +186,26 @@ export async function loopCheck({
     return { result: `요청하신 조건에 맞는 루프를 찾을 수 없습니다.` };
   }
   
-  const results = [];
-  for (let i = 0; i < targetLoopInfos.length; i++) {
-    const loopInfo = targetLoopInfos[i];
-    const loop = loopInfo.code;
-    
-    // 계층적 번호 생성
+  // 모든 루프를 하나의 API 호출로 처리 (비용 절약)
+  const loopAnalysisData = targetLoopInfos.map((loopInfo, i) => {
     const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
-    
-    const prompt = `Review the following loop code and determine if its termination condition is valid. If there is an issue, first explain the problem briefly, then provide suggestions in numbered format like "수정 제안 1 :", "수정 제안 2:" etc. Do not include code examples, just provide brief explanations for each suggestion. If there is no problem, simply respond with "문제가 없습니다." (include the period). Respond in Korean.\n\n${loop}`;
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-    const analysis = result.response.text();
-    
-    results.push(`- 반복문 ${loopNumber}\n${analysis}`);
-  }
+    return {
+      number: loopNumber,
+      code: loopInfo.code
+    };
+  });
   
-  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${results.join('\n\n')}`;
+  const batchPrompt = `다음 반복문들을 각각 검토하고 종료 조건이 유효한지 판단하세요. 각 반복문에 대해 문제가 있는 경우에만 "수정 제안 1:", "수정 제안 2:" 등의 형태로 간결한 설명을 제공하세요. 문제가 없다면 "문제가 없습니다."라고 응답하세요. 한국어로 응답하세요.
+
+${loopAnalysisData.map(item => `=== 반복문 ${item.number} ===\n${item.code}`).join('\n\n')}
+
+각 반복문에 대해 "- 반복문 X" 형태로 시작하여 각각 분석해주세요.`;
+  
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(batchPrompt);
+  const batchAnalysis = result.response.text();
+  
+  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
   return { result: formattedResult };
 }
 
