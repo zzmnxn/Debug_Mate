@@ -435,7 +435,14 @@ export async function afterDebugFromCode(
   const execSync = require("child_process").execSync;
   let compilerOutput = "";
   try {
-    compilerOutput = execSync(`gcc -Wall -o NUL "${sourcePath}"`, {
+    // Enhanced compiler flags for better error detection:
+    // -Wall -Wextra: Enable all warnings
+    // -g: Generate debug info
+    // -fsanitize=address: Enable AddressSanitizer (detects memory errors)
+    // -fsanitize=undefined: Enable UndefinedBehaviorSanitizer
+    // -fno-omit-frame-pointer: Better stack traces
+    // -fno-sanitize-recover=all: Make all sanitizer errors fatal
+    compilerOutput = execSync(`gcc -Wall -Wextra -g -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -fno-sanitize-recover=all -o /dev/null "${sourcePath}"`, {
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
     });
