@@ -9,6 +9,7 @@ import path from "path";
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
 
 
+
 //jm hw
 export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): string {
   const MAX_ITEMS = 3;
@@ -64,9 +65,8 @@ Do not add anything outside this format.
  */
 export async function afterDebug(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): Promise<string> {
   const prompt = buildAfterDebugPrompt(logSummary, errors, warnings);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-  return result.response.text().trim();
+  const analysis = await callMindlogicAPI(prompt, "claude-sonnet-4-20250514");
+  return analysis;
 }
 
 /**
@@ -455,12 +455,8 @@ export async function traceVar({
   Please follow this format for your explanation.
   `.trim(); // 문자열의 양쪽 공백을 제거합니다.
 
-  // 'gemini-1.5-flash' 모델을 사용하여 Gemini AI 모델 인스턴스를 생성합니다.
+  const analysis = await callMindlogicAPI(prompt, "claude-sonnet-4-20250514");
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  
-  // 생성된 모델에 프롬프트를 전달하여 콘텐츠를 생성하도록 요청합니다.
-  const result = await model.generateContent(prompt);
   
   // AI 응답 텍스트를 'variableTrace' 키를 가진 객체 형태로 반환합니다.
   return { variableTrace: result.response.text() };
@@ -552,9 +548,8 @@ ${log}
 
 `.trim();
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    const analysis = await callMindlogicAPI(prompt, "claude-sonnet-4-20250514");
+    return analysis;
 
   } catch (e: any) {
     return `[Result] 분석 실패\n[Reason] ${e.message || e.toString()}\n[Suggestion] 로그 확인 필요`;
@@ -616,9 +611,8 @@ ${code}
 [Suggestions] 간단한 수정 제안
 `.trim();
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-  return result.response.text().trim();
+    const analysis = await callMindlogicAPI(prompt, "gpt-4o");
+    return analysis;
 }
 
 function buildPrompt(codeSnippet: string): string {
