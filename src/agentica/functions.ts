@@ -14,7 +14,9 @@ export class ErrorDiagnosisService {
     return testBreak({ codeSnippet });
   }
   async afterDebugFromCode({ code, userQuery }: { code: string, userQuery: string }) {
-    return afterDebugFromCode(code, userQuery);
+    const analysis = await afterDebugFromCode(code, userQuery);
+    const markedFilePath = await markErrors("input.c", code, [], []);
+    return { analysis, markedFilePath };
   }
   async markErrors({ originalFilePath, code, errors, warnings }: { originalFilePath: string, code: string, errors: CompilerError[], warnings: CompilerWarning[] }) {
     return markErrors(originalFilePath, code, errors, warnings);
