@@ -200,8 +200,8 @@ export function markErrors(
     const resultMatch = aiAnalysis.match(/\[Result\]\s*([OX])/);
     if (resultMatch && resultMatch[1] === "X") {
       // Reason, Suggestion 추출
-      const reasonMatch = aiAnalysis.match(/\[Reason\](.*?)(\[Suggestion\]|$)/s);
-      const suggestionMatch = aiAnalysis.match(/\[Suggestion\](.*)/s);
+      const reasonMatch = aiAnalysis.match(/\[Reason\]([\s\S]*?)(\[Suggestion\]|$)/);
+      const suggestionMatch = aiAnalysis.match(/\[Suggestion\]([\s\S]*)/);
       if (reasonMatch) {
         markedLines.push(`// [AI 분석: 치명적 문제 감지]`);
         markedLines.push(`// Reason: ${reasonMatch[1].trim()}`);
