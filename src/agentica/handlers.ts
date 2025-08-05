@@ -442,12 +442,54 @@ export async function afterDebugFromCode(
     // -fsanitize=undefined: Enable UndefinedBehaviorSanitizer
     // -fno-omit-frame-pointer: Better stack traces
     // -fno-sanitize-recover=all: Make all sanitizer errors fatal
-    compilerOutput = execSync(`gcc -Wall -Wextra -g -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -fno-sanitize-recover=all -o /dev/null "${sourcePath}"`, {
+    // -fno-common: Better detection of multiple definitions
+    // -fstack-protector-strong: Better stack protection
+    const outputFile = path.join(tmp, `debugmate_out_${Date.now()}`);
+    const compileCmd = `gcc -Wall -Wextra -g -fsanitize=address -fsanitize=undefined \
+      -fno-omit-frame-pointer -fno-sanitize-recover=all \
+      -fno-common -fstack-protector-strong \
+      -o "${outputFile}" "${sourcePath}"`;
+      
+    compilerOutput = execSync(compileCmd, {
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        ASAN_OPTIONS: 'detect_leaks=1:check_initialization_order=1:strict_init_order=1',
+        UBSAN_OPTIONS: 'print_stacktrace=1',
+      },
     });
+
+    // If compilation succeeds, run the program to catch runtime errors
+    if (fs.existsSync(outputFile)) {
+      try {
+        const runOutput = execSync(`"${outputFile}"`, {
+          encoding: "utf8",
+          stdio: ["pipe", "pipe", "pipe"],
+          env: {
+            ...process.env,
+            ASAN_OPTIONS: 'detect_leaks=1:check_initialization_order=1:strict_init_order=1:abort_on_error=1',
+            UBSAN_OPTIONS: 'print_stacktrace=1:abort_on_error=1',
+          },
+          timeout: 2000, // 2 second timeout
+        });
+        compilerOutput += "\n\n=== Program Output ===\n" + runOutput;
+      } catch (runError: any) {
+        compilerOutput += "\n\n=== Runtime Error ===\n" + 
+          (runError.stdout || '') + 
+          (runError.stderr || '') + 
+          "\nExit code: " + runError.status;
+      } finally {
+        // Clean up the compiled binary
+        try { fs.unlinkSync(outputFile); } catch {}
+      }
+    }
   } catch (e: any) {
-    compilerOutput = e.stdout + "\n" + e.stderr;
+    compilerOutput = (e.stdout || '') + "\n" + (e.stderr || '');
+    // Add more context to the error message
+    if (e.status !== null) {
+      compilerOutput += "\nExit code: " + e.status;
+    }
   }
 
   // 파싱
