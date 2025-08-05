@@ -105,8 +105,12 @@ int main() {
 async function main() {
   for (const { name, code } of tests) {
     console.log(`\n==== 🧪 ${name} ====\n`);
-    const result = await afterDebugFromCode(code);
-    console.log(result);
+    const { analysis, markedFilePath } = await afterDebugFromCode(code, `${name}.c`);
+    console.log("[AI 분석 결과]\n" + analysis);
+    console.log("[마킹된 파일 경로]", markedFilePath);
+    if (markedFilePath) {
+      console.log(`[마킹된 코드 파일이 저장되었습니다: ${markedFilePath}]`);
+    }
   }
 }
 
