@@ -6,6 +6,7 @@ import * as path from "path";
 import { runBeforeDebug } from "./src/testcode/test_beforeDebug";
 import { runLoopCheck } from "./src/testcode/test_loopCheck";
 import { runTraceVar } from "./src/testcode/test_traceVar";
+import { runInProgressDebug } from "./src/testcode/test_InProgressDebug";
 
 
 async function main() {
@@ -29,9 +30,10 @@ async function main() {
 
   console.log(`✅ '${filename}'에 대한 분석을 시작합니다.\n`);
 
-  await runBeforeDebug(code);
+  await runBeforeDebug();
   await runLoopCheck(code);
   await runTraceVar(code);
+  await runInProgressDebug();
 
   console.log("\n✅ 모든 분석이 완료되었습니다.");
 }

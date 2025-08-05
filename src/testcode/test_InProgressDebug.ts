@@ -1,7 +1,24 @@
-import fs from "fs";
-import path from "path";
+//import fs from "fs";
+import * as fs from "fs";
+import * as path from "path";
+//import path from "path";
 import { inProgressDebug } from "../agentica/handlers";
 
+export async function runInProgressDebug() {
+  const file = process.argv[2];
+  if (!file) return console.error("❌ 파일명을 입력하세요.");
+
+  const code = fs.readFileSync(path.resolve(file), "utf-8");
+  const result = await inProgressDebug(code);
+
+  console.log("\n=== 🧪 [inProgressDebug 결과] ===");
+  console.log(result);
+}
+
+//runInProgressDebug();
+
+
+/*
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) {
@@ -22,3 +39,4 @@ async function main() {
 }
 
 main();
+*/

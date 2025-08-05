@@ -248,59 +248,121 @@ export async function testBreak({ codeSnippet }: { codeSnippet: string }) {
   }
 }
 
-// moonjeong's hw
+// moonjeong's hw1   (code: string): Promise<string> {
 export async function beforeDebug({ code }: { code: string }) {
-  const prompt = `
-당신은 C 언어 전문가입니다. 아래는 사용자가 작성 중인 전체 코드입니다.
+  const tmpDir = process.platform === "win32" ? path.join(process.cwd(), "tmp") : "/tmp";
+  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);  // Windows에서는 tmp 폴더 없을 수 있음
+  
+  const tmpFile = path.join(tmpDir, `code_${Date.now()}.c`);
+  const outputFile = path.join(tmpDir, `a.out`);
 
-코드가 아직 실행되기 전 상태로, 문법 오류, 누락된 세미콜론, 선언되지 않은 변수, 함수 호출 오류, 누락된 return 문 등 명백한 문제점이 있는지 확인해주세요.
+  try {
+    // 코드 저장
+    fs.writeFileSync(tmpFile, code);
 
-가능하면 줄 번호를 포함해 수정 제안을 해주세요. 아직 작성 중일 수 있으므로 유연하게 판단해주세요.
+    // GCC 컴파일 수행
+    const compileResult = spawnSync("gcc", [
+      "-Wall", "-Wextra", "-O2", "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address",
+      tmpFile, "-o", outputFile
+    ], {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"]
+    });
 
-답변은 다음 형식을 지켜주세요:
+    // 로그 수집
+    let log = (compileResult.stdout || "") + (compileResult.stderr || "");
+    if (compileResult.status === 0) {
+      const runResult = spawnSync(outputFile, [], { encoding: "utf-8", timeout: 1000 });
+      log += "\n\n=== Runtime Output ===\n";
+      log += runResult.stdout || "";
+      log += runResult.stderr || "";
+    }
 
-[Result] 문제가 감지되었는지 여부 (예: "문제 있음", "문제 없음")
-[Issues] 줄 번호와 함께 발견된 주요 문제 요약 (없으면 "없음")
-[Suggestions] 각 문제에 대한 간단한 수정 제안 (없으면 "없음")
+    // 프롬프트 구성
+    const prompt = `
+당신은 C 언어 디버깅 전문가입니다.
+사용자가 작성한 전체 코드와 gcc 컴파일/실행 로그를 함께 제공합니다.
 
-아래는 코드입니다:
+🔹 코드 내용:
 \`\`\`c
 ${code}
 \`\`\`
-`;
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-  return { result: result.response.text() };
+🔹 GCC 로그:
+\`\`\`
+${log}
+\`\`\`
+
+이 정보를 바탕으로 다음의 포맷으로 분석해주세요:
+
+[Result] "문제 있음" 또는 "문제 없음"
+[Reason] 주요 원인 또는 분석 이유
+[Suggestion] 핵심 수정 제안 (1~2줄)
+
+`.trim();
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+
+  } catch (e: any) {
+    return `[Result] 분석 실패\n[Reason] ${e.message || e.toString()}\n[Suggestion] 로그 확인 필요`;
+  } finally {
+    // 정리
+    [tmpFile, outputFile].forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
+  }
 }
 
-// moonjeong's hw
-export async function inProgressDebug(code: string): Promise<string> {
+// moonjeong's hw2
+export async function inProgressDebug(code: string) {
+  let compileLog = "";
+
+  try {
+    const compileResult = spawnSync("gcc", [
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-fsyntax-only",
+      "-xc",  // 입력 형식 명시
+      "-"     // stdin 입력
+    ], {
+      input: code,           // 여기서 코드 전달
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"]  // stdin, stdout, stderr 모두 파이프
+    });
+
+    compileLog += compileResult.stderr || "";
+
+  } catch (err) {
+    compileLog += `GCC Error: ${(err as Error).message}`;
+  }
+
+  const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
+  const summary = CompilerResultParser.generateSummary(parsed);
+
   const prompt = `
-당신은 C 언어 디버깅 전문가입니다.
+당신은 숙련된 C 디버깅 도우미입니다.
+사용자가 아직 완성하지 않은 C 코드 일부를 작성하고 있습니다.
 
-사용자가 코드를 작성하는 도중입니다. 아직 완성되지 않은 코드일 수 있습니다.
-현재까지 작성된 코드에서 다음을 찾아주세요:
+아래는 작성 중인 코드와 현재까지의 컴파일 로그 요약입니다. 오류가 많더라도 "명백한 실수" (예: ; 누락, 오타, 선언 안 된 변수 등)만 짚어주세요.
 
-1. 문법 오류나 괄호 누락
-2. 변수 선언 누락
-3. 흐름상 부자연스러운 부분
-4. 명확한 개선점이 있는 코드
+[Summary]
+${summary}
 
-🎯 [응답 형식]
-[문제 요약]
-- 문제1
-- 문제2 (있다면)
-
-[개선 제안]
-- 코드 일부 수정 예시 또는 간결한 설명
-
-주의: 코드가 완전하지 않아도 분석해야 합니다.
-
-작성 중인 코드:
+[Code]
 \`\`\`c
 ${code}
 \`\`\`
+
+[Instructions]
+- 전체 코드가 아니므로 함수 누락 등은 무시해주세요.
+- 명백한 문법 오류만 확인해주세요.
+- 너무 공격적인 피드백은 지양해주세요.
+- 다음 형식으로 응답하세요:
+
+[Result] 문제 있음/없음
+[Issues] 발견된 문제 요약 (없으면 없음)
+[Suggestions] 간단한 수정 제안
 `.trim();
 
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
