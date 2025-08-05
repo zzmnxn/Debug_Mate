@@ -100,17 +100,15 @@ async function main() {
         details: parsedIntent.details 
       });
       resultText = result.result ?? "";
-    } else if (parsedIntent.tool === "afterDebugFromCode") {
-      resultText = await afterDebugFromCode(code);
-    } else if (parsedIntent.tool === "testBreak") {
+    } else if (selectedTool === "afterDebugFromCode") {
+      // 파일명은 main.c로 고정하거나, 필요시 인자로 받을 수 있음
+      const { analysis, markedFilePath } = await afterDebugFromCode(code, "main.c");
+      resultText = analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "");
+    } else if (selectedTool === "testBreak") {
       const result = await testBreak({ codeSnippet: code });
       resultText = JSON.stringify(result, null, 2);
-    } else if (parsedIntent.tool === "traceVar") {
-      const result = await traceVar({ 
-        code, 
-        target: parsedIntent.target,
-        details: parsedIntent.details 
-      });
+    } else if (selectedTool === "traceVar") {
+      const result = await traceVar({ code, userQuery });
       resultText = result.variableTrace ?? "";
     }
 
