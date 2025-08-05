@@ -54,23 +54,24 @@ ${errorText || "None"}
 === Compiler Warnings ===
 ${warningText || "None"}
 
- IMPORTANT NOTES:
+IMPORTANT NOTES:
 - If issues are present: State the most likely cause and suggest a concrete fix (1–2 lines).
 - Do NOT guess beyond the given log. If something is unclear, say so briefly (e.g., "Based on the log alone, it's unclear").
 
+IMPORTANT: Please respond in Korean, but keep the [Result], [Reason], and [Suggestion] section headers in English.
 
 Format your response in the following structure:
 
-[Result] {Short message: "Critical issue detected" or "No critical issues detected"}
-[Reason] {Brief explanation of why (e.g., undeclared variable, safe log, etc.)}
-[Suggestion] {Fix or say "No fix required" if none needed}
+[Result] {Short message: "O" or "X"}
+[Reason] {Brief explanation of why (e.g., undeclared variable, safe log, etc.) - in Korean}
+[Suggestion] {Fix or say "No fix required" if none needed - in Korean}
 Do not add anything outside this format.
 
 === Analysis Rules ===
 - If error type is "undeclared" or message contains "undeclared", always treat as critical.
 - If a warning or message contains "memory leak" or "leaked", treat it as a critical issue.
 - For unused variable warnings, if variable name is vague (like 'temp'), suggest renaming or removal.
-- If runtime log contains "runtime error", check if it follows a dangerous cast (e.g., int to pointer). If the code contains a dangerous cast pattern (예: (char*)정수, (int*)정수 등), 반드시 Reason에 'dangerous cast 의심'을 명시하고, Suggestion에 포인터 변환 및 역참조 코드를 점검하라고 안내할 것.
+- If runtime log contains "runtime error", check if it follows a dangerous cast (e.g., int to pointer). If the code contains a dangerous cast pattern (e.g., (char*)int, (int*)int), mention 'dangerous cast suspected' in Reason and suggest checking pointer conversion and dereferencing code in Suggestion.
 - If the summary or runtime log contains "[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.", do NOT analyze the cause. Just output the hint exactly as the Suggestion and say "Critical issue detected" in Result.
 
 `.trim();
@@ -250,7 +251,6 @@ export function markErrors(
   // 헤더 추가
   markedLines.push(`// === 에러/경고 위치 표시 파일 ===`);
   markedLines.push(`// 원본 파일: ${originalFilePath}`);
-  markedLines.push(`// ● ERROR | ● WARNING`);
   markedLines.push("");
 
   // 각 라인 처리
