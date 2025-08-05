@@ -143,31 +143,77 @@ export async function afterDebugFromCode(code: string): Promise<string> {
 
 
 // uuyeong's hw
-export async function loopCheck({ code }: { code: string }) {
+export async function loopCheck({ 
+  code, 
+  target = "all",
+  details = {}
+}: { 
+  code: string;
+  target?: string;
+  details?: any;
+}) {
   const loops = extractLoopsFromCode(code);
   
   if (loops.length === 0) {
     return { result: "코드에서 for/while 루프를 찾을 수 없습니다." };
   }
   
+  // 선택적 분석 로직
+  let targetLoops = loops;
+  
+  if (target === "first") {
+    targetLoops = [loops[0]];
+  } else if (target === "second") {
+    targetLoops = loops.length > 1 ? [loops[1]] : [];
+  } else if (target === "specific" && details.loopType) {
+    // 특정 타입의 루프만 필터링
+    targetLoops = loops.filter(loop => {
+      if (details.loopType === "for") {
+        return loop.trim().startsWith("for");
+      } else if (details.loopType === "while") {
+        return loop.trim().startsWith("while");
+      }
+      return true;
+    });
+  }
+  
+  if (targetLoops.length === 0) {
+    return { result: `요청하신 조건에 맞는 루프를 찾을 수 없습니다.` };
+  }
+  
   const results = [];
-  for (let i = 0; i < loops.length; i++) {
-    const loop = loops[i];
+  for (let i = 0; i < targetLoops.length; i++) {
+    const loop = targetLoops[i];
     const prompt = `Review the following loop code and determine if its termination condition is valid. If there is an issue, provide a concise explanation and a corrected example snippet. Respond in Korean, focusing on the core insights.\n\n${loop}`;
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
     const analysis = result.response.text();
     
-    results.push(`**루프 ${i + 1}**:\n\`\`\`\n${loop.trim()}\n\`\`\`\n\n**분석 결과**:\n${analysis}`);
+    results.push(analysis);
   }
   
-  return { result: `루프 분석 완료 (총 ${loops.length}개)\n\n${results.join('\n\n---\n\n')}` };
+  return { result: results.join('\n\n') };
 }
 
 
 // sohyeon's hw
-export async function traceVar({ code }: { code: string }) {
-  const prompt = `Analyze the following code snippet and trace the flow of variables.
+export async function traceVar({ 
+  code, 
+  target = "all",
+  details = {}
+}: { 
+  code: string;
+  target?: string;
+  details?: any;
+}) {
+  let prompt = `Analyze the following code snippet and trace the flow of variables.`;
+
+  // 선택적 변수 추적
+  if (target === "variable" && details.name) {
+    prompt += `\n\n**특별 요청**: 변수 "${details.name}"만 집중적으로 추적해주세요.`;
+  }
+
+  prompt += `
 
   **Response Format:**
   - **If no variables are used in the code,** please respond only with "No variables are used."
@@ -184,6 +230,7 @@ export async function traceVar({ code }: { code: string }) {
   Please respond in Korean.
 
   \`\`\`${code}\`\`\``;
+  
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
   return { variableTrace: result.response.text() };
@@ -199,10 +246,26 @@ export async function testBreak({ codeSnippet }: { codeSnippet: string }) {
   const responseText = result.response.text().trim();
 
   try {
-    const parsed = JSON.parse(responseText);
-    return parsed;
+    // JSON 추출 시도
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return parsed;
+    } else {
+      // JSON이 없으면 텍스트 형태로 반환
+      return {
+        isBuggy: responseText.includes("buggy") || responseText.includes("error"),
+        reason: responseText,
+        suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요."
+      };
+    }
   } catch (err) {
-    throw new Error(`Failed to parse model output as JSON:\n${responseText}`);
+    // 파싱 실패 시 텍스트 형태로 반환
+    return {
+      isBuggy: responseText.includes("buggy") || responseText.includes("error"),
+      reason: responseText,
+      suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요."
+    };
   }
 }
 
