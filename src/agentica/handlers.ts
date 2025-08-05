@@ -472,18 +472,23 @@ export async function traceVar({
   \`\`\`
 
   **Response Format:**
-  // 응답 형식에 대한 지시사항
-  // 각 변수의 이름과 값의 변화를 명확하고 직관적으로 설명
-  - Clearly and intuitively explain the name of each variable and the changes in its value.
-  // 응답은 한국어로 작성
-  - Please respond in Korean.
+  // 응답 형식
+  - Present each variable using the format Variable Name: variable_name.
+  - Include the following sections for each variable:
+    - [Initial Value]: Describe the initial value of the variable(Output only the numeric or literal value (no explanation)).
+    - [Update Process]: Summarize the changes step-by-step using short bullet points (use "-" at the beginning of each line, avoid long sentences).
+    - [Final Value]: Indicate the final value stored in the variable(Output only the final value (no explanation)).
+  - Write all section titles in English (Variable Name, Initial Value, Update Process, Final Value), and provide the explanations in Korean.
+
   // 응답 형식의 예시 제공
   - For example:
   \`\`\`
-  변수 'counter':
-  - 초기값: 0
-  - 루프를 통해 1씩 증가
-  - 최종값: 10
+  Variable Name: counter
+  [Initial Value] 0
+  [Update Process]
+    - 루프 진입 시마다 1씩 증가
+    - 총 10회 반복
+  [Final Value] 10
   \`\`\`
   // 위의 형식을 따르도록 지시
   Please follow this format for your explanation.
