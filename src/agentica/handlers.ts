@@ -91,23 +91,35 @@ export async function afterDebug(
   errors: CompilerError[],
   warnings: CompilerWarning[]
 ): Promise<string> {
-  // 조기 반환: 에러와 경고가 모두 없으면 AI 호출 없이 바로 성공 응답
-  if (errors.length === 0 && warnings.length === 0) {
-    return `[Result] O
-[Reason] 컴파일 성공, 에러 및 경고 없음
-[Suggestion] Suggestion 없음`;
-  }
-
-  // 에러나 경고가 있는 경우에만 AI 분석 수행
+  // 항상 AI 분석 수행 (에러/경고 유무와 상관없이)
   try {
     const prompt = buildAfterDebugPrompt(logSummary, errors, warnings);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    
+    // AI 분석 결과가 있으면 반환
+    if (result.response.text().trim()) {
+      return result.response.text().trim();
+    }
+    
+    // AI가 아무 결과도 반환하지 않은 경우에만 기본 성공 메시지 반환
+    if (errors.length === 0 && warnings.length === 0) {
+      return `[Result] O\n[Reason] 컴파일 성공, 에러 및 경고 없음\n[Suggestion] Suggestion 없음`;
+    }
+    
+    return `[Result] X\n[Reason] AI 분석 중 오류가 발생했습니다.\n[Suggestion] 코드를 다시 확인해주세요.`;
+    
   } catch (error) {
-    throw new Error(
-      `AI 분석 실패: ${error instanceof Error ? error.message : String(error)}`
-    );
+    // AI 분석 중 오류가 발생한 경우
+    console.error('AI 분석 중 오류 발생:', error);
+    
+    // 에러나 경고가 있었는데 AI 분석에 실패한 경우
+    if (errors.length > 0 || warnings.length > 0) {
+      return `[Result] X\n[Reason] AI 분석 중 오류가 발생했습니다. (${error instanceof Error ? error.message : '알 수 없는 오류'})\n[Suggestion] 수동으로 코드를 확인해주세요.`;
+    }
+    
+    // 에러나 경고가 없었고 AI 분석에만 실패한 경우
+    return `[Result] O\n[Reason] 컴파일 성공 (AI 분석 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'})\n[Suggestion] 수동으로 코드를 확인해주세요.`;
   }
 }
 
