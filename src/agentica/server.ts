@@ -1,6 +1,6 @@
 import { WebSocketServer } from "tgrid";
 import { SGlobal } from "../config/SGlobal";
-import { afterDebug, afterDebugFromCode, loopCheck, traceVar, testBreak, markErrors } from "./handlers";
+import { beforeDebug, afterDebug, afterDebugFromCode, loopCheck, traceVar, testBreak, inProgressDebug, markErrors } from "./handlers";
 
 const main = async (): Promise<void> => {
   const port = Number(SGlobal.env.PORT);
@@ -9,15 +9,17 @@ const main = async (): Promise<void> => {
   console.log(`Gemini function server running on port ${port}`);
   await server.open(port, async (acceptor) => {
     await acceptor.accept({
+      beforeDebug,
       afterDebug,
       afterDebugFromCode,
       loopCheck,
       traceVar,
       testBreak,
+      inProgressDebug,
       markErrors
     });
     console.log(`Connection accepted: ${acceptor.path}`);
-    console.log(`Available controllers: afterDebug, loopCheck, traceVar, testBreak, markErrors `);
+    console.log(`Available controllers: beforeDebug, afterDebug, loopCheck, traceVar, testBreak, inProgressDebug, markErrors`);
   });
   console.log(`WebSocket server running on port ${port}.`);
 };

@@ -339,26 +339,63 @@ export async function loopCheck({ code }: { code: string }) {
 
 
 // sohyeon's hw
-export async function traceVar({ code }: { code: string }) {
-  const prompt = `Analyze the following code snippet and trace the flow of variables.
+// traceVar 함수를 비동기(async) 함수로 정의합니다.
+// 이 함수는 'code'와 'userQuery'라는 두 개의 인자를 받습니다.
+export async function traceVar({
+  code,         // 사용자가 제공한 코드 문자열
+  userQuery,    // 변수 추적에 대한 사용자의 질문
+}: {
+  code: string;
+  userQuery: string;
+}) {
+  // Gemini 모델에 전달할 프롬프트(prompt)를 정의합니다.
+  const prompt = `
+  // 사용자 코드와 질문을 분석하여 변수의 흐름을 추적하라는 지시
+  Analyze the following code and the user's question to trace the flow of variables the user wants to understand.
+  // 만약 사용자가 특정 변수나 함수를 지정하지 않았다면, 주요 변수들의 흐름을 설명하라는 지시
+  If the user's question does not specify a function or variable name, identify and explain the flow of key variables in the code.
+  // 만약 사용자의 질문이 변수 추적과 관련이 없다면, 특정 응답("The question is not related to variable tracing.")을 반환하라는 지시
+  If the user's question is not related to variable tracing, respond with "The question is not related to variable tracing."
+
+  **User Question:**
+  "${userQuery}"
+
+  **Code:**
+  \`\`\`
+  ${code}
+  \`\`\`
 
   **Response Format:**
-  - **If no variables are used in the code,** please respond only with "No variables are used."
-  - **If variables are used in the code,** please provide a concise explanation for each variable in the following format:
-    \`\`\`
-    Variable 1: [Variable Name]
-    - [Concise and intuitive explanation of variable value changes]
-    Variable 2: [Variable Name]
-    - [Concise and intuitive explanation of variable value changes]
-    ...
-    \`\`\`
-    The explanation should be short and intuitive, but clearly explain the changes in variable values.
+  // 응답 형식
+  - Present each variable using the format Variable Name: variable_name.
+  - Include the following sections for each variable:
+    - [Initial Value]: Describe the initial value of the variable(Output only the numeric or literal value (no explanation)).
+    - [Update Process]: Summarize the changes step-by-step using short bullet points (use "-" at the beginning of each line, avoid long sentences).
+    - [Final Value]: Indicate the final value stored in the variable(Output only the final value (no explanation)).
+  - Write all section titles in English (Variable Name, Initial Value, Update Process, Final Value), and provide the explanations in Korean.
 
-  Please respond in Korean.
+  // 응답 형식의 예시 제공
+  - For example:
+  \`\`\`
+  Variable Name: counter
+  [Initial Value] 0
+  [Update Process]
+    - 루프 진입 시마다 1씩 증가
+    - 총 10회 반복
+  [Final Value] 10
+  \`\`\`
+  // 위의 형식을 따르도록 지시
+  Please follow this format for your explanation.
+  `.trim(); // 문자열의 양쪽 공백을 제거합니다.
 
-  \`\`\`${code}\`\`\``;
+  // 'gemini-1.5-flash' 모델을 사용하여 Gemini AI 모델 인스턴스를 생성합니다.
+
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  
+  // 생성된 모델에 프롬프트를 전달하여 콘텐츠를 생성하도록 요청합니다.
   const result = await model.generateContent(prompt);
+  
+  // AI 응답 텍스트를 'variableTrace' 키를 가진 객체 형태로 반환합니다.
   return { variableTrace: result.response.text() };
 }
 
@@ -377,6 +414,128 @@ export async function testBreak({ codeSnippet }: { codeSnippet: string }) {
   } catch (err) {
     throw new Error(`Failed to parse model output as JSON:\n${responseText}`);
   }
+}
+
+// moonjeong's hw1   (code: string): Promise<string> {
+export async function beforeDebug({ code }: { code: string }) {
+  const tmpDir = process.platform === "win32" ? path.join(process.cwd(), "tmp") : "/tmp";
+  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);  // Windows에서는 tmp 폴더 없을 수 있음
+  
+  const tmpFile = path.join(tmpDir, `code_${Date.now()}.c`);
+  const outputFile = path.join(tmpDir, `a.out`);
+
+  try {
+    // 코드 저장
+    fs.writeFileSync(tmpFile, code);
+
+    // GCC 컴파일 수행
+    const compileResult = spawnSync("gcc", [
+      "-Wall", "-Wextra", "-O2", "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address",
+      tmpFile, "-o", outputFile
+    ], {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    // 로그 수집
+    let log = (compileResult.stdout || "") + (compileResult.stderr || "");
+    if (compileResult.status === 0) {
+      const runResult = spawnSync(outputFile, [], { encoding: "utf-8", timeout: 1000 });
+      log += "\n\n=== Runtime Output ===\n";
+      log += runResult.stdout || "";
+      log += runResult.stderr || "";
+    }
+
+    // 프롬프트 구성
+    const prompt = `
+당신은 C 언어 디버깅 전문가입니다.
+사용자가 작성한 전체 코드와 gcc 컴파일/실행 로그를 함께 제공합니다.
+
+🔹 코드 내용:
+\`\`\`c
+${code}
+\`\`\`
+
+🔹 GCC 로그:
+\`\`\`
+${log}
+\`\`\`
+
+이 정보를 바탕으로 다음의 포맷으로 분석해주세요:
+
+[Result] "문제 있음" 또는 "문제 없음"
+[Reason] 주요 원인 또는 분석 이유
+[Suggestion] 핵심 수정 제안 (1~2줄)
+
+`.trim();
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+
+  } catch (e: any) {
+    return `[Result] 분석 실패\n[Reason] ${e.message || e.toString()}\n[Suggestion] 로그 확인 필요`;
+  } finally {
+    // 정리
+    [tmpFile, outputFile].forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
+  }
+}
+
+// moonjeong's hw2
+export async function inProgressDebug(code: string) {
+  let compileLog = "";
+
+  try {
+    const compileResult = spawnSync("gcc", [
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-fsyntax-only",
+      "-xc",  // 입력 형식 명시
+      "-"     // stdin 입력
+    ], {
+      input: code,           // 여기서 코드 전달
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"]  // stdin, stdout, stderr 모두 파이프
+    });
+
+    compileLog += compileResult.stderr || "";
+
+  } catch (err) {
+    compileLog += `GCC Error: ${(err as Error).message}`;
+  }
+
+  const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
+  const summary = CompilerResultParser.generateSummary(parsed);
+
+  const prompt = `
+당신은 숙련된 C 디버깅 도우미입니다.
+사용자가 아직 완성하지 않은 C 코드 일부를 작성하고 있습니다.
+
+아래는 작성 중인 코드와 현재까지의 컴파일 로그 요약입니다. 오류가 많더라도 "명백한 실수" (예: ; 누락, 오타, 선언 안 된 변수 등)만 짚어주세요.
+
+[Summary]
+${summary}
+
+[Code]
+\`\`\`c
+${code}
+\`\`\`
+
+[Instructions]
+- 전체 코드가 아니므로 함수 누락 등은 무시해주세요.
+- 명백한 문법 오류만 확인해주세요.
+- 너무 공격적인 피드백은 지양해주세요.
+- 다음 형식으로 응답하세요:
+
+[Result] 문제 있음/없음
+[Issues] 발견된 문제 요약 (없으면 없음)
+[Suggestions] 간단한 수정 제안
+`.trim();
+
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(prompt);
+  return result.response.text().trim();
 }
 
 function buildPrompt(codeSnippet: string): string {
