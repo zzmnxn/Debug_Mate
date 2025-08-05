@@ -1,7 +1,7 @@
 import { SGlobal } from "../config/SGlobal";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { CompilerError, CompilerWarning, CompilerResultParser } from '../parsing/compilerResultParser';
-import { extractLoopsFromCode } from '../parsing/loopExtractor';
+import { extractLoopsFromCode, extractLoopsWithNesting, LoopInfo } from '../parsing/loopExtractor';
 import { execSync } from "child_process";
 import { spawnSync } from "child_process";
 import fs from "fs";
@@ -152,24 +152,25 @@ export async function loopCheck({
   target?: string;
   details?: any;
 }) {
-  const loops = extractLoopsFromCode(code);
+  const loopInfos = extractLoopsWithNesting(code);
   
-  if (loops.length === 0) {
+  if (loopInfos.length === 0) {
     return { result: "코드에서 for/while 루프를 찾을 수 없습니다." };
   }
   
   // 선택적 분석 로직
-  let targetLoops = loops;
+  let targetLoopInfos = loopInfos;
   
   if (target === "first") {
-    targetLoops = [loops[0]];
+    targetLoopInfos = [loopInfos[0]];
   } else if (target === "second") {
-    targetLoops = loops.length > 1 ? [loops[1]] : [];
+    targetLoopInfos = loopInfos.length > 1 ? [loopInfos[1]] : [];
   } else if (target === "last") {
-    targetLoops = [loops[loops.length - 1]];
+    targetLoopInfos = [loopInfos[loopInfos.length - 1]];
   } else if (target === "specific" && details.loopType) {
     // 특정 타입의 루프만 필터링
-    targetLoops = loops.filter(loop => {
+    targetLoopInfos = loopInfos.filter(loopInfo => {
+      const loop = loopInfo.code;
       if (details.loopType === "for") {
         return loop.trim().startsWith("for");
       } else if (details.loopType === "while") {
@@ -181,23 +182,44 @@ export async function loopCheck({
     });
   }
   
-  if (targetLoops.length === 0) {
+  if (targetLoopInfos.length === 0) {
     return { result: `요청하신 조건에 맞는 루프를 찾을 수 없습니다.` };
   }
   
   const results = [];
-  for (let i = 0; i < targetLoops.length; i++) {
-    const loop = targetLoops[i];
+  for (let i = 0; i < targetLoopInfos.length; i++) {
+    const loopInfo = targetLoopInfos[i];
+    const loop = loopInfo.code;
+    
+    // 계층적 번호 생성
+    const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
+    
     const prompt = `Review the following loop code and determine if its termination condition is valid. If there is an issue, first explain the problem briefly, then provide suggestions in numbered format like "수정 제안 1 :", "수정 제안 2:" etc. Do not include code examples, just provide brief explanations for each suggestion. If there is no problem, simply respond with "문제가 없습니다." (include the period). Respond in Korean.\n\n${loop}`;
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
     const analysis = result.response.text();
     
-    results.push(`- 반복문 ${i + 1}\n${analysis}`);
+    results.push(`- 반복문 ${loopNumber}\n${analysis}`);
   }
   
-  const formattedResult = `검사한 반복문 수 : ${targetLoops.length}\n\n${results.join('\n\n')}`;
+  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${results.join('\n\n')}`;
   return { result: formattedResult };
+}
+
+/**
+ * 계층적 번호 생성 (1, 2.1, 2.2, 3 등)
+ */
+function generateHierarchicalNumber(currentLoop: LoopInfo, allLoops: LoopInfo[]): string {
+  if (currentLoop.level === 0) {
+    // 최상위 루프
+    return currentLoop.index.toString();
+  }
+  
+  // 부모 루프 찾기
+  const parentLoop = allLoops[currentLoop.parentIndex!];
+  const parentNumber = generateHierarchicalNumber(parentLoop, allLoops);
+  
+  return `${parentNumber}.${currentLoop.index}`;
 }
 
 
