@@ -445,16 +445,22 @@ export async function loopCheck({ code }: { code: string }) {
 }
 
 // sohyeon's hw
+// traceVar 함수를 비동기(async) 함수로 정의합니다.
+// 이 함수는 'code'와 'userQuery'라는 두 개의 인자를 받습니다.
 export async function traceVar({
-  code,
-  userQuery,
+  code,         // 사용자가 제공한 코드 문자열
+  userQuery,    // 변수 추적에 대한 사용자의 질문
 }: {
   code: string;
   userQuery: string;
 }) {
+  // Gemini 모델에 전달할 프롬프트(prompt)를 정의합니다.
   const prompt = `
+  // 사용자 코드와 질문을 분석하여 변수의 흐름을 추적하라는 지시
   Analyze the following code and the user's question to trace the flow of variables the user wants to understand.
+  // 만약 사용자가 특정 변수나 함수를 지정하지 않았다면, 주요 변수들의 흐름을 설명하라는 지시
   If the user's question does not specify a function or variable name, identify and explain the flow of key variables in the code.
+  // 만약 사용자의 질문이 변수 추적과 관련이 없다면, 특정 응답("The question is not related to variable tracing.")을 반환하라는 지시
   If the user's question is not related to variable tracing, respond with "The question is not related to variable tracing."
 
   **User Question:**
@@ -466,8 +472,12 @@ export async function traceVar({
   \`\`\`
 
   **Response Format:**
+  // 응답 형식에 대한 지시사항
+  // 각 변수의 이름과 값의 변화를 명확하고 직관적으로 설명
   - Clearly and intuitively explain the name of each variable and the changes in its value.
+  // 응답은 한국어로 작성
   - Please respond in Korean.
+  // 응답 형식의 예시 제공
   - For example:
   \`\`\`
   변수 'counter':
@@ -475,11 +485,17 @@ export async function traceVar({
   - 루프를 통해 1씩 증가
   - 최종값: 10
   \`\`\`
+  // 위의 형식을 따르도록 지시
   Please follow this format for your explanation.
-  `.trim();
+  `.trim(); // 문자열의 양쪽 공백을 제거합니다.
 
+  // 'gemini-1.5-flash' 모델을 사용하여 Gemini AI 모델 인스턴스를 생성합니다.
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  
+  // 생성된 모델에 프롬프트를 전달하여 콘텐츠를 생성하도록 요청합니다.
   const result = await model.generateContent(prompt);
+  
+  // AI 응답 텍스트를 'variableTrace' 키를 가진 객체 형태로 반환합니다.
   return { variableTrace: result.response.text() };
 }
 
