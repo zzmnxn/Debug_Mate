@@ -1,5 +1,5 @@
 import { CompilerError, CompilerWarning } from "../parsing/compilerResultParser";
-import { loopCheck, testBreak, traceVar, afterDebug, markErrors } from "./handlers";
+import { loopCheck, testBreak, traceVar, afterDebug, markErrors, inProgressDebug, beforeDebug } from "./handlers";
 import typia from "typia";
 
 export class ErrorDiagnosisService {
@@ -15,6 +15,12 @@ export class ErrorDiagnosisService {
   }
   async afterDebug({ logSummary, errors, warnings }: { logSummary: string, errors: CompilerError[], warnings: CompilerWarning[] }) {
     return afterDebug(logSummary, errors, warnings);
+  }
+  async beforeDebug({ code }: { code: string }) {
+    return beforeDebug({ code });
+  }
+  async inProgressDebug({ code }: { code: string }) {
+    return inProgressDebug(code);
   }
   async markErrors({ originalFilePath, code, errors, warnings }: { originalFilePath: string, code: string, errors: CompilerError[], warnings: CompilerWarning[] }) {
     return markErrors(originalFilePath, code, errors, warnings);
