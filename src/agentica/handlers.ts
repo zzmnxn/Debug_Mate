@@ -5,8 +5,8 @@ import { extractLoopsFromCode } from '../parsing/loopExtractor';
 import { execSync, spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
 
+const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
 
 /**
  * afterDebug 기능을 위한 프롬프트 생성 함수
@@ -15,21 +15,28 @@ const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
  * @param warnings - 파싱된 컴파일러 경고 목록
  * @returns Gemini AI 분석을 위한 구조화된 프롬프트 문자열
  */
-export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): string {
+export function buildAfterDebugPrompt(
+  logSummary: string,
+  errors: CompilerError[],
+  warnings: CompilerWarning[]
+): string {
   // 프롬프트에 포함할 최대 에러/경고 개수 (너무 많으면 AI 분석 품질이 떨어질 수 있음)
   const MAX_ITEMS = 3;
 
   // 에러 정보를 사람이 읽기 쉬운 형태로 포맷팅
   const formatError = (e: CompilerError, i: number) =>
-    `[Error ${i + 1}] (${e.severity.toUpperCase()} - ${e.type}) ${e.message}${e.file ? ` at ${e.file}:${e.line}:${e.column}` : ''}`;
+    `[Error ${i + 1}] (${e.severity.toUpperCase()} - ${e.type}) ${e.message}${e.file ? ` at ${e.file}:${e.line}:${e.column}` : ""}`;
 
   // 경고 정보를 사람이 읽기 쉬운 형태로 포맷팅
   const formatWarning = (w: CompilerWarning, i: number) =>
-    `[Warning ${i + 1}] (${w.type}) ${w.message}${w.file ? ` at ${w.file}:${w.line}:${w.column}` : ''}`;
+    `[Warning ${i + 1}] (${w.type}) ${w.message}${w.file ? ` at ${w.file}:${w.line}:${w.column}` : ""}`;
 
   // 상위 N개의 에러와 경고만 선택하여 텍스트로 변환
-  const errorText = errors.slice(0, MAX_ITEMS).map(formatError).join('\n');
-  const warningText = warnings.slice(0, MAX_ITEMS).map(formatWarning).join('\n');
+  const errorText = errors.slice(0, MAX_ITEMS).map(formatError).join("\n");
+  const warningText = warnings
+    .slice(0, MAX_ITEMS)
+    .map(formatWarning)
+    .join("\n");
 
   return `
 You are a senior compiler engineer and static analysis expert.
@@ -39,10 +46,10 @@ Your task is to analyze the compiler output and runtime log from a C/C++ program
 ${logSummary}
 
 === Compiler Errors ===
-${errorText || 'None'}
+${errorText || "None"}
 
 === Compiler Warnings ===
-${warningText || 'None'}
+${warningText || "None"}
 
  IMPORTANT NOTES:
 - If issues are present: State the most likely cause and suggest a concrete fix (1–2 lines).
@@ -64,7 +71,7 @@ Do not add anything outside this format.
 - If the summary or runtime log contains "[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.", do NOT analyze the cause. Just output the hint exactly as the Suggestion and say "Critical issue detected" in Result.
 
 `.trim();
-///다른 함수를 이용해야할 거 같으면 [Hint] ~~ 을 사용해보세요라고 유도 함////////
+  ///다른 함수를 이용해야할 거 같으면 [Hint] ~~ 을 사용해보세요라고 유도 함////////
 }
 
 /**
@@ -74,8 +81,8 @@ Do not add anything outside this format.
  * @param warnings - 파싱된 컴파일러 경고 배열
  * @returns AI 분석 결과 (한국어, 구조화된 형태: [Result]/[Reason]/[Suggestion])
  */
-
 export async function afterDebug(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): Promise<string> {
+
   // 조기 반환: 에러와 경고가 모두 없으면 AI 호출 없이 바로 성공 응답
   if (errors.length === 0 && warnings.length === 0) {
     return `[Result] No critical issues detected
@@ -90,7 +97,9 @@ export async function afterDebug(logSummary: string, errors: CompilerError[], wa
     const result = await model.generateContent(prompt);
     return result.response.text().trim();
   } catch (error) {
-    throw new Error(`AI 분석 실패: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `AI 분석 실패: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
@@ -98,52 +107,88 @@ export async function afterDebug(logSummary: string, errors: CompilerError[], wa
  * afterDebugFromCode - C/C++ 코드를 받아서 전체 분석 파이프라인 실행
  * @param code - 분석할 C/C++ 소스 코드 문자열
  * @returns AI 분석 결과 (한국어, 구조화된 형태)
- * 
+ *
  * @throws Error - 파일 시스템 오류, 컴파일러 오류, AI API 오류 등
- * 
+ *
  */
+export async function afterDebugFromCode(code: string): Promise<string> {
+  const tmpFile = path.join("/tmp", `code_${Date.now()}.c`);
+  const outputFile = "/tmp/a.out";
 
+  try {
+    // 임시 파일에 코드 저장
+    fs.writeFileSync(tmpFile, code);
+
+    // 컴파일 실행
+    const compileLog = await compileAndRun(tmpFile, outputFile);
+
+    // 결과 파싱 및 분석
+    const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
+    const summary = CompilerResultParser.generateSummary(parsed);
+    return afterDebug(summary, parsed.errors, parsed.warnings);
+  } finally {
+    // 임시 파일 정리
+    cleanupTempFiles(tmpFile, outputFile);
+  }
+}
 
 /**
  * 컴파일 및 실행을 수행하고 로그를 반환하는 헬퍼 함수
  */
-async function compileAndRun(sourceFile: string, outputFile: string): Promise<string> {
+async function compileAndRun(
+  sourceFile: string,
+  outputFile: string
+): Promise<string> {
   let log = "";
-  
+
   // GCC 컴파일 실행
-  const compileResult = spawnSync("gcc", [
-    "-Wall", "-Wextra", "-Wpedantic", "-O2", "-Wdiv-by-zero", 
-    "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address", 
-    sourceFile, "-o", outputFile
-  ], {
-    encoding: "utf-8",
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-  
+  const compileResult = spawnSync(
+    "gcc",
+    [
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-O2",
+      "-Wdiv-by-zero",
+      "-fanalyzer",
+      "-fsanitize=undefined",
+      "-fsanitize=address",
+      sourceFile,
+      "-o",
+      outputFile,
+    ],
+    {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }
+  );
+
   // 컴파일 출력 수집
   log += (compileResult.stdout || "") + (compileResult.stderr || "");
-  
+
   // 컴파일 성공 시 실행
   if (compileResult.status === 0) {
     log += "\n\n=== Runtime Output ===\n";
-    const runResult = spawnSync(outputFile, [], { 
-      encoding: "utf-8", 
-      timeout: 1000 
+    const runResult = spawnSync(outputFile, [], {
+      encoding: "utf-8",
+      timeout: 1000,
     });
-    
+
     log += (runResult.stdout || "") + (runResult.stderr || "");
-    
+
     // 런타임 에러 감지
     if (runResult.stderr?.includes("runtime error:")) {
-      log += "\n[Runtime Type] UndefinedBehaviorSanitizer runtime error (UB 가능성)";
+      log +=
+        "\n[Runtime Type] UndefinedBehaviorSanitizer runtime error (UB 가능성)";
     }
-    
+
     // 타임아웃 감지
-    if (runResult.error && (runResult.error as any).code === 'ETIMEDOUT') {
-      log += "\n[Runtime Error] Execution timed out (possible infinite loop)\nloopCheck() 함수를 사용해보세요";
+    if (runResult.error && (runResult.error as any).code === "ETIMEDOUT") {
+      log +=
+        "\n[Runtime Error] Execution timed out (possible infinite loop)\nloopCheck() 함수를 사용해보세요";
     }
   }
-  
+
   return log;
 }
 
@@ -372,11 +417,11 @@ export async function afterDebugFromCode(code: string, originalFilePath: string 
 // uuyeong's hw
 export async function loopCheck({ code }: { code: string }) {
   const loops = extractLoopsFromCode(code);
-  
+
   if (loops.length === 0) {
     return { result: "코드에서 for/while 루프를 찾을 수 없습니다." };
   }
-  
+
   const results = [];
   for (let i = 0; i < loops.length; i++) {
     const loop = loops[i];
@@ -384,33 +429,51 @@ export async function loopCheck({ code }: { code: string }) {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
     const analysis = result.response.text();
-    
-    results.push(`**루프 ${i + 1}**:\n\`\`\`\n${loop.trim()}\n\`\`\`\n\n**분석 결과**:\n${analysis}`);
+
+    results.push(
+      `**루프 ${i + 1}**:\n\`\`\`\n${loop.trim()}\n\`\`\`\n\n**분석 결과**:\n${analysis}`
+    );
   }
-  
-  return { result: `루프 분석 완료 (총 ${loops.length}개)\n\n${results.join('\n\n---\n\n')}` };
+
+  return {
+    result: `루프 분석 완료 (총 ${loops.length}개)\n\n${results.join("\n\n---\n\n")}`,
+  };
 }
 
-
 // sohyeon's hw
-export async function traceVar({ code }: { code: string }) {
-  const prompt = `Analyze the following code snippet and trace the flow of variables.
+export async function traceVar({
+  code,
+  userQuery,
+}: {
+  code: string;
+  userQuery: string;
+}) {
+  const prompt = `
+  Analyze the following code and the user's question to trace the flow of variables the user wants to understand.
+  If the user's question does not specify a function or variable name, identify and explain the flow of key variables in the code.
+  If the user's question is not related to variable tracing, respond with "The question is not related to variable tracing."
+
+  **User Question:**
+  "${userQuery}"
+
+  **Code:**
+  \`\`\`
+  ${code}
+  \`\`\`
 
   **Response Format:**
-  - **If no variables are used in the code,** please respond only with "No variables are used."
-  - **If variables are used in the code,** please provide a concise explanation for each variable in the following format:
-    \`\`\`
-    Variable 1: [Variable Name]
-    - [Concise and intuitive explanation of variable value changes]
-    Variable 2: [Variable Name]
-    - [Concise and intuitive explanation of variable value changes]
-    ...
-    \`\`\`
-    The explanation should be short and intuitive, but clearly explain the changes in variable values.
+  - Clearly and intuitively explain the name of each variable and the changes in its value.
+  - Please respond in Korean.
+  - For example:
+  \`\`\`
+  변수 'counter':
+  - 초기값: 0
+  - 루프를 통해 1씩 증가
+  - 최종값: 10
+  \`\`\`
+  Please follow this format for your explanation.
+  `.trim();
 
-  Please respond in Korean.
-
-  \`\`\`${code}\`\`\``;
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
   return { variableTrace: result.response.text() };
@@ -471,4 +534,3 @@ Now analyze the following code:
 ${codeSnippet}
   `.trim();
 }
-
