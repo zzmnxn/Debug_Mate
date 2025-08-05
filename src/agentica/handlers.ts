@@ -1,11 +1,14 @@
 import { SGlobal } from "../config/SGlobal";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { CompilerError, CompilerWarning, CompilerResultParser } from '../parsing/compilerResultParser';
-import { extractLoopsFromCode } from '../parsing/loopExtractor';
+import {
+  CompilerError,
+  CompilerWarning,
+  CompilerResultParser,
+} from "../parsing/compilerResultParser";
+import { extractLoopsFromCode } from "../parsing/loopExtractor";
 import { execSync, spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
 
 /**
@@ -81,8 +84,12 @@ Do not add anything outside this format.
  * @param warnings - 파싱된 컴파일러 경고 배열
  * @returns AI 분석 결과 (한국어, 구조화된 형태: [Result]/[Reason]/[Suggestion])
  */
-export async function afterDebug(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): Promise<string> {
 
+export async function afterDebug(
+  logSummary: string,
+  errors: CompilerError[],
+  warnings: CompilerWarning[]
+): Promise<string> {
   // 조기 반환: 에러와 경고가 모두 없으면 AI 호출 없이 바로 성공 응답
   if (errors.length === 0 && warnings.length === 0) {
     return `[Result] No critical issues detected
@@ -111,26 +118,6 @@ export async function afterDebug(logSummary: string, errors: CompilerError[], wa
  * @throws Error - 파일 시스템 오류, 컴파일러 오류, AI API 오류 등
  *
  */
-export async function afterDebugFromCode(code: string): Promise<string> {
-  const tmpFile = path.join("/tmp", `code_${Date.now()}.c`);
-  const outputFile = "/tmp/a.out";
-
-  try {
-    // 임시 파일에 코드 저장
-    fs.writeFileSync(tmpFile, code);
-
-    // 컴파일 실행
-    const compileLog = await compileAndRun(tmpFile, outputFile);
-
-    // 결과 파싱 및 분석
-    const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
-    const summary = CompilerResultParser.generateSummary(parsed);
-    return afterDebug(summary, parsed.errors, parsed.warnings);
-  } finally {
-    // 임시 파일 정리
-    cleanupTempFiles(tmpFile, outputFile);
-  }
-}
 
 /**
  * 컴파일 및 실행을 수행하고 로그를 반환하는 헬퍼 함수
@@ -209,14 +196,14 @@ function cleanupTempFiles(...files: string[]): void {
 }
 
 // 문자열 패딩 헬퍼 함수 (padStart 대체)
-function padLeft(str: string, length: number, padChar: string = ' '): string {
+function padLeft(str: string, length: number, padChar: string = " "): string {
   const padLength = length - str.length;
   return padLength > 0 ? padChar.repeat(padLength) + str : str;
 }
 
 /**
  * 코드에서 에러와 경고 위치를 주석으로 표시하고 파일로 저장하는 함수
- * 
+ *
  * @param originalFilePath - 원본 파일 경로 (예: "main.c")
  * @param code - 원본 코드 문자열
  * @param errors - 파싱된 컴파일러 에러 목록
@@ -229,14 +216,17 @@ export function markErrors(
   errors: CompilerError[],
   warnings: CompilerWarning[]
 ): string {
-  const lines = code.split('\n');
+  const lines = code.split("\n");
   const markedLines: string[] = [];
-  
+
   // 각 라인별로 에러/경고 정보 수집
-  const lineIssues = new Map<number, { errors: CompilerError[], warnings: CompilerWarning[] }>();
-  
+  const lineIssues = new Map<
+    number,
+    { errors: CompilerError[]; warnings: CompilerWarning[] }
+  >();
+
   // 에러 정보 수집
-  errors.forEach(error => {
+  errors.forEach((error) => {
     if (error.line) {
       const lineNum = error.line;
       if (!lineIssues.has(lineNum)) {
@@ -245,9 +235,9 @@ export function markErrors(
       lineIssues.get(lineNum)!.errors.push(error);
     }
   });
-  
+
   // 경고 정보 수집
-  warnings.forEach(warning => {
+  warnings.forEach((warning) => {
     if (warning.line) {
       const lineNum = warning.line;
       if (!lineIssues.has(lineNum)) {
@@ -256,13 +246,13 @@ export function markErrors(
       lineIssues.get(lineNum)!.warnings.push(warning);
     }
   });
-  
+
   // 헤더 추가
   markedLines.push(`// === 에러/경고 위치 표시 파일 ===`);
   markedLines.push(`// 원본 파일: ${originalFilePath}`);
   markedLines.push(`// ● ERROR | ● WARNING`);
-  markedLines.push('');
-  
+  markedLines.push("");
+
   // 각 라인 처리
   lines.forEach((line, index) => {
     const lineNum = index + 1;
@@ -271,10 +261,10 @@ export function markErrors(
     let comments: string[] = [];
     if (issues) {
       // 에러 메시지들 표시
-      issues.errors.forEach(error => {
-        let indicator = '';
+      issues.errors.forEach((error) => {
+        let indicator = "";
         if (error.column) {
-          indicator = ' '.repeat(error.column - 1) + '^';
+          indicator = " ".repeat(error.column - 1) + "^";
           if (error.code) {
             comments.push(`// ${error.code}`);
           }
@@ -286,10 +276,10 @@ export function markErrors(
         }
       });
       // 경고 메시지들 표시
-      issues.warnings.forEach(warning => {
-        let indicator = '';
+      issues.warnings.forEach((warning) => {
+        let indicator = "";
         if (warning.column) {
-          indicator = ' '.repeat(warning.column - 1) + '^';
+          indicator = " ".repeat(warning.column - 1) + "^";
           if (warning.code) {
             comments.push(`// ${warning.code}`);
           }
@@ -300,31 +290,32 @@ export function markErrors(
           }
         }
       });
-      markedLines.push(outputLine + (comments.length > 0 ? '  ' + comments.join(' ') : ''));
+      markedLines.push(
+        outputLine + (comments.length > 0 ? "  " + comments.join(" ") : "")
+      );
     } else {
       // 일반 라인 (문제 없음)
       markedLines.push(line);
     }
   });
-  
+
   // 요약 정보 추가
-  markedLines.push('');
+  markedLines.push("");
   markedLines.push(`// === 요약 ===`);
   markedLines.push(`// 에러: ${errors.length}개`);
   markedLines.push(`// 경고: ${warnings.length}개`);
-  
+
   // 파일명 생성 (원본 파일명 기반)
   const parsedPath = path.parse(originalFilePath);
   const outputFileName = `${parsedPath.name}_with_errors${parsedPath.ext}`;
-  const outputPath = path.join(parsedPath.dir || '.', outputFileName);
-  
+  const outputPath = path.join(parsedPath.dir || ".", outputFileName);
+
   // 파일로 저장
-  const markedCode = markedLines.join('\n');
-  fs.writeFileSync(outputPath, markedCode, 'utf8');
-  
+  const markedCode = markedLines.join("\n");
+  fs.writeFileSync(outputPath, markedCode, "utf8");
+
   return outputPath;
 }
-
 
 /**
  * 코드를 임시 파일로 저장, 컴파일, 에러/경고를 파싱해 마킹된 파일을 생성하는 함수
@@ -349,7 +340,10 @@ export async function compileAndMarkCode(
   const execSync = require("child_process").execSync;
   let compilerOutput = "";
   try {
-    compilerOutput = execSync(`${compilerPath} -Wall -o NUL "${sourcePath}"`, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+    compilerOutput = execSync(`${compilerPath} -Wall -o NUL "${sourcePath}"`, {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
   } catch (e: any) {
     // 컴파일 에러/경고는 stderr에 있음
     compilerOutput = e.stdout + "\n" + e.stderr;
@@ -367,13 +361,18 @@ export async function compileAndMarkCode(
   );
 
   // 임시 파일 정리(선택)
-  try { fs.unlinkSync(sourcePath); } catch {}
+  try {
+    fs.unlinkSync(sourcePath);
+  } catch {}
 
   return markedPath;
 }
 
 // afterDebugFromCode 수정: 마킹 파일 경로도 반환
-export async function afterDebugFromCode(code: string, originalFilePath: string = "main.c"): Promise<{ analysis: string, markedFilePath: string }> {
+export async function afterDebugFromCode(
+  code: string,
+  originalFilePath: string = "main.c"
+): Promise<{ analysis: string; markedFilePath: string }> {
   // 기존 코드 참고 (임시 파일 저장, 컴파일, 파싱 등)
   const tmp = require("os").tmpdir();
   const fs = require("fs");
@@ -386,7 +385,10 @@ export async function afterDebugFromCode(code: string, originalFilePath: string 
   const execSync = require("child_process").execSync;
   let compilerOutput = "";
   try {
-    compilerOutput = execSync(`gcc -Wall -o NUL "${sourcePath}"`, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+    compilerOutput = execSync(`gcc -Wall -o NUL "${sourcePath}"`, {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
   } catch (e: any) {
     compilerOutput = e.stdout + "\n" + e.stderr;
   }
@@ -409,7 +411,9 @@ export async function afterDebugFromCode(code: string, originalFilePath: string 
     result.warnings
   );
 
-  try { fs.unlinkSync(sourcePath); } catch {}
+  try {
+    fs.unlinkSync(sourcePath);
+  } catch {}
 
   return { analysis, markedFilePath };
 }
