@@ -1,45 +1,26 @@
 import { SGlobal } from "../config/SGlobal";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import {
-  CompilerError,
-  CompilerWarning,
-  CompilerResultParser,
-} from "../parsing/compilerResultParser";
-import { extractLoopsFromCode } from "../parsing/loopExtractor";
-import { execSync, spawnSync } from "child_process";
-import * as fs from "fs";
-import * as path from "path";
-const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
+import { CompilerError, CompilerWarning, CompilerResultParser } from '../parsing/compilerResultParser';
+import { extractLoopsFromCode } from '../parsing/loopExtractor';
+import { execSync } from "child_process";
+import { spawnSync } from "child_process";
+import fs from "fs";
+import path from "path";
+const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
 
-/**
- * afterDebug 기능을 위한 프롬프트 생성 함수
- * @param logSummary - 컴파일 및 실행 로그의 요약 정보
- * @param errors - 파싱된 컴파일러 에러 목록
- * @param warnings - 파싱된 컴파일러 경고 목록
- * @returns Gemini AI 분석을 위한 구조화된 프롬프트 문자열
- */
-export function buildAfterDebugPrompt(
-  logSummary: string,
-  errors: CompilerError[],
-  warnings: CompilerWarning[]
-): string {
-  // 프롬프트에 포함할 최대 에러/경고 개수 (너무 많으면 AI 분석 품질이 떨어질 수 있음)
+
+//jm hw
+export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): string {
   const MAX_ITEMS = 3;
 
-  // 에러 정보를 사람이 읽기 쉬운 형태로 포맷팅
   const formatError = (e: CompilerError, i: number) =>
-    `[Error ${i + 1}] (${e.severity.toUpperCase()} - ${e.type}) ${e.message}${e.file ? ` at ${e.file}:${e.line}:${e.column}` : ""}`;
+    `[Error ${i + 1}] (${e.severity.toUpperCase()} - ${e.type}) ${e.message}${e.file ? ` at ${e.file}:${e.line}:${e.column}` : ''}`;
 
-  // 경고 정보를 사람이 읽기 쉬운 형태로 포맷팅
   const formatWarning = (w: CompilerWarning, i: number) =>
-    `[Warning ${i + 1}] (${w.type}) ${w.message}${w.file ? ` at ${w.file}:${w.line}:${w.column}` : ""}`;
+    `[Warning ${i + 1}] (${w.type}) ${w.message}${w.file ? ` at ${w.file}:${w.line}:${w.column}` : ''}`;
 
-  // 상위 N개의 에러와 경고만 선택하여 텍스트로 변환
-  const errorText = errors.slice(0, MAX_ITEMS).map(formatError).join("\n");
-  const warningText = warnings
-    .slice(0, MAX_ITEMS)
-    .map(formatWarning)
-    .join("\n");
+  const errorText = errors.slice(0, MAX_ITEMS).map(formatError).join('\n');
+  const warningText = warnings.slice(0, MAX_ITEMS).map(formatWarning).join('\n');
 
   return `
 You are a senior compiler engineer and static analysis expert.
@@ -49,21 +30,22 @@ Your task is to analyze the compiler output and runtime log from a C/C++ program
 ${logSummary}
 
 === Compiler Errors ===
-${errorText || "None"}
+${errorText || 'None'}
 
 === Compiler Warnings ===
-${warningText || "None"}
+${warningText || 'None'}
 
- IMPORTANT NOTES:
+IMPORTANT NOTES:
 - If issues are present: State the most likely cause and suggest a concrete fix (1–2 lines).
-- Do NOT guess beyond the given log. If something is unclear, say so briefly (e.g., "Based on the log alone, it's unclear").
+- Do NOT guess beyond the given log. If something is unclear, say so briefly.
 
+IMPORTANT: Please respond in Korean, but keep the [Result], [Reason], and [Suggestion] section headers in English.
 
 Format your response in the following structure:
 
-[Result] {Short message: "Critical issue detected" or "No critical issues detected"}
-[Reason] {Brief explanation of why (e.g., undeclared variable, safe log, etc.)}
-[Suggestion] {Fix or say "No fix required" if none needed}
+[Result] {Short message: "O" or "X"}
+[Reason] {Brief explanation of why - in Korean}
+[Suggestion] {Fix or say "Suggestion 없음" if none needed - in Korean}
 Do not add anything outside this format.
 
 === Analysis Rules ===
@@ -74,132 +56,96 @@ Do not add anything outside this format.
 - If the summary or runtime log contains "[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.", do NOT analyze the cause. Just output the hint exactly as the Suggestion and say "Critical issue detected" in Result.
 
 `.trim();
-  ///다른 함수를 이용해야할 거 같으면 [Hint] ~~ 을 사용해보세요라고 유도 함////////
+///다른 함수를 이용해야할 거 같으면 [Hint] ~~ 을 사용해보세요라고 유도 함////////
 }
 
 /**
- * afterDebug 핵심 함수 - 파싱된 컴파일러 결과를 AI로 분석
- * @param logSummary - CompilerResultParser.generateSummary()로 생성된 로그 요약
- * @param errors - 파싱된 컴파일러 에러 배열
- * @param warnings - 파싱된 컴파일러 경고 배열
- * @returns AI 분석 결과 (한국어, 구조화된 형태: [Result]/[Reason]/[Suggestion])
+ * 1. afterDebug: 에러/경고 로그 + 요약을 받아 Gemini 분석 수행
  */
+export async function afterDebug(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): Promise<string> {
+  const prompt = buildAfterDebugPrompt(logSummary, errors, warnings);
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(prompt);
+  return result.response.text().trim();
+}
 
-export async function afterDebug(
-  logSummary: string,
-  errors: CompilerError[],
-  warnings: CompilerWarning[]
-): Promise<string> {
-  // 조기 반환: 에러와 경고가 모두 없으면 AI 호출 없이 바로 성공 응답
-  if (errors.length === 0 && warnings.length === 0) {
-    return `[Result] No critical issues detected
-[Reason] 컴파일 성공, 에러 및 경고 없음
-[Suggestion] No fix required`;
-  }
+/**
+ * 2. afterDebugFromCode: 코드 입력 → 컴파일 → 로그 파싱 → Gemini 분석까지 자동 수행
+ */
+export async function afterDebugFromCode(code: string, originalFileName: string = "input.c"): Promise<{ analysis: string, markedFilePath: string }> {
+  const tmpFile = path.join("/tmp", `code_${Date.now()}.c`);
+  fs.writeFileSync(tmpFile, code);
 
-  // 에러나 경고가 있는 경우에만 AI 분석 수행
+  let compileLog = "";
+
   try {
-    const prompt = buildAfterDebugPrompt(logSummary, errors, warnings);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-    return result.response.text().trim();
-  } catch (error) {
-    throw new Error(
-      `AI 분석 실패: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-}
-
-/**
- * afterDebugFromCode - C/C++ 코드를 받아서 전체 분석 파이프라인 실행
- * @param code - 분석할 C/C++ 소스 코드 문자열
- * @returns AI 분석 결과 (한국어, 구조화된 형태)
- *
- * @throws Error - 파일 시스템 오류, 컴파일러 오류, AI API 오류 등
- *
- */
-
-/**
- * 컴파일 및 실행을 수행하고 로그를 반환하는 헬퍼 함수
- */
-async function compileAndRun(
-  sourceFile: string,
-  outputFile: string
-): Promise<string> {
-  let log = "";
-
-  // GCC 컴파일 실행
-  const compileResult = spawnSync(
-    "gcc",
-    [
-      "-Wall",
-      "-Wextra",
-      "-Wpedantic",
-      "-O2",
-      "-Wdiv-by-zero",
-      "-fanalyzer",
-      "-fsanitize=undefined",
-      "-fsanitize=address",
-      sourceFile,
-      "-o",
-      outputFile,
-    ],
-    {
-      encoding: "utf-8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }
-  );
-
-  // 컴파일 출력 수집
-  log += (compileResult.stdout || "") + (compileResult.stderr || "");
-
-  // 컴파일 성공 시 실행
-  if (compileResult.status === 0) {
-    log += "\n\n=== Runtime Output ===\n";
-    const runResult = spawnSync(outputFile, [], {
-      encoding: "utf-8",
-      timeout: 1000,
+    // 컴파일 단계 - spawnSync 사용으로 변경하여 stderr 확실히 캡처
+    const compileResult = spawnSync("gcc", [
+      "-Wall", "-Wextra", "-Wpedantic", "-O2", "-Wdiv-by-zero", 
+      "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address", tmpFile, "-o", "/tmp/a.out"
+    ], {
+      encoding: "utf-8"
     });
-
-    log += (runResult.stdout || "") + (runResult.stderr || "");
-
-    // 런타임 에러 감지
-    if (runResult.stderr?.includes("runtime error:")) {
-      log +=
-        "\n[Runtime Type] UndefinedBehaviorSanitizer runtime error (UB 가능성)";
+    if (compileResult.stdout) {
+      compileLog += compileResult.stdout;
+    }
+    if (compileResult.stderr) {
+      compileLog += compileResult.stderr;
     }
 
-    // 타임아웃 감지
-    if (runResult.error && (runResult.error as any).code === "ETIMEDOUT") {
-      log +=
-        "\n[Runtime Error] Execution timed out (possible infinite loop)\nloopCheck() 함수를 사용해보세요";
-    }
-  }
+    // 컴파일 성공 시에만 실행
+    if (compileResult.status === 0) {
+      compileLog += "\n\n=== Runtime Output ===\n";
+      const runResult = spawnSync("/tmp/a.out", [], { encoding: "utf-8", timeout: 1000 }); // 1초 제한
 
-  return log;
-}
-
-/**
- * 임시 파일들을 안전하게 정리하는 헬퍼 함수
- */
-function cleanupTempFiles(...files: string[]): void {
-  for (const file of files) {
-    try {
-      if (fs.existsSync(file)) {
-        fs.unlinkSync(file);
+      if (runResult.stdout) {
+        compileLog += runResult.stdout;
       }
-    } catch (error) {
-      // 파일 삭제 실패는 무시 (임시 파일이므로)
-      console.warn(`임시 파일 삭제 실패: ${file}`);
+      if (runResult.stderr) {
+        compileLog += runResult.stderr;
+      }
+      if (runResult.stderr.includes("runtime error:")) {
+        compileLog += `\n[Runtime Type] UndefinedBehaviorSanitizer runtime error (UB 가능성)`;
+      }
+      if (runResult.error) {
+        const errorAny = runResult.error as any;
+        if (errorAny && errorAny.code === 'ETIMEDOUT') {
+          compileLog += `\n[Runtime Error] Execution timed out (possible infinite loop)\n loopCheck() 함수를 사용해보세요`;
+        } else {
+          compileLog += `\n[Runtime Error] ${runResult.error.message}`;
+        }
+      }
+    } else {
+      // 컴파일 실패
+      compileLog += "\n\n=== Compile Failed ===\n";
+      if (compileResult.error) {
+        compileLog += `[Compile Process Error] ${compileResult.error.message}\n`;
+      }
     }
+
+  } catch (err: any) {
+    // 예상치 못한 에러
+    compileLog += "\n\n=== Unexpected Error ===\n";
+    compileLog += err.message || err.toString();
   }
+  // 디버깅용 로그 (필요시 주석 해제)
+  // console.log("=== 🧾 GCC + Runtime 로그 ===");
+  // console.log(compileLog);
+
+  const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
+  const summary = CompilerResultParser.generateSummary(parsed);
+  const analysis = await afterDebug(summary, parsed.errors, parsed.warnings);
+  // AI 분석 결과에서 [Result] X면 Reason/Suggestion을 markErrors에 넘김
+  let aiAnalysisForMark = undefined;
+  const resultMatch = analysis.match(/\[Result\]\s*([OX])/);
+  if (resultMatch && resultMatch[1] === "X") {
+    aiAnalysisForMark = analysis;
+  }
+  const markedFilePath = markErrors(originalFileName, code, parsed.errors, parsed.warnings, aiAnalysisForMark);
+  return { analysis, markedFilePath };
 }
 
-// 문자열 패딩 헬퍼 함수 (padStart 대체)
-function padLeft(str: string, length: number, padChar: string = " "): string {
-  const padLength = length - str.length;
-  return padLength > 0 ? padChar.repeat(padLength) + str : str;
-}
+
 
 /**
  * 코드에서 에러와 경고 위치를 주석으로 표시하고 파일로 저장하는 함수
@@ -208,13 +154,15 @@ function padLeft(str: string, length: number, padChar: string = " "): string {
  * @param code - 원본 코드 문자열
  * @param errors - 파싱된 컴파일러 에러 목록
  * @param warnings - 파싱된 컴파일러 경고 목록
+ * @param aiAnalysis - AI 분석 결과 (에러가 있는 경우 Reason/Suggestion을 포함)
  * @returns 생성된 파일의 경로
  */
 export function markErrors(
   originalFilePath: string,
   code: string,
   errors: CompilerError[],
-  warnings: CompilerWarning[]
+  warnings: CompilerWarning[],
+  aiAnalysis?: string
 ): string {
   const lines = code.split("\n");
   const markedLines: string[] = [];
@@ -247,11 +195,23 @@ export function markErrors(
     }
   });
 
-  // 헤더 추가
-  markedLines.push(`// === 에러/경고 위치 표시 파일 ===`);
-  markedLines.push(`// 원본 파일: ${originalFilePath}`);
-  markedLines.push(`// ● ERROR | ● WARNING`);
-  markedLines.push("");
+  // AI 분석 결과가 치명적(X)이면 파일 상단에 Reason/Suggestion 주석 추가
+  if (aiAnalysis) {
+    const resultMatch = aiAnalysis.match(/\[Result\]\s*([OX])/);
+    if (resultMatch && resultMatch[1] === "X") {
+      // Reason, Suggestion 추출
+      const reasonMatch = aiAnalysis.match(/\[Reason\]([\s\S]*?)(\[Suggestion\]|$)/);
+      const suggestionMatch = aiAnalysis.match(/\[Suggestion\]([\s\S]*)/);
+      if (reasonMatch) {
+        markedLines.push(`// [AI 분석: 치명적 문제 감지]`);
+        markedLines.push(`// Reason: ${reasonMatch[1].trim()}`);
+      }
+      if (suggestionMatch) {
+        markedLines.push(`// Suggestion: ${suggestionMatch[1].trim()}`);
+      }
+      markedLines.push("");
+    }
+  }
 
   // 각 라인 처리
   lines.forEach((line, index) => {
@@ -260,39 +220,65 @@ export function markErrors(
     let outputLine = line;
     let comments: string[] = [];
     if (issues) {
-      // 에러 메시지들 표시
+      // 에러 메시지들 표시 (컴파일 타임 + 런타임)
       issues.errors.forEach((error) => {
         let indicator = "";
+        const isRuntimeError = error.type === 'runtime';
+        const errorPrefix = isRuntimeError ? '[RUNTIME ERROR]' : '[ERROR]';
+        
         if (error.column) {
-          indicator = " ".repeat(error.column - 1) + "^";
+          indicator = " ".repeat(Math.max(0, error.column - 1)) + "^";
           if (error.code) {
-            comments.push(`// ${error.code}`);
+            comments.push(`${errorPrefix} ${error.code}: ${error.message}`);
+          } else {
+            comments.push(`${errorPrefix} ${error.message}`);
           }
-          outputLine += `\n${indicator}`;
+          // 런타임 에러의 경우 화살표 표시 추가
+          if (isRuntimeError) {
+            outputLine += `\n${indicator} // ${error.message}`;
+          } else {
+            outputLine += `\n${indicator}`;
+          }
         } else {
+          // 컬럼 정보가 없는 경우
           if (error.code) {
-            comments.push(`// ${error.code}`);
+            comments.push(`${errorPrefix} ${error.code}: ${error.message}`);
+          } else {
+            comments.push(`${errorPrefix} ${error.message}`);
+          }
+          // 런타임 에러인데 컬럼이 없는 경우
+          if (isRuntimeError) {
+            outputLine += `  // ${error.message}`;
           }
         }
       });
+      
       // 경고 메시지들 표시
       issues.warnings.forEach((warning) => {
         let indicator = "";
         if (warning.column) {
-          indicator = " ".repeat(warning.column - 1) + "^";
+          indicator = " ".repeat(Math.max(0, warning.column - 1)) + "^";
           if (warning.code) {
-            comments.push(`// ${warning.code}`);
+            comments.push(`[WARNING] ${warning.code}: ${warning.message}`);
+          } else {
+            comments.push(`[WARNING] ${warning.message}`);
           }
           outputLine += `\n${indicator}`;
         } else {
           if (warning.code) {
-            comments.push(`// ${warning.code}`);
+            comments.push(`[WARNING] ${warning.code}: ${warning.message}`);
+          } else {
+            comments.push(`[WARNING] ${warning.message}`);
           }
         }
       });
-      markedLines.push(
-        outputLine + (comments.length > 0 ? "  " + comments.join(" ") : "")
-      );
+      markedLines.push(outputLine);
+      if (comments.length > 0) {
+        comments.forEach((comment) => {
+          markedLines.push(`// ${"=".repeat(50)}`);
+          markedLines.push(comment);
+        });
+      }
     } else {
       // 일반 라인 (문제 없음)
       markedLines.push(line);
@@ -301,9 +287,21 @@ export function markErrors(
 
   // 요약 정보 추가
   markedLines.push("");
-  markedLines.push(`// === 요약 ===`);
-  markedLines.push(`// 에러: ${errors.length}개`);
-  markedLines.push(`// 경고: ${warnings.length}개`);
+  markedLines.push(`// ====== 요약 ======`);
+  const runtimeErrorCount = errors.filter(e => e.type === 'runtime').length;
+  const compileErrorCount = errors.length - runtimeErrorCount;
+  
+  if (runtimeErrorCount > 0) {
+    markedLines.push(`// 런타임 오류: ${runtimeErrorCount}개`);
+  }
+  if (compileErrorCount > 0) {
+    markedLines.push(`// 컴파일 에러: ${compileErrorCount}개`);
+  }
+  if (warnings.length > 0) {
+    markedLines.push(`// 경고: ${warnings.length}개`);
+  }
+  
+
 
   // 파일명 생성 (원본 파일명 기반)
   const parsedPath = path.parse(originalFilePath);
@@ -317,115 +315,14 @@ export function markErrors(
   return outputPath;
 }
 
-/**
- * 코드를 임시 파일로 저장, 컴파일, 에러/경고를 파싱해 마킹된 파일을 생성하는 함수
- * @param code - 컴파일할 C/C++ 코드 문자열
- * @param originalFilePath - 원본 파일명(확장자 포함)
- * @param compilerPath - 사용할 컴파일러 경로 (기본값: gcc)
- * @returns 마킹된 파일 경로
- */
-export async function compileAndMarkCode(
-  code: string,
-  originalFilePath: string,
-  compilerPath: string = "gcc"
-): Promise<string> {
-  const tmp = require("os").tmpdir();
-  const fs = require("fs");
-  const path = require("path");
-  const { CompilerResultParser } = require("../parsing/compilerResultParser");
-  const sourcePath = path.join(tmp, `debugmate_tmp_${Date.now()}.c`);
-  fs.writeFileSync(sourcePath, code, "utf8");
-
-  // 컴파일 (출력 파일은 무시)
-  const execSync = require("child_process").execSync;
-  let compilerOutput = "";
-  try {
-    compilerOutput = execSync(`${compilerPath} -Wall -o NUL "${sourcePath}"`, {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-  } catch (e: any) {
-    // 컴파일 에러/경고는 stderr에 있음
-    compilerOutput = e.stdout + "\n" + e.stderr;
-  }
-
-  // 파싱
-  const result = CompilerResultParser.parseCompilerOutput(compilerOutput);
-
-  // 마킹 파일 생성
-  const markedPath = markErrors(
-    originalFilePath,
-    code,
-    result.errors,
-    result.warnings
-  );
-
-  // 임시 파일 정리(선택)
-  try {
-    fs.unlinkSync(sourcePath);
-  } catch {}
-
-  return markedPath;
-}
-
-// afterDebugFromCode 수정: 마킹 파일 경로도 반환
-export async function afterDebugFromCode(
-  code: string,
-  originalFilePath: string = "main.c"
-): Promise<{ analysis: string; markedFilePath: string }> {
-  // 기존 코드 참고 (임시 파일 저장, 컴파일, 파싱 등)
-  const tmp = require("os").tmpdir();
-  const fs = require("fs");
-  const path = require("path");
-  const { CompilerResultParser } = require("../parsing/compilerResultParser");
-  const sourcePath = path.join(tmp, `debugmate_tmp_${Date.now()}.c`);
-  fs.writeFileSync(sourcePath, code, "utf8");
-
-  // 컴파일 (출력 파일은 무시)
-  const execSync = require("child_process").execSync;
-  let compilerOutput = "";
-  try {
-    compilerOutput = execSync(`gcc -Wall -o NUL "${sourcePath}"`, {
-      encoding: "utf8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-  } catch (e: any) {
-    compilerOutput = e.stdout + "\n" + e.stderr;
-  }
-
-  // 파싱
-  const result = CompilerResultParser.parseCompilerOutput(compilerOutput);
-
-  // AI 분석
-  const analysis = await afterDebug(
-    CompilerResultParser.generateSummary(result),
-    result.errors,
-    result.warnings
-  );
-
-  // 마킹 파일 생성
-  const markedFilePath = markErrors(
-    originalFilePath,
-    code,
-    result.errors,
-    result.warnings
-  );
-
-  try {
-    fs.unlinkSync(sourcePath);
-  } catch {}
-
-  return { analysis, markedFilePath };
-}
-
 // uuyeong's hw
 export async function loopCheck({ code }: { code: string }) {
   const loops = extractLoopsFromCode(code);
-
+  
   if (loops.length === 0) {
     return { result: "코드에서 for/while 루프를 찾을 수 없습니다." };
   }
-
+  
   const results = [];
   for (let i = 0; i < loops.length; i++) {
     const loop = loops[i];
@@ -433,16 +330,13 @@ export async function loopCheck({ code }: { code: string }) {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
     const analysis = result.response.text();
-
-    results.push(
-      `**루프 ${i + 1}**:\n\`\`\`\n${loop.trim()}\n\`\`\`\n\n**분석 결과**:\n${analysis}`
-    );
+    
+    results.push(`**루프 ${i + 1}**:\n\`\`\`\n${loop.trim()}\n\`\`\`\n\n**분석 결과**:\n${analysis}`);
   }
-
-  return {
-    result: `루프 분석 완료 (총 ${loops.length}개)\n\n${results.join("\n\n---\n\n")}`,
-  };
+  
+  return { result: `루프 분석 완료 (총 ${loops.length}개)\n\n${results.join('\n\n---\n\n')}` };
 }
+
 
 // sohyeon's hw
 // traceVar 함수를 비동기(async) 함수로 정의합니다.
@@ -495,6 +389,7 @@ export async function traceVar({
   `.trim(); // 문자열의 양쪽 공백을 제거합니다.
 
   // 'gemini-1.5-flash' 모델을 사용하여 Gemini AI 모델 인스턴스를 생성합니다.
+
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   
   // 생성된 모델에 프롬프트를 전달하여 콘텐츠를 생성하도록 요청합니다.
