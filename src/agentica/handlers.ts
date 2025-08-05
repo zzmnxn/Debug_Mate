@@ -266,12 +266,16 @@ export function markErrors(
         if (error.column) {
           indicator = " ".repeat(error.column - 1) + "^";
           if (error.code) {
-            comments.push(`// ${error.code}`);
+            comments.push(`[ERROR] ${error.code}: ${error.message}`);
+          } else {
+            comments.push(`[ERROR] ${error.message}`);
           }
           outputLine += `\n${indicator}`;
         } else {
           if (error.code) {
-            comments.push(`// ${error.code}`);
+            comments.push(`[ERROR] ${error.code}: ${error.message}`);
+          } else {
+            comments.push(`[ERROR] ${error.message}`);
           }
         }
       });
@@ -281,18 +285,26 @@ export function markErrors(
         if (warning.column) {
           indicator = " ".repeat(warning.column - 1) + "^";
           if (warning.code) {
-            comments.push(`// ${warning.code}`);
+            comments.push(`[WARNING] ${warning.code}: ${warning.message}`);
+          } else {
+            comments.push(`[WARNING] ${warning.message}`);
           }
           outputLine += `\n${indicator}`;
         } else {
           if (warning.code) {
-            comments.push(`// ${warning.code}`);
+            comments.push(`[WARNING] ${warning.code}: ${warning.message}`);
+          } else {
+            comments.push(`[WARNING] ${warning.message}`);
           }
         }
       });
-      markedLines.push(
-        outputLine + (comments.length > 0 ? "  " + comments.join(" ") : "")
-      );
+      markedLines.push(outputLine);
+      if (comments.length > 0) {
+        comments.forEach((comment) => {
+          markedLines.push(`// ${"=".repeat(50)}`);
+          markedLines.push(comment);
+        });
+      }
     } else {
       // 일반 라인 (문제 없음)
       markedLines.push(line);
