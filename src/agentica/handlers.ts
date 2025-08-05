@@ -56,15 +56,15 @@ ${warningText || "None"}
 
 IMPORTANT NOTES:
 - If issues are present: State the most likely cause and suggest a concrete fix (1–2 lines).
-- Do NOT guess beyond the given log. If something is unclear, say so briefly (e.g., "Based on the log alone, it's unclear").
+- Do NOT guess beyond the given log. If something is unclear, say so briefly.
 
 IMPORTANT: Please respond in Korean, but keep the [Result], [Reason], and [Suggestion] section headers in English.
 
 Format your response in the following structure:
 
 [Result] {Short message: "O" or "X"}
-[Reason] {Brief explanation of why (e.g., undeclared variable, safe log, etc.) - in Korean}
-[Suggestion] {Fix or say "No fix required" if none needed - in Korean}
+[Reason] {Brief explanation of why - in Korean}
+[Suggestion] {Fix or say "Suggestion 없음" if none needed - in Korean}
 Do not add anything outside this format.
 
 === Analysis Rules ===
@@ -93,9 +93,9 @@ export async function afterDebug(
 ): Promise<string> {
   // 조기 반환: 에러와 경고가 모두 없으면 AI 호출 없이 바로 성공 응답
   if (errors.length === 0 && warnings.length === 0) {
-    return `[Result] No critical issues detected
+    return `[Result] O
 [Reason] 컴파일 성공, 에러 및 경고 없음
-[Suggestion] No fix required`;
+[Suggestion] Suggestion 없음`;
   }
 
   // 에러나 경고가 있는 경우에만 AI 분석 수행
@@ -249,7 +249,7 @@ export function markErrors(
   });
 
   // 헤더 추가
-  markedLines.push(`// === 에러/경고 위치 표시 파일 ===`);
+  markedLines.push(`// ====== 에러/경고/런타임 오류 위치 표시 파일 ======`);
   markedLines.push(`// 원본 파일: ${originalFilePath}`);
   markedLines.push("");
 
@@ -260,30 +260,44 @@ export function markErrors(
     let outputLine = line;
     let comments: string[] = [];
     if (issues) {
-      // 에러 메시지들 표시
+      // 에러 메시지들 표시 (컴파일 타임 + 런타임)
       issues.errors.forEach((error) => {
         let indicator = "";
+        const isRuntimeError = error.type === 'runtime';
+        const errorPrefix = isRuntimeError ? '[RUNTIME ERROR]' : '[ERROR]';
+        
         if (error.column) {
-          indicator = " ".repeat(error.column - 1) + "^";
+          indicator = " ".repeat(Math.max(0, error.column - 1)) + "^";
           if (error.code) {
-            comments.push(`[ERROR] ${error.code}: ${error.message}`);
+            comments.push(`${errorPrefix} ${error.code}: ${error.message}`);
           } else {
-            comments.push(`[ERROR] ${error.message}`);
+            comments.push(`${errorPrefix} ${error.message}`);
           }
-          outputLine += `\n${indicator}`;
-        } else {
-          if (error.code) {
-            comments.push(`[ERROR] ${error.code}: ${error.message}`);
+          // 런타임 에러의 경우 화살표 표시 추가
+          if (isRuntimeError) {
+            outputLine += `\n${indicator} // ${error.message}`;
           } else {
-            comments.push(`[ERROR] ${error.message}`);
+            outputLine += `\n${indicator}`;
+          }
+        } else {
+          // 컬럼 정보가 없는 경우
+          if (error.code) {
+            comments.push(`${errorPrefix} ${error.code}: ${error.message}`);
+          } else {
+            comments.push(`${errorPrefix} ${error.message}`);
+          }
+          // 런타임 에러인데 컬럼이 없는 경우
+          if (isRuntimeError) {
+            outputLine += `  // ${error.message}`;
           }
         }
       });
+      
       // 경고 메시지들 표시
       issues.warnings.forEach((warning) => {
         let indicator = "";
         if (warning.column) {
-          indicator = " ".repeat(warning.column - 1) + "^";
+          indicator = " ".repeat(Math.max(0, warning.column - 1)) + "^";
           if (warning.code) {
             comments.push(`[WARNING] ${warning.code}: ${warning.message}`);
           } else {
@@ -313,9 +327,21 @@ export function markErrors(
 
   // 요약 정보 추가
   markedLines.push("");
-  markedLines.push(`// === 요약 ===`);
-  markedLines.push(`// 에러: ${errors.length}개`);
-  markedLines.push(`// 경고: ${warnings.length}개`);
+  markedLines.push(`// ====== 요약 ======`);
+  const runtimeErrorCount = errors.filter(e => e.type === 'runtime').length;
+  const compileErrorCount = errors.length - runtimeErrorCount;
+  
+  if (runtimeErrorCount > 0) {
+    markedLines.push(`// 런타임 오류: ${runtimeErrorCount}개`);
+  }
+  if (compileErrorCount > 0) {
+    markedLines.push(`// 컴파일 에러: ${compileErrorCount}개`);
+  }
+  if (warnings.length > 0) {
+    markedLines.push(`// 경고: ${warnings.length}개`);
+  }
+  
+
 
   // 파일명 생성 (원본 파일명 기반)
   const parsedPath = path.parse(originalFilePath);
