@@ -10,33 +10,69 @@ interface CompileInput {
   code: string;
 }
 
+interface ParsedIntent {
+  tool: string;
+  target?: string;
+  details?: any;
+}
+
 //gemini model call
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-async function analyzeIntent(naturalQuery: string): Promise<"loopCheck" | "afterDebugFromCode" | "testBreak" | "traceVar"> {
-  // add or modify your function explanation here!!!! @@@@@@@@@@@@@@@@ 
+async function parseUserIntent(query: string): Promise<ParsedIntent> {
   const prompt = `
-You are an AI assistant that analyzes Korean debugging questions and determines which of the following debugging tools is most appropriate.
+Analyze the user's natural language request, correct typos, and convert it to structured data.
 
 Available tools:
-- loopCheck: Used when the user suspects an infinite loop or asks about termination conditions of a loop.
-- afterDebugFromCode: Used when the user wants comprehensive analysis including compilation errors, warnings, and runtime issues. This tool compiles the code and analyzes all potential problems.
-- testBreak: Used when the user wants to detect undefined behavior and runtime bugs in C/C++ code (null pointer, division by zero, memory leaks, etc.).
-- traceVar: Used when the user wants to trace variable values and understand how they change throughout the code.
+- loopCheck: Loop analysis (for, while, do-while)
+- traceVar: Variable tracing
+- testBreak: Runtime bug detection (memory leaks, pointer issues, etc.)
+- afterDebugFromCode: Comprehensive analysis
 
-Respond with one of: loopCheck, afterDebugFromCode, testBreak, or traceVar only. Do not explain.
+Examples:
+"첫버째 for문만 검사해줘" → {"tool": "loopCheck", "target": "first", "details": {"loopType": "for"}}
+"변수 a만 추적해줘" → {"tool": "traceVar", "target": "variable", "details": {"name": "a"}}
+"메모리 누수 확인해줘" → {"tool": "testBreak"}
+"코드 전체를 분석해줘" → {"tool": "afterDebugFromCode"}
+"마지막 반복문 검사해줘" → {"tool": "loopCheck", "target": "last"}
 
-User question:
-"${naturalQuery}"
+Common Korean typos to recognize and correct:
+- Ordinal numbers: "첫버째", "첫벉째" → "첫 번째" (first)
+- "두버째", "두벉째", "두번째" → "두 번째" (second)  
+- "세버째", "세벉째", "세번째" → "세 번째" (third)
+- "네버째", "네벉째", "네번째" → "네 번째" (fourth)
+- "다섯버째", "다섯벉째" → "다섯 번째" (fifth)
+- "마지막버째", "마지막벉째" → "마지막" (last)
+- Loop types: "for문", "while문", "do-while문"
+- Analysis terms: "분석", "검사", "확인"
+
+Notes:
+- Always correct typos while preserving the user's intent
+- Pay special attention to Korean ordinal number typos
+- "버째", "벉째" are common typos for "번째"
+- Respond in JSON format only
+
+JSON response only:
 `;
-  const result = await model.generateContent(prompt);
-  const toolName = result.response.text().trim();
+
+  const result = await model.generateContent(prompt + `\n\nUser request: "${query}"`);
+  const responseText = result.response.text().trim();
   
-  if (toolName === "loopCheck" || toolName === "afterDebugFromCode" || toolName === "testBreak" || toolName === "traceVar") {
-    return toolName;
-  } else {
-    throw new Error(`Unrecognized tool selection: ${toolName}`);
+  try {
+    // JSON extraction attempt
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      console.log(`🔍 LLM parsing result:`, parsed);
+      return parsed;
+    } else {
+      throw new Error("Not JSON format");
+    }
+  } catch (err) {
+    // Return default value on parsing failure
+    console.warn("LLM parsing failed, performing default analysis.");
+    return { tool: "afterDebugFromCode" };
   }
 }
 
@@ -52,14 +88,17 @@ async function main() {
   const absolutePath = path.resolve(filePath);
   const code = fs.readFileSync(absolutePath, "utf-8");
 
-
   //add or modify your homework function here !! @@@@@@@@@@@@@@@@@@
   try {
-    const selectedTool = await analyzeIntent(userQuery);
+    const parsedIntent = await parseUserIntent(userQuery);
     let resultText = "";
 
-    if (selectedTool === "loopCheck") {
-      const result = await loopCheck({ code });
+    if (parsedIntent.tool === "loopCheck") {
+      const result = await loopCheck({ 
+        code, 
+        target: parsedIntent.target,
+        details: parsedIntent.details 
+      });
       resultText = result.result ?? "";
     } else if (selectedTool === "afterDebugFromCode") {
       // 파일명은 main.c로 고정하거나, 필요시 인자로 받을 수 있음
@@ -73,10 +112,10 @@ async function main() {
       resultText = result.variableTrace ?? "";
     }
 
-    console.log("\n🧠 [분석 도구 선택]:", selectedTool);
-    console.log("💬 [결과]:\n" + resultText);
+    console.log("\n선택된 함수(테스트용) : ", parsedIntent.tool);
+    console.log("[Result] \n" + resultText);
   } catch (err: any) {
-    console.error("❌ 오류 발생:", err.message || err);
+    console.error("[Error] ", err.message || err);
   }
 }
 

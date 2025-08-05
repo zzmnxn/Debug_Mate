@@ -1,7 +1,7 @@
 import { SGlobal } from "../config/SGlobal";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { CompilerError, CompilerWarning, CompilerResultParser } from '../parsing/compilerResultParser';
-import { extractLoopsFromCode } from '../parsing/loopExtractor';
+import { extractLoopsFromCode, extractLoopsWithNesting, LoopInfo } from '../parsing/loopExtractor';
 import { execSync } from "child_process";
 import { spawnSync } from "child_process";
 import fs from "fs";
@@ -316,25 +316,92 @@ export function markErrors(
 }
 
 // uuyeong's hw
-export async function loopCheck({ code }: { code: string }) {
-  const loops = extractLoopsFromCode(code);
+export async function loopCheck({ 
+  code, 
+  target = "all",
+  details = {}
+}: { 
+  code: string;
+  target?: string;
+  details?: any;
+}) {
+  const loopInfos = extractLoopsWithNesting(code);
   
-  if (loops.length === 0) {
+  if (loopInfos.length === 0) {
     return { result: "코드에서 for/while 루프를 찾을 수 없습니다." };
   }
   
-  const results = [];
-  for (let i = 0; i < loops.length; i++) {
-    const loop = loops[i];
-    const prompt = `Review the following loop code and determine if its termination condition is valid. If there is an issue, provide a concise explanation and a corrected example snippet. Respond in Korean, focusing on the core insights.\n\n${loop}`;
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-    const analysis = result.response.text();
-    
-    results.push(`**루프 ${i + 1}**:\n\`\`\`\n${loop.trim()}\n\`\`\`\n\n**분석 결과**:\n${analysis}`);
+  // 선택적 분석 로직
+  let targetLoopInfos = loopInfos;
+  
+  if (target === "first") {
+    targetLoopInfos = [loopInfos[0]];
+  } else if (target === "second") {
+    targetLoopInfos = loopInfos.length > 1 ? [loopInfos[1]] : [];
+  } else if (target === "third") {
+    targetLoopInfos = loopInfos.length > 2 ? [loopInfos[2]] : [];
+  } else if (target === "fourth") {
+    targetLoopInfos = loopInfos.length > 3 ? [loopInfos[3]] : [];
+  } else if (target === "fifth") {
+    targetLoopInfos = loopInfos.length > 4 ? [loopInfos[4]] : [];
+  } else if (target === "last") {
+    targetLoopInfos = [loopInfos[loopInfos.length - 1]];
+  } else if (target === "specific" && details.loopType) {
+    // 특정 타입의 루프만 필터링
+    targetLoopInfos = loopInfos.filter(loopInfo => {
+      const loop = loopInfo.code;
+      if (details.loopType === "for") {
+        return loop.trim().startsWith("for");
+      } else if (details.loopType === "while") {
+        return loop.trim().startsWith("while");
+      } else if (details.loopType === "do-while") {
+        return loop.trim().startsWith("do");
+      }
+      return true;
+    });
   }
   
-  return { result: `루프 분석 완료 (총 ${loops.length}개)\n\n${results.join('\n\n---\n\n')}` };
+  if (targetLoopInfos.length === 0) {
+    return { result: `요청하신 조건에 맞는 루프를 찾을 수 없습니다.` };
+  }
+  
+  // 모든 루프를 하나의 API 호출로 처리 (비용 절약)
+  const loopAnalysisData = targetLoopInfos.map((loopInfo, i) => {
+    const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
+    return {
+      number: loopNumber,
+      code: loopInfo.code
+    };
+  });
+  
+  const batchPrompt = `Review the following loop codes and determine if their termination conditions are valid. For each loop, if there is an issue, provide suggestions in numbered format like "수정 제안 1:", "수정 제안 2:" etc. with brief explanations. If there is no problem, simply respond with "문제가 없습니다.". Respond in Korean.
+
+${loopAnalysisData.map(item => `=== Loop ${item.number} ===\n${item.code}`).join('\n\n')}
+
+For each loop, start with "- 반복문 X" format and analyze each one separately.`;
+  
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(batchPrompt);
+  const batchAnalysis = result.response.text();
+  
+  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
+  return { result: formattedResult };
+}
+
+/**
+ * 계층적 번호 생성 (1, 2.1, 2.2, 3 등)
+ */
+function generateHierarchicalNumber(currentLoop: LoopInfo, allLoops: LoopInfo[]): string {
+  if (currentLoop.level === 0) {
+    // 최상위 루프
+    return currentLoop.index.toString();
+  }
+  
+  // 부모 루프 찾기
+  const parentLoop = allLoops[currentLoop.parentIndex!];
+  const parentNumber = generateHierarchicalNumber(parentLoop, allLoops);
+  
+  return `${parentNumber}.${currentLoop.index}`;
 }
 
 
@@ -409,10 +476,26 @@ export async function testBreak({ codeSnippet }: { codeSnippet: string }) {
   const responseText = result.response.text().trim();
 
   try {
-    const parsed = JSON.parse(responseText);
-    return parsed;
+    // JSON 추출 시도
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return parsed;
+    } else {
+      // JSON이 없으면 텍스트 형태로 반환
+      return {
+        isBuggy: responseText.includes("buggy") || responseText.includes("error"),
+        reason: responseText,
+        suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요."
+      };
+    }
   } catch (err) {
-    throw new Error(`Failed to parse model output as JSON:\n${responseText}`);
+    // 파싱 실패 시 텍스트 형태로 반환
+    return {
+      isBuggy: responseText.includes("buggy") || responseText.includes("error"),
+      reason: responseText,
+      suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요."
+    };
   }
 }
 
