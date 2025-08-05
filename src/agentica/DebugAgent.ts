@@ -25,7 +25,7 @@ async function parseUserIntent(query: string): Promise<ParsedIntent> {
 Analyze the user's natural language request, correct typos, and convert it to structured data.
 
 Available tools:
-- loopCheck: Loop analysis (for, while)
+- loopCheck: Loop analysis (for, while, do-while)
 - traceVar: Variable tracing
 - testBreak: Runtime bug detection (memory leaks, pointer issues, etc.)
 - afterDebugFromCode: Comprehensive analysis
@@ -35,10 +35,22 @@ Examples:
 "변수 a만 추적해줘" → {"tool": "traceVar", "target": "variable", "details": {"name": "a"}}
 "메모리 누수 확인해줘" → {"tool": "testBreak"}
 "코드 전체를 분석해줘" → {"tool": "afterDebugFromCode"}
+"마지막 반복문 검사해줘" → {"tool": "loopCheck", "target": "last"}
+
+Common Korean typos to recognize and correct:
+- Ordinal numbers: "첫버째", "첫벉째" → "첫 번째" (first)
+- "두버째", "두벉째", "두번째" → "두 번째" (second)  
+- "세버째", "세벉째", "세번째" → "세 번째" (third)
+- "네버째", "네벉째", "네번째" → "네 번째" (fourth)
+- "다섯버째", "다섯벉째" → "다섯 번째" (fifth)
+- "마지막버째", "마지막벉째" → "마지막" (last)
+- Loop types: "for문", "while문", "do-while문"
+- Analysis terms: "분석", "검사", "확인"
 
 Notes:
-- Correct typos while understanding the intent
-- "첫버째" → "첫 번째", "두번째" → "두 번째", etc.
+- Always correct typos while preserving the user's intent
+- Pay special attention to Korean ordinal number typos
+- "버째", "벉째" are common typos for "번째"
 - Respond in JSON format only
 
 JSON response only:

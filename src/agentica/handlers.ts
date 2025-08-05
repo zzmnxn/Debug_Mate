@@ -165,6 +165,12 @@ export async function loopCheck({
     targetLoopInfos = [loopInfos[0]];
   } else if (target === "second") {
     targetLoopInfos = loopInfos.length > 1 ? [loopInfos[1]] : [];
+  } else if (target === "third") {
+    targetLoopInfos = loopInfos.length > 2 ? [loopInfos[2]] : [];
+  } else if (target === "fourth") {
+    targetLoopInfos = loopInfos.length > 3 ? [loopInfos[3]] : [];
+  } else if (target === "fifth") {
+    targetLoopInfos = loopInfos.length > 4 ? [loopInfos[4]] : [];
   } else if (target === "last") {
     targetLoopInfos = [loopInfos[loopInfos.length - 1]];
   } else if (target === "specific" && details.loopType) {
@@ -195,11 +201,11 @@ export async function loopCheck({
     };
   });
   
-  const batchPrompt = `다음 반복문들을 각각 검토하고 종료 조건이 유효한지 판단하세요. 각 반복문에 대해 문제가 있는 경우에만 "수정 제안 1:", "수정 제안 2:" 등의 형태로 간결한 설명을 제공하세요. 문제가 없다면 "문제가 없습니다."라고 응답하세요. 한국어로 응답하세요.
+  const batchPrompt = `Review the following loop codes and determine if their termination conditions are valid. For each loop, if there is an issue, provide suggestions in numbered format like "수정 제안 1:", "수정 제안 2:" etc. with brief explanations. If there is no problem, simply respond with "문제가 없습니다.". Respond in Korean.
 
-${loopAnalysisData.map(item => `=== 반복문 ${item.number} ===\n${item.code}`).join('\n\n')}
+${loopAnalysisData.map(item => `=== Loop ${item.number} ===\n${item.code}`).join('\n\n')}
 
-각 반복문에 대해 "- 반복문 X" 형태로 시작하여 각각 분석해주세요.`;
+For each loop, start with "- 반복문 X" format and analyze each one separately.`;
   
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(batchPrompt);
