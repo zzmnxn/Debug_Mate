@@ -115,37 +115,40 @@ function extractForWhileLoop(code: string, startPos: number): string {
 /**
  * for/while 루프 추출 (끝 위치 포함)
  */
-function extractForWhileLoopWithEnd(code: string, startPos: number): {code: string, end: number} {
+ function extractForWhileLoopWithEnd(code: string, startPos: number): {code: string, end: number} {
   let pos = startPos;
-  
-  // 키워드 건너뛰기
+
+  // (1) 키워드 건너뛰고 조건 괄호 매칭 (기존)
   while (pos < code.length && code[pos] !== '(') pos++;
   if (pos >= code.length) return {code: '', end: startPos};
-  
-  // 조건부 괄호 매칭
   let parenCount = 0;
-  while (pos < code.length) {
+  do {
     if (code[pos] === '(') parenCount++;
     else if (code[pos] === ')') parenCount--;
     pos++;
-    if (parenCount === 0) break;
-  }
-  
-  // 중괄호 찾기
+  } while (pos < code.length && parenCount > 0);
+
+  // (2) 공백/개행 건너뛰기
   while (pos < code.length && /\s/.test(code[pos])) pos++;
-  if (pos >= code.length || code[pos] !== '{') return {code: '', end: startPos};
-  
-  // 중괄호 블록 매칭
-  let braceCount = 0;
-  while (pos < code.length) {
-    if (code[pos] === '{') braceCount++;
-    else if (code[pos] === '}') braceCount--;
-    pos++;
-    if (braceCount === 0) break;
+
+  // (3) 본체가 중괄호 블록인지 단일문인지 분기
+  if (pos < code.length && code[pos] === '{') {
+    // 기존 중괄호 매칭 로직 (변경 없음)
+    let braceCount = 0;
+    do {
+      if (code[pos] === '{') braceCount++;
+      else if (code[pos] === '}') braceCount--;
+      pos++;
+    } while (pos < code.length && braceCount > 0);
+    return { code: code.substring(startPos, pos), end: pos };
+  } else {
+    // 단일문: 세미콜론(;)까지 잘라서 리턴
+    const stmtEnd = code.indexOf(';', pos);
+    if (stmtEnd === -1) return {code: '', end: startPos};
+    return { code: code.substring(startPos, stmtEnd + 1), end: stmtEnd + 1 };
   }
-  
-  return {code: code.substring(startPos, pos), end: pos};
 }
+
 
 /**
  * do-while 루프 추출
