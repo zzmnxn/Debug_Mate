@@ -352,6 +352,48 @@ export async function loopCheck({
     targetLoopInfos = loopInfos.length > 4 ? [loopInfos[4]] : [];
   } else if (target === "last") {
     targetLoopInfos = [loopInfos[loopInfos.length - 1]];
+  } else if (/^\d+$/.test(target)) {
+    // 숫자 인덱스 처리 (6, 7, 44, 209번째 등 무제한 지원)
+    const index = parseInt(target) - 1; // 0-based 인덱스로 변환
+    targetLoopInfos = loopInfos.length > index && index >= 0 ? [loopInfos[index]] : [];
+  } else if (target === "function" && details.functionName) {
+    // 특정 함수 내의 반복문만 필터링
+    const functionName = details.functionName;
+    
+    // 함수 시작과 끝 위치를 정확히 찾기
+    const functionRegex = new RegExp(`\\b${functionName}\\s*\\([^)]*\\)\\s*\\{`, 'g');
+    let match;
+    let functionStart = -1;
+    let functionEnd = -1;
+    
+    while ((match = functionRegex.exec(code)) !== null) {
+      functionStart = match.index;
+      // 중괄호 균형을 맞춰 함수 끝 찾기
+      let braceCount = 0;
+      let pos = functionStart + match[0].length - 1; // '{' 위치
+      
+      for (let i = pos; i < code.length; i++) {
+        if (code[i] === '{') braceCount++;
+        if (code[i] === '}') {
+          braceCount--;
+          if (braceCount === 0) {
+            functionEnd = i;
+            break;
+          }
+        }
+      }
+      break; // 첫 번째 매칭만 사용
+    }
+    
+    if (functionStart !== -1 && functionEnd !== -1) {
+      // 함수 내부의 반복문만 필터링
+      targetLoopInfos = loopInfos.filter(loopInfo => {
+        const loopStart = code.indexOf(loopInfo.code);
+        return loopStart > functionStart && loopStart < functionEnd;
+      });
+    } else {
+      targetLoopInfos = [];
+    }
   } else if (target === "specific" && details.loopType) {
     // 특정 타입의 루프만 필터링
     targetLoopInfos = loopInfos.filter(loopInfo => {
