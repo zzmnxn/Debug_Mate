@@ -315,6 +315,11 @@ export function markErrors(
   return outputPath;
 }
 
+// 캐시 시스템 추가 (API 절약) - 전역으로 이동
+const analysisCache = new Map<string, string>();
+
+
+
 // uuyeong's hw
 export async function loopCheck({ 
   code, 
@@ -325,10 +330,11 @@ export async function loopCheck({
   target?: string;
   details?: any;
 }) {
+  // 사전 검증: 반복문이 없으면 API 호출 안 함
   const loopInfos = extractLoopsWithNesting(code);
   
   if (loopInfos.length === 0) {
-    return { result: "코드에서 for/while 루프를 찾을 수 없습니다." };
+    return { result: "코드에서 for/while/do-while 루프를 찾을 수 없습니다." };
   }
   
   // 선택적 분석 로직
@@ -364,8 +370,48 @@ export async function loopCheck({
   if (targetLoopInfos.length === 0) {
     return { result: `요청하신 조건에 맞는 루프를 찾을 수 없습니다.` };
   }
+
+  // 캐시 키 생성
+  const cacheKey = JSON.stringify({
+    loops: targetLoopInfos.map(info => info.code),
+    target,
+    details
+  });
+
+  // 캐시 확인
+  if (analysisCache.has(cacheKey)) {
+    console.log("🔄 Using cached result (no API call)");
+    const cachedResult = analysisCache.get(cacheKey)!;
+    return { result: `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${cachedResult}` };
+  }
+
+  // ⚡ 간단한 패턴 사전 검사 (명백한 경우 API 호출 안 함)
+  const simpleChecks = targetLoopInfos.map((loopInfo, i) => {
+    const loop = loopInfo.code.trim();
+    const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
+    
+    // 명백한 무한루프 패턴 검사
+    if (loop.includes("i++") && loop.includes("i < ") && loop.includes("i--")) {
+      return `- 반복문 ${loopNumber}\n무한 루프입니다. i++와 i--가 동시에 있어 조건이 만족되지 않습니다.\n수정 제안 1: i++ 또는 i-- 중 하나만 사용하세요.`;
+    }
+    if (loop.match(/for\s*\(\s*int\s+\w+\s*=\s*0\s*;\s*\w+\s*<\s*\d+\s*;\s*\w+--\s*\)/)) {
+      return `- 반복문 ${loopNumber}\n무한 루프입니다. 초기값 0에서 감소하면 종료 조건을 만족할 수 없습니다.\n수정 제안 1: i--를 i++로 변경하세요.\n수정 제안 2: 조건을 i >= 0으로 변경하세요.`;
+    }
+    
+    return null; // AI 분석 필요
+  });
+
+  // 모든 반복문이 간단한 패턴으로 해결되면 API 호출 안 함
+  const allSimple = simpleChecks.every(check => check !== null);
   
-  // 모든 루프를 하나의 API 호출로 처리 (비용 절약)
+  if (allSimple) {
+    console.log("⚡ Simple pattern analysis (no API call)");
+    const result = simpleChecks.join('\n\n');
+    analysisCache.set(cacheKey, result);
+    return { result: `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${result}` };
+  }
+
+  // 복잡한 경우에만 AI 분석
   const loopAnalysisData = targetLoopInfos.map((loopInfo, i) => {
     const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
     return {
@@ -374,15 +420,15 @@ export async function loopCheck({
     };
   });
   
-  const batchPrompt = `Review the following loop codes and determine if their termination conditions are valid. For each loop, if there is an issue, provide suggestions in numbered format like "수정 제안 1:", "수정 제안 2:" etc. with brief explanations. If there is no problem, simply respond with "문제가 없습니다.". Respond in Korean.
-
-${loopAnalysisData.map(item => `=== Loop ${item.number} ===\n${item.code}`).join('\n\n')}
-
-For each loop, start with "- 반복문 X" format and analyze each one separately.`;
+  // 더 짧은 프롬프트 사용 (토큰 절약)
+  const batchPrompt = `Analyze these loops for termination issues. For problems, use "수정 제안 1:", "수정 제안 2:" format. For no issues, use "문제가 없습니다.". Korean only.\n\n${loopAnalysisData.map(item => `=== Loop ${item.number} ===\n${item.code}`).join('\n\n')}\n\nStart each with "- 반복문 X". Only analyze provided loops.`;
   
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(batchPrompt);
   const batchAnalysis = result.response.text();
+  
+  // 결과 캐싱
+  analysisCache.set(cacheKey, batchAnalysis);
   
   const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
   return { result: formattedResult };
@@ -403,6 +449,8 @@ function generateHierarchicalNumber(currentLoop: LoopInfo, allLoops: LoopInfo[])
   
   return `${parentNumber}.${currentLoop.index}`;
 }
+
+
 
 
 // sohyeon's hw

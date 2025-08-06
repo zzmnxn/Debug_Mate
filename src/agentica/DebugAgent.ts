@@ -21,59 +21,66 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 async function parseUserIntent(query: string): Promise<ParsedIntent> {
-  const prompt = `
-Analyze the user's natural language request, correct typos, and convert it to structured data.
-
-Available tools:
-- loopCheck: Loop analysis (for, while, do-while)
-- traceVar: Variable tracing
-- testBreak: Runtime bug detection (memory leaks, pointer issues, etc.)
-- afterDebugFromCode: Comprehensive analysis
-
-Examples:
-"첫버째 for문만 검사해줘" → {"tool": "loopCheck", "target": "first", "details": {"loopType": "for"}}
-"변수 a만 추적해줘" → {"tool": "traceVar", "target": "variable", "details": {"name": "a"}}
-"메모리 누수 확인해줘" → {"tool": "testBreak"}
-"코드 전체를 분석해줘" → {"tool": "afterDebugFromCode"}
-"마지막 반복문 검사해줘" → {"tool": "loopCheck", "target": "last"}
-
-Common Korean typos to recognize and correct:
-- Ordinal numbers: "첫버째", "첫벉째" → "첫 번째" (first)
-- "두버째", "두벉째", "두번째" → "두 번째" (second)  
-- "세버째", "세벉째", "세번째" → "세 번째" (third)
-- "네버째", "네벉째", "네번째" → "네 번째" (fourth)
-- "다섯버째", "다섯벉째" → "다섯 번째" (fifth)
-- "마지막버째", "마지막벉째" → "마지막" (last)
-- Loop types: "for문", "while문", "do-while문"
-- Analysis terms: "분석", "검사", "확인"
-
-Notes:
-- Always correct typos while preserving the user's intent
-- Pay special attention to Korean ordinal number typos
-- "버째", "벉째" are common typos for "번째"
-- Respond in JSON format only
-
-JSON response only:
-`;
-
-  const result = await model.generateContent(prompt + `\n\nUser request: "${query}"`);
-  const responseText = result.response.text().trim();
+  const simplePatterns = [
+    // 순서 패턴 (오타 포함)
+    { pattern: /(첫|첫번째|첫 번째|첫버째|첫벉째)/i, target: "first" },
+    { pattern: /(두|두번째|두 번째|두버째|두벉째)/i, target: "second" },
+    { pattern: /(세|세번째|세 번째|세버째|세벉째)/i, target: "third" },
+    { pattern: /(네|네번째|네 번째|네버째|네벉째)/i, target: "fourth" },
+    { pattern: /(다섯|다섯번째|다섯 번째|다섯버째|다섯벉째)/i, target: "fifth" },
+    { pattern: /(마지막|마지막번째|마지막버째|마지막벉째)/i, target: "last" },
+    
+    // 루프 타입 패턴
+    { pattern: /for문/i, loopType: "for" },
+    { pattern: /while문/i, loopType: "while" },
+    { pattern: /do-?while문/i, loopType: "do-while" },
+  ];
   
-  try {
-    // JSON extraction attempt
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      console.log(`🔍 LLM parsing result:`, parsed);
-      return parsed;
-    } else {
-      throw new Error("Not JSON format");
+  // 기본 도구 결정
+  let tool = "loopCheck";
+  if (query.includes("변수") || query.includes("추적")) tool = "traceVar";
+  if (query.includes("메모리") || query.includes("누수")) tool = "testBreak";
+  if (query.includes("전체") || query.includes("종합") || query.includes("전반적")) tool = "afterDebugFromCode";
+  
+  let target = "all";
+  let details: any = {};
+  
+  // 간단한 패턴 매칭
+  for (const pattern of simplePatterns) {
+    if (pattern.pattern.test(query)) {
+      if (pattern.target) target = pattern.target;
+      if (pattern.loopType) {
+        target = "specific";
+        details.loopType = pattern.loopType;
+      }
+      break;
     }
-  } catch (err) {
-    // Return default value on parsing failure
-    console.warn("LLM parsing failed, performing default analysis.");
-    return { tool: "afterDebugFromCode" };
   }
+  
+  // 복잡한 경우에만 AI 사용 (변수명 추출 등)
+  const hasVariableName = query.includes("변수") && query.match(/[a-zA-Z_][a-zA-Z0-9_]*/);
+  const isComplexQuery = hasVariableName || (query.length > 50 && !simplePatterns.some(p => p.pattern.test(query)));
+  
+  if (isComplexQuery) {
+    // 짧은 프롬프트로 AI 파싱
+    const prompt = `Parse request to JSON:\nTools: loopCheck, traceVar, testBreak, afterDebugFromCode\nExamples:\n"변수 a 추적" → {"tool": "traceVar", "target": "variable", "details": {"name": "a"}}\nJSON only:`;
+
+    try {
+      const result = await model.generateContent(prompt + `\n\n"${query}"`);
+      const responseText = result.response.text().trim();
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return parsed;
+      }
+    } catch (err) {
+      // AI parsing failed, using regex result
+    }
+  }
+  
+  const result = { tool, target, details };
+  return result;
 }
 
 async function main() {
@@ -100,14 +107,14 @@ async function main() {
         details: parsedIntent.details 
       });
       resultText = result.result ?? "";
-    } else if (selectedTool === "afterDebugFromCode") {
+    } else if (parsedIntent.tool === "afterDebugFromCode") {
       // 파일명은 main.c로 고정하거나, 필요시 인자로 받을 수 있음
       const { analysis, markedFilePath } = await afterDebugFromCode(code, "main.c");
       resultText = analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "");
-    } else if (selectedTool === "testBreak") {
+    } else if (parsedIntent.tool === "testBreak") {
       const result = await testBreak({ codeSnippet: code });
       resultText = JSON.stringify(result, null, 2);
-    } else if (selectedTool === "traceVar") {
+    } else if (parsedIntent.tool === "traceVar") {
       const result = await traceVar({ code, userQuery });
       resultText = result.variableTrace ?? "";
     }

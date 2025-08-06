@@ -7,8 +7,8 @@ export class ErrorDiagnosisService {
   async loopCheck({ code }: { code: string }) {
     return loopCheck({ code });
   }
-  async traceVar({ code }: { code: string }) {
-    return traceVar({ code });
+  async traceVar({ code, userQuery }: { code: string; userQuery: string }) {
+    return traceVar({ code, userQuery });
   }
   async testBreak({ codeSnippet }: { codeSnippet: string }) {
     return testBreak({ codeSnippet });
