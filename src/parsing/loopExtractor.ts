@@ -115,40 +115,58 @@ function extractForWhileLoop(code: string, startPos: number): string {
 /**
  * for/while 루프 추출 (끝 위치 포함)
  */
- function extractForWhileLoopWithEnd(code: string, startPos: number): {code: string, end: number} {
+function extractForWhileLoopWithEnd(code: string, startPos: number): {code: string, end: number} {
   let pos = startPos;
-
-  // (1) 키워드 건너뛰고 조건 괄호 매칭 (기존)
+  
+  // 키워드 건너뛰기
   while (pos < code.length && code[pos] !== '(') pos++;
   if (pos >= code.length) return {code: '', end: startPos};
+  
+  // 조건부 괄호 매칭
   let parenCount = 0;
-  do {
+  while (pos < code.length) {
     if (code[pos] === '(') parenCount++;
     else if (code[pos] === ')') parenCount--;
     pos++;
-  } while (pos < code.length && parenCount > 0);
-
-  // (2) 공백/개행 건너뛰기
+    if (parenCount === 0) break;
+  }
+  
+  // 공백 건너뛰기
   while (pos < code.length && /\s/.test(code[pos])) pos++;
-
-  // (3) 본체가 중괄호 블록인지 단일문인지 분기
-  if (pos < code.length && code[pos] === '{') {
-    // 기존 중괄호 매칭 로직 (변경 없음)
+  if (pos >= code.length) return {code: '', end: startPos};
+  
+  // 중괄호가 있는 경우와 없는 경우 모두 처리
+  if (code[pos] === '{') {
+    // 중괄호 블록 매칭
     let braceCount = 0;
-    do {
+    while (pos < code.length) {
       if (code[pos] === '{') braceCount++;
       else if (code[pos] === '}') braceCount--;
       pos++;
-    } while (pos < code.length && braceCount > 0);
-    return { code: code.substring(startPos, pos), end: pos };
+      if (braceCount === 0) break;
+    }
   } else {
-    // 단일문: 세미콜론(;)까지 잘라서 리턴
-    const stmtEnd = code.indexOf(';', pos);
-    if (stmtEnd === -1) return {code: '', end: startPos};
-    return { code: code.substring(startPos, stmtEnd + 1), end: stmtEnd + 1 };
+    // 단일 문장 처리 - 세미콜론까지 또는 줄 끝까지
+    while (pos < code.length) {
+      if (code[pos] === ';') {
+        pos++;
+        break;
+      }
+      if (code[pos] === '\n') {
+        // 다음 줄이 공백이 아닌 문자로 시작하면 종료
+        let nextPos = pos + 1;
+        while (nextPos < code.length && /[ \t]/.test(code[nextPos])) nextPos++;
+        if (nextPos < code.length && !/\s/.test(code[nextPos])) {
+          pos = nextPos;
+          break;
+        }
+      }
+      pos++;
+    }
   }
+  
+  return {code: code.substring(startPos, pos), end: pos};
 }
-
 
 /**
  * do-while 루프 추출

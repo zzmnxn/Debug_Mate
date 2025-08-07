@@ -1,4 +1,4 @@
-import { loopCheck, testBreak, afterDebugFromCode, traceVar } from "./handlers";
+import { loopCheck, afterDebugFromCode, traceVar } from "./handlers";
 import * as fs from "fs";
 import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -21,59 +21,81 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 async function parseUserIntent(query: string): Promise<ParsedIntent> {
-  // AI가 모든 자연어를 직접 파싱 (사용자 요청에 따라 수정)
-  const prompt = `
-Analyze the user's natural language request and convert it to structured data.
-
-Available tools:
-- loopCheck: Loop analysis (for, while, do-while)
-- traceVar: Variable tracing  
-- testBreak: Runtime bug detection (memory leaks, pointer issues, etc.)
-- afterDebugFromCode: Comprehensive analysis
-
-For loopCheck requests, determine:
-1. Which specific loop they want (examples):
-   - "첫번째" → "first"
-   - "두번째" → "second" 
-   - "세번째" → "third"
-   - "일곱번째" → "7"
-   - "44번째" → "44"
-   - "마지막" → "last"
-   - "for문만" → {"target": "specific", "details": {"loopType": "for"}}
-   - "processArray함수 안의" → {"target": "function", "details": {"functionName": "processArray"}}
-   - "main함수 내 반복문" → {"target": "function", "details": {"functionName": "main"}}
-   - "전체" → "all"
-   
-
-Examples:
-"첫번째 반복문 검사해줘" → {"tool": "loopCheck", "target": "first"}
-"일곱번째 반복문이 정상작동하는지 확인해줘" → {"tool": "loopCheck", "target": "7"}
-"44번째 반복문 검사" → {"tool": "loopCheck", "target": "44"}
-"processArray함수 안의 반복문이 정상작동하는지 확인해줘" → {"tool": "loopCheck", "target": "function", "details": {"functionName": "processArray"}}
-"main함수 내 반복문 검사" → {"tool": "loopCheck", "target": "function", "details": {"functionName": "main"}}
-"for문만 검사해줘" → {"tool": "loopCheck", "target": "specific", "details": {"loopType": "for"}}
-"변수 a만 추적해줘" → {"tool": "traceVar", "target": "variable", "details": {"name": "a"}}
-"메모리 누수 확인해줘" → {"tool": "testBreak"}
-"코드 전체를 분석해줘" → {"tool": "afterDebugFromCode"}
-
-JSON response only:
-`;
-
-  try {
-    const result = await model.generateContent(prompt + `\n\nUser request: "${query}"`);
-    const responseText = result.response.text().trim();
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+  const simplePatterns = [
+    // 기본 순서 패턴 (1~5번째만 정규식으로 처리, API 절약)
+    { pattern: /(첫|첫번째|첫 번째|첫버째|첫벉째)/i, target: "first" },
+    { pattern: /(두|두번째|두 번째|두버째|두벉째)/i, target: "second" },
+    { pattern: /(세|세번째|세 번째|세버째|세벉째)/i, target: "third" },
+    { pattern: /(네|네번째|네 번째|네버째|네벉째)/i, target: "fourth" },
+    { pattern: /(다섯|다섯번째|다섯 번째|다섯버째|다섯벉째)/i, target: "fifth" },
+    { pattern: /(마지막|마지막번째|마지막버째|마지막벉째)/i, target: "last" },
     
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return parsed;
-    } else {
-      throw new Error("Not JSON format");
+    // 루프 타입 패턴
+    { pattern: /for문/i, loopType: "for" },
+    { pattern: /while문/i, loopType: "while" },
+    { pattern: /do-?while문/i, loopType: "do-while" },
+  ];
+  
+  // 기본 도구 결정
+  let tool = "loopCheck";
+  if (query.includes("변수") || query.includes("추적")) tool = "traceVar";
+  if (query.includes("컴파일") || query.includes("실행") || query.includes("결과") || 
+      query.includes("전체") || query.includes("종합") || query.includes("전반적")) tool = "afterDebugFromCode";
+  
+  let target = "all";
+  let details: any = {};
+  
+  // 숫자 패턴 검사 (6번째 이상, 44번째, 209번째 등)
+  const numberPattern = query.match(/(\d+)번째|번째\s*(\d+)|(\d+)번|번\s*(\d+)/i);
+  if (numberPattern) {
+    const number = numberPattern[1] || numberPattern[2] || numberPattern[3] || numberPattern[4];
+    const index = parseInt(number);
+    if (index >= 1 && index <= 5) {
+      // 1~5번째는 기존 로직 사용
+      const targets = ["first", "second", "third", "fourth", "fifth"];
+      target = targets[index - 1];
+    } else if (index >= 6) {
+      // 6번째 이상은 숫자로 직접 처리
+      target = index.toString();
     }
-  } catch (err) {
-    // AI 파싱 실패시 기본값 반환
-    return { tool: "loopCheck", target: "all" };
   }
+  
+  // 간단한 패턴 매칭
+  for (const pattern of simplePatterns) {
+    if (pattern.pattern.test(query)) {
+      if (pattern.target) target = pattern.target;
+      if (pattern.loopType) {
+        target = "specific";
+        details.loopType = pattern.loopType;
+      }
+      break;
+    }
+  }
+  
+  // 복잡한 경우에만 AI 사용 (변수명 추출 등)
+  const hasVariableName = query.includes("변수") && query.match(/[a-zA-Z_][a-zA-Z0-9_]*/);
+  const isComplexQuery = hasVariableName || (query.length > 50 && !simplePatterns.some(p => p.pattern.test(query)));
+  
+  if (isComplexQuery) {
+    // 짧은 프롬프트로 AI 파싱
+    const prompt = `Parse request to JSON:\nTools: loopCheck, traceVar, afterDebugFromCode\nExamples:\n"변수 a 추적" → {"tool": "traceVar", "target": "variable", "details": {"name": "a"}}\nJSON only:`;
+
+    try {
+      const result = await model.generateContent(prompt + `\n\n"${query}"`);
+      const responseText = result.response.text().trim();
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return parsed;
+      }
+    } catch (err) {
+      // AI parsing failed, using regex result
+    }
+  }
+  
+  const result = { tool, target, details };
+  return result;
 }
 
 async function main() {
@@ -104,9 +126,6 @@ async function main() {
       // 파일명은 main.c로 고정하거나, 필요시 인자로 받을 수 있음
       const { analysis, markedFilePath } = await afterDebugFromCode(code, "main.c");
       resultText = analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "");
-    } else if (parsedIntent.tool === "testBreak") {
-      const result = await testBreak({ codeSnippet: code });
-      resultText = JSON.stringify(result, null, 2);
     } else if (parsedIntent.tool === "traceVar") {
       const result = await traceVar({ code, userQuery });
       resultText = result.variableTrace ?? "";
