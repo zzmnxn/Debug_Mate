@@ -9,21 +9,35 @@ import path from "path";
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
 
 
-//jm hw
-export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): string {
-  const MAX_ITEMS = 3;
+//jm hw - 개선된 버전
+export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[], executionOutput?: string): string {
+  const MAX_ITEMS = 5; // 더 많은 항목을 보여주도록 증가
 
-  const formatError = (e: CompilerError, i: number) =>
-    `[Error ${i + 1}] (${e.severity.toUpperCase()} - ${e.type}) ${e.message}${e.file ? ` at ${e.file}:${e.line}:${e.column}` : ''}`;
+  const formatError = (e: CompilerError, i: number) => {
+    const location = e.file ? ` at ${e.file}:${e.line || '?'}:${e.column || '?'}` : '';
+    const code = e.code ? ` (${e.code})` : '';
+    return `[Error ${i + 1}] (${e.severity.toUpperCase()} - ${e.type})${code} ${e.message}${location}`;
+  };
 
-  const formatWarning = (w: CompilerWarning, i: number) =>
-    `[Warning ${i + 1}] (${w.type}) ${w.message}${w.file ? ` at ${w.file}:${w.line}:${w.column}` : ''}`;
+  const formatWarning = (w: CompilerWarning, i: number) => {
+    const location = w.file ? ` at ${w.file}:${w.line || '?'}:${w.column || '?'}` : '';
+    const code = w.code ? ` (${w.code})` : '';
+    return `[Warning ${i + 1}] (${w.type})${code} ${w.message}${location}`;
+  };
 
-  const errorText = errors.slice(0, MAX_ITEMS).map(formatError).join('\n');
+  // 에러와 경고를 심각도별로 정렬
+  const sortedErrors = [...errors].sort((a, b) => {
+    if (a.severity === 'fatal' && b.severity !== 'fatal') return -1;
+    if (a.severity !== 'fatal' && b.severity === 'fatal') return 1;
+    return 0;
+  });
+
+  const errorText = sortedErrors.slice(0, MAX_ITEMS).map(formatError).join('\n');
   const warningText = warnings.slice(0, MAX_ITEMS).map(formatWarning).join('\n');
 
   return `
-You are a senior compiler engineer and static analysis expert.
+You are a senior compiler engineer and static analysis expert with 15+ years of experience in C/C++ development and debugging.
+
 Your task is to analyze the compiler output and runtime log from a C/C++ program and determine whether the code has any critical problems that need to be addressed before deployment.
 
 === Summary ===
@@ -35,9 +49,13 @@ ${errorText || 'None'}
 === Compiler Warnings ===
 ${warningText || 'None'}
 
+${executionOutput ? `=== Program Execution Output ===
+${executionOutput}` : ''}
+
 IMPORTANT NOTES:
 - If issues are present: State the most likely cause and suggest a concrete fix (1–2 lines).
 - Do NOT guess beyond the given log. If something is unclear, say so briefly.
+- Prioritize critical issues that could cause crashes, memory corruption, or undefined behavior.
 
 IMPORTANT: Please respond in Korean, but keep the [Result], [Reason], and [Suggestion] section headers in English.
 
@@ -50,42 +68,153 @@ Do not add anything outside this format.
 
 === Analysis Rules ===
 - If error type is "undeclared" or message contains "undeclared", always treat as critical.
-- If a warning or message contains "memory leak" or "leaked", treat it as a critical issue.
+- If a warning or message contains "memory leak", "leaked", "AddressSanitizer", or "LeakSanitizer", treat it as a critical issue.
 - For unused variable warnings, if variable name is vague (like 'temp'), suggest renaming or removal.
+- If runtime log contains "runtime error", "segmentation fault", "core dumped", or "undefined behavior", treat as critical.
 - If runtime log contains "runtime error", check if it follows a dangerous cast (e.g., int to pointer). If the code contains a dangerous cast pattern (예: (char*)정수, (int*)정수 등), 반드시 Reason에 'dangerous cast 의심'을 명시하고, Suggestion에 포인터 변환 및 역참조 코드를 점검하라고 안내할 것.
 - If the summary or runtime log contains "[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.", do NOT analyze the cause. Just output the hint exactly as the Suggestion and say "Critical issue detected" in Result.
+- If execution timed out, suggest using loopCheck() function to analyze loop conditions.
+- For memory-related errors, always suggest checking pointer operations and memory allocation/deallocation.
+
+=== Error Priority ===
+1. Fatal errors (compilation failure)
+2. Runtime errors (segmentation fault, undefined behavior)
+3. Memory leaks and address sanitizer errors
+4. Syntax errors
+5. Semantic errors
+6. Warnings (unused variables, deprecated features)
 
 `.trim();
-///다른 함수를 이용해야할 거 같으면 [Hint] ~~ 을 사용해보세요라고 유도 함////////
 }
 
 /**
  * 1. afterDebug: 에러/경고 로그 + 요약을 받아 Gemini 분석 수행
  */
-export async function afterDebug(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[]): Promise<string> {
-  const prompt = buildAfterDebugPrompt(logSummary, errors, warnings);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-  return result.response.text().trim();
+export async function afterDebug(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[], executionOutput?: string): Promise<string> {
+  try {
+    // 1. 입력 검증
+    if (!logSummary || typeof logSummary !== 'string') {
+      throw new Error('Invalid logSummary: must be a non-empty string');
+    }
+    
+    if (!Array.isArray(errors) || !Array.isArray(warnings)) {
+      throw new Error('Invalid errors/warnings: must be arrays');
+    }
+
+    // 2. API 키 검증
+    if (!SGlobal.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is not configured. Please set it in your environment variables.');
+    }
+
+    // 3. 프롬프트 생성 (실행 결과 포함)
+    const prompt = buildAfterDebugPrompt(logSummary, errors, warnings, executionOutput);
+    
+    // 4. 모델 초기화 및 타임아웃 설정
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        temperature: 0.3, // 더 일관된 응답을 위해 낮은 온도 설정
+        maxOutputTokens: 1000, // 응답 길이 제한
+      }
+    });
+
+    // 5. API 호출 (타임아웃 포함)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('API request timed out after 30 seconds')), 30000);
+    });
+
+    const apiPromise = model.generateContent(prompt);
+    const result = await Promise.race([apiPromise, timeoutPromise]) as any;
+
+    // 6. 응답 검증
+    if (!result || !result.response || !result.response.text) {
+      throw new Error('Invalid response from Gemini API');
+    }
+
+    const responseText = result.response.text().trim();
+    
+    // 7. 응답 형식 검증
+    if (!responseText) {
+      throw new Error('Empty response from Gemini API');
+    }
+
+    // 8. 응답 형식이 올바른지 확인
+    const hasResult = /\[Result\]\s*[OX]/.test(responseText);
+    const hasReason = /\[Reason\]/.test(responseText);
+    const hasSuggestion = /\[Suggestion\]/.test(responseText);
+
+    if (!hasResult || !hasReason || !hasSuggestion) {
+      console.warn(' AI 응답이 예상 형식과 다릅니다. 원본 응답을 반환합니다.');
+      return `[Result] X\n[Reason] AI 응답 형식 오류 - 원본 응답: ${responseText.substring(0, 200)}...\n[Suggestion] 시스템 관리자에게 문의하세요.`;
+    }
+
+    return responseText;
+
+  } catch (error: any) {
+    // 9. 상세한 에러 처리
+    let errorMessage = 'Unknown error occurred';
+    
+    if (error.message.includes('API_KEY')) {
+      errorMessage = 'Gemini API 키가 설정되지 않았습니다. 환경 변수 GEMINI_API_KEY를 확인해주세요.';
+    } else if (error.message.includes('timed out')) {
+      errorMessage = 'API 요청이 시간 초과되었습니다. 네트워크 연결을 확인하고 다시 시도해주세요.';
+    } else if (error.message.includes('network') || error.message.includes('fetch')) {
+      errorMessage = '네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.';
+    } else if (error.message.includes('quota') || error.message.includes('rate limit')) {
+      errorMessage = 'API 할당량이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+    } else {
+      errorMessage = `분석 중 오류가 발생했습니다: ${error.message}`;
+    }
+
+    console.error(' afterDebug 에러:', error);
+    
+    return `[Result] X\n[Reason] ${errorMessage}\n[Suggestion] 시스템 오류로 인해 분석을 완료할 수 없습니다. 잠시 후 다시 시도해주세요.`;
+  }
 }
 
 /**
  * 2. afterDebugFromCode: 코드 입력 → 컴파일 → 로그 파싱 → Gemini 분석까지 자동 수행
+ * 개선: 실행 결과도 함께 표시
  */
-export async function afterDebugFromCode(code: string, originalFileName: string = "input.c"): Promise<{ analysis: string, markedFilePath: string }> {
-  const tmpFile = path.join("/tmp", `code_${Date.now()}.c`);
-  fs.writeFileSync(tmpFile, code);
-
+export async function afterDebugFromCode(code: string, originalFileName: string = "input.c"): Promise<{ analysis: string, markedFilePath: string, executionOutput?: string }> {
+  // 임시 파일 경로 설정 (Windows 호환성)
+  const tmpDir = process.platform === "win32" ? path.join(process.cwd(), "tmp") : "/tmp";
+  const tmpFile = path.join(tmpDir, `code_${Date.now()}.c`);
+  const outputFile = path.join(tmpDir, `a.out_${Date.now()}`);
+  
   let compileLog = "";
+  let markedFilePath = "";
+  let executionOutput = ""; // 실행 결과 저장용
 
   try {
-    // 컴파일 단계 - spawnSync 사용으로 변경하여 stderr 확실히 캡처
+    // 1. 입력 검증
+    if (!code || typeof code !== 'string') {
+      throw new Error('Invalid code: must be a non-empty string');
+    }
+
+    if (!originalFileName || typeof originalFileName !== 'string') {
+      originalFileName = "input.c";
+    }
+
+    // 2. 임시 디렉토리 생성 (Windows용)
+    if (process.platform === "win32" && !fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+
+    // 3. 임시 파일 생성
+    fs.writeFileSync(tmpFile, code, 'utf-8');
+
+    // 4. GCC 컴파일 (에러 처리 개선)
     const compileResult = spawnSync("gcc", [
       "-Wall", "-Wextra", "-Wpedantic", "-O2", "-Wdiv-by-zero", 
-      "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address", tmpFile, "-o", "/tmp/a.out"
+      "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address", 
+      tmpFile, "-o", outputFile
     ], {
-      encoding: "utf-8"
+      encoding: "utf-8",
+      timeout: 30000 // 30초 타임아웃
     });
+
+    // 5. 컴파일 로그 수집
     if (compileResult.stdout) {
       compileLog += compileResult.stdout;
     }
@@ -93,56 +222,116 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
       compileLog += compileResult.stderr;
     }
 
-    // 컴파일 성공 시에만 실행
+    // 6. 컴파일 성공 시 실행
     if (compileResult.status === 0) {
       compileLog += "\n\n=== Runtime Output ===\n";
-      const runResult = spawnSync("/tmp/a.out", [], { encoding: "utf-8", timeout: 1000 }); // 1초 제한
+      
+      try {
+        const runResult = spawnSync(outputFile, [], { 
+          encoding: "utf-8", 
+          timeout: 5000 // 5초로 증가
+        });
 
-      if (runResult.stdout) {
-        compileLog += runResult.stdout;
-      }
-      if (runResult.stderr) {
-        compileLog += runResult.stderr;
-      }
-      if (runResult.stderr.includes("runtime error:")) {
-        compileLog += `\n[Runtime Type] UndefinedBehaviorSanitizer runtime error (UB 가능성)`;
-      }
-      if (runResult.error) {
-        const errorAny = runResult.error as any;
-        if (errorAny && errorAny.code === 'ETIMEDOUT') {
-          compileLog += `\n[Runtime Error] Execution timed out (possible infinite loop)\n loopCheck() 함수를 사용해보세요`;
-        } else {
-          compileLog += `\n[Runtime Error] ${runResult.error.message}`;
+        if (runResult.stdout) {
+          compileLog += runResult.stdout;
+          executionOutput += runResult.stdout; // 실행 결과 저장
         }
+        if (runResult.stderr) {
+          compileLog += runResult.stderr;
+          executionOutput += runResult.stderr; // 에러도 실행 결과에 포함
+        }
+        
+        // 런타임 에러 타입 분류 개선
+        if (runResult.stderr.includes("runtime error:")) {
+          compileLog += `\n[Runtime Type] UndefinedBehaviorSanitizer runtime error (UB 가능성)`;
+        } else if (runResult.stderr.includes("AddressSanitizer")) {
+          compileLog += `\n[Runtime Type] AddressSanitizer memory error`;
+        } else if (runResult.stderr.includes("LeakSanitizer")) {
+          compileLog += `\n[Runtime Type] Memory leak detected`;
+        }
+        
+        if (runResult.error) {
+          const errorAny = runResult.error as any;
+          if (errorAny && errorAny.code === 'ETIMEDOUT') {
+            compileLog += `\n[Runtime Error] Execution timed out (possible infinite loop)\n[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.`;
+          } else {
+            compileLog += `\n[Runtime Error] ${runResult.error.message}`;
+          }
+        }
+      } catch (runError: any) {
+        compileLog += `\n[Runtime Execution Error] ${runError.message}`;
       }
     } else {
-      // 컴파일 실패
+      // 7. 컴파일 실패 처리
       compileLog += "\n\n=== Compile Failed ===\n";
       if (compileResult.error) {
         compileLog += `[Compile Process Error] ${compileResult.error.message}\n`;
       }
+      if (compileResult.signal) {
+        compileLog += `[Compile Signal] ${compileResult.signal}\n`;
+      }
     }
 
   } catch (err: any) {
-    // 예상치 못한 에러
+    // 8. 예상치 못한 에러 처리
     compileLog += "\n\n=== Unexpected Error ===\n";
-    compileLog += err.message || err.toString();
+    compileLog += `[Error] ${err.message || err.toString()}\n`;
+    
+    if (err.code === 'ENOENT') {
+      compileLog += "[Suggestion] GCC가 설치되어 있는지 확인해주세요.\n";
+    } else if (err.code === 'EACCES') {
+      compileLog += "[Suggestion] 파일 권한을 확인해주세요.\n";
+    }
+  } finally {
+    // 9. 임시 파일 정리
+    try {
+      if (fs.existsSync(tmpFile)) {
+        fs.unlinkSync(tmpFile);
+      }
+      if (fs.existsSync(outputFile)) {
+        fs.unlinkSync(outputFile);
+      }
+    } catch (cleanupError) {
+      console.warn('⚠️ 임시 파일 정리 중 오류:', cleanupError);
+    }
   }
-  // 디버깅용 로그 (필요시 주석 해제)
-  // console.log("=== 🧾 GCC + Runtime 로그 ===");
-  // console.log(compileLog);
 
-  const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
-  const summary = CompilerResultParser.generateSummary(parsed);
-  const analysis = await afterDebug(summary, parsed.errors, parsed.warnings);
-  // AI 분석 결과에서 [Result] X면 Reason/Suggestion을 markErrors에 넘김
-  let aiAnalysisForMark = undefined;
-  const resultMatch = analysis.match(/\[Result\]\s*([OX])/);
-  if (resultMatch && resultMatch[1] === "X") {
-    aiAnalysisForMark = analysis;
+  // 10. 로그 파싱 및 분석
+  try {
+    const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
+    const summary = CompilerResultParser.generateSummary(parsed);
+    
+    // 11. AI 분석 수행 (실행 결과 포함)
+    const analysis = await afterDebug(summary, parsed.errors, parsed.warnings, executionOutput);
+    
+    // 12. AI 분석 결과 처리
+    let aiAnalysisForMark = undefined;
+    const resultMatch = analysis.match(/\[Result\]\s*([OX])/);
+    if (resultMatch && resultMatch[1] === "X") {
+      aiAnalysisForMark = analysis;
+    }
+    
+    // 13. 에러 마킹 파일 생성
+    markedFilePath = markErrors(originalFileName, code, parsed.errors, parsed.warnings, aiAnalysisForMark);
+    
+    // 14. 실행 결과가 있으면 포함하여 반환
+    return { 
+      analysis, 
+      markedFilePath, 
+      executionOutput: executionOutput.trim() || undefined 
+    };
+    
+  } catch (analysisError: any) {
+    console.error('❌ 분석 중 오류:', analysisError);
+    
+    const fallbackAnalysis = `[Result] X\n[Reason] 분석 과정에서 오류가 발생했습니다: ${analysisError.message}\n[Suggestion] 코드를 다시 확인하고 시도해주세요.`;
+    
+    return { 
+      analysis: fallbackAnalysis, 
+      markedFilePath: markErrors(originalFileName, code, [], [], fallbackAnalysis),
+      executionOutput: executionOutput.trim() || undefined
+    };
   }
-  const markedFilePath = markErrors(originalFileName, code, parsed.errors, parsed.warnings, aiAnalysisForMark);
-  return { analysis, markedFilePath };
 }
 
 
@@ -167,47 +356,52 @@ export function markErrors(
   const lines = code.split("\n");
   const markedLines: string[] = [];
 
-  // 각 라인별로 에러/경고 정보 수집
+  // 각 라인별로 에러/경고 정보 수집 (중복 제거)
   const lineIssues = new Map<
     number,
-    { errors: CompilerError[]; warnings: CompilerWarning[] }
+    { 
+      errors: Map<string, CompilerError>; // 메시지별로 중복 제거
+      warnings: Map<string, CompilerWarning>; // 메시지별로 중복 제거
+    }
   >();
 
-  // 에러 정보 수집
+  // 에러 정보 수집 (중복 제거)
   errors.forEach((error) => {
     if (error.line) {
       const lineNum = error.line;
       if (!lineIssues.has(lineNum)) {
-        lineIssues.set(lineNum, { errors: [], warnings: [] });
+        lineIssues.set(lineNum, { errors: new Map(), warnings: new Map() });
       }
-      lineIssues.get(lineNum)!.errors.push(error);
+      const errorKey = `${error.type}-${error.message}`;
+      lineIssues.get(lineNum)!.errors.set(errorKey, error);
     }
   });
 
-  // 경고 정보 수집
+  // 경고 정보 수집 (중복 제거)
   warnings.forEach((warning) => {
     if (warning.line) {
       const lineNum = warning.line;
       if (!lineIssues.has(lineNum)) {
-        lineIssues.set(lineNum, { errors: [], warnings: [] });
+        lineIssues.set(lineNum, { errors: new Map(), warnings: new Map() });
       }
-      lineIssues.get(lineNum)!.warnings.push(warning);
+      const warningKey = `${warning.type}-${warning.message}`;
+      lineIssues.get(lineNum)!.warnings.set(warningKey, warning);
     }
   });
 
-  // AI 분석 결과가 치명적(X)이면 파일 상단에 Reason/Suggestion 주석 추가
+  // AI 분석 결과가 치명적(X)이면 파일 상단에 간결한 주석 추가
   if (aiAnalysis) {
     const resultMatch = aiAnalysis.match(/\[Result\]\s*([OX])/);
     if (resultMatch && resultMatch[1] === "X") {
-      // Reason, Suggestion 추출
       const reasonMatch = aiAnalysis.match(/\[Reason\]([\s\S]*?)(\[Suggestion\]|$)/);
       const suggestionMatch = aiAnalysis.match(/\[Suggestion\]([\s\S]*)/);
+      
+      markedLines.push(`//AI 분석: 치명적 문제 감지`);
       if (reasonMatch) {
-        markedLines.push(`// [AI 분석: 치명적 문제 감지]`);
-        markedLines.push(`// Reason: ${reasonMatch[1].trim()}`);
+        markedLines.push(`// 원인: ${reasonMatch[1].trim()}`);
       }
       if (suggestionMatch) {
-        markedLines.push(`// Suggestion: ${suggestionMatch[1].trim()}`);
+        markedLines.push(`// 해결책: ${suggestionMatch[1].trim()}`);
       }
       markedLines.push("");
     }
@@ -217,67 +411,42 @@ export function markErrors(
   lines.forEach((line, index) => {
     const lineNum = index + 1;
     const issues = lineIssues.get(lineNum);
-    let outputLine = line;
-    let comments: string[] = [];
-    if (issues) {
-      // 에러 메시지들 표시 (컴파일 타임 + 런타임)
-      issues.errors.forEach((error) => {
-        let indicator = "";
-        const isRuntimeError = error.type === 'runtime';
-        const errorPrefix = isRuntimeError ? '[RUNTIME ERROR]' : '[ERROR]';
-        
-        if (error.column) {
-          indicator = " ".repeat(Math.max(0, error.column - 1)) + "^";
-          if (error.code) {
-            comments.push(`${errorPrefix} ${error.code}: ${error.message}`);
-          } else {
-            comments.push(`${errorPrefix} ${error.message}`);
-          }
-          // 런타임 에러의 경우 화살표 표시 추가
-          if (isRuntimeError) {
-            outputLine += `\n${indicator} // ${error.message}`;
-          } else {
-            outputLine += `\n${indicator}`;
-          }
-        } else {
-          // 컬럼 정보가 없는 경우
-          if (error.code) {
-            comments.push(`${errorPrefix} ${error.code}: ${error.message}`);
-          } else {
-            comments.push(`${errorPrefix} ${error.message}`);
-          }
-          // 런타임 에러인데 컬럼이 없는 경우
-          if (isRuntimeError) {
-            outputLine += `  // ${error.message}`;
-          }
-        }
-      });
+    
+    if (issues && (issues.errors.size > 0 || issues.warnings.size > 0)) {
+      // 문제가 있는 라인: 코드 + 간결한 주석
+      markedLines.push(line);
       
-      // 경고 메시지들 표시
-      issues.warnings.forEach((warning) => {
-        let indicator = "";
-        if (warning.column) {
-          indicator = " ".repeat(Math.max(0, warning.column - 1)) + "^";
-          if (warning.code) {
-            comments.push(`[WARNING] ${warning.code}: ${warning.message}`);
-          } else {
-            comments.push(`[WARNING] ${warning.message}`);
-          }
-          outputLine += `\n${indicator}`;
-        } else {
-          if (warning.code) {
-            comments.push(`[WARNING] ${warning.code}: ${warning.message}`);
-          } else {
-            comments.push(`[WARNING] ${warning.message}`);
-          }
-        }
-      });
-      markedLines.push(outputLine);
-      if (comments.length > 0) {
-        comments.forEach((comment) => {
-          markedLines.push(`// ${"=".repeat(50)}`);
-          markedLines.push(comment);
+      // 에러 주석 (간결하게)
+      if (issues.errors.size > 0) {
+        const uniqueErrors = Array.from(issues.errors.values());
+        const errorMessages = uniqueErrors.map(error => {
+          const prefix = error.type === 'runtime' ? ' 런타임' : ' 컴파일';
+          const code = error.code ? ` (${error.code})` : '';
+          return `${prefix}${code}: ${error.message}`;
         });
+        
+        // 여러 에러가 있으면 한 줄로 요약
+        if (errorMessages.length === 1) {
+          markedLines.push(`  // ${errorMessages[0]}`);
+        } else {
+          markedLines.push(`  //  ${errorMessages.length}개 에러: ${errorMessages[0]}${errorMessages.length > 1 ? ' 외' : ''}`);
+        }
+      }
+      
+      // 경고 주석 (간결하게)
+      if (issues.warnings.size > 0) {
+        const uniqueWarnings = Array.from(issues.warnings.values());
+        const warningMessages = uniqueWarnings.map(warning => {
+          const code = warning.code ? ` (${warning.code})` : '';
+          return ` 경고${code}: ${warning.message}`;
+        });
+        
+        // 여러 경고가 있으면 한 줄로 요약
+        if (warningMessages.length === 1) {
+          markedLines.push(`  // ${warningMessages[0]}`);
+        } else {
+          markedLines.push(`  //  ${warningMessages.length}개 경고: ${warningMessages[0]}${warningMessages.length > 1 ? ' 외' : ''}`);
+        }
       }
     } else {
       // 일반 라인 (문제 없음)
@@ -285,23 +454,24 @@ export function markErrors(
     }
   });
 
-  // 요약 정보 추가
-  markedLines.push("");
-  markedLines.push(`// ====== 요약 ======`);
+  // 간결한 요약 정보 추가
   const runtimeErrorCount = errors.filter(e => e.type === 'runtime').length;
   const compileErrorCount = errors.length - runtimeErrorCount;
+  const totalIssues = errors.length + warnings.length;
   
-  if (runtimeErrorCount > 0) {
-    markedLines.push(`// 런타임 오류: ${runtimeErrorCount}개`);
+  if (totalIssues > 0) {
+    markedLines.push("");
+    markedLines.push(`//  분석 요약: 총 ${totalIssues}개 문제`);
+    if (runtimeErrorCount > 0) {
+      markedLines.push(`//    런타임 오류: ${runtimeErrorCount}개`);
+    }
+    if (compileErrorCount > 0) {
+      markedLines.push(`//    컴파일 에러: ${compileErrorCount}개`);
+    }
+    if (warnings.length > 0) {
+      markedLines.push(`//   경고: ${warnings.length}개`);
+    }
   }
-  if (compileErrorCount > 0) {
-    markedLines.push(`// 컴파일 에러: ${compileErrorCount}개`);
-  }
-  if (warnings.length > 0) {
-    markedLines.push(`// 경고: ${warnings.length}개`);
-  }
-  
-
 
   // 파일명 생성 (원본 파일명 기반)
   const parsedPath = path.parse(originalFilePath);
