@@ -182,23 +182,79 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   ];
   
   // 도구 결정 - 더 유연한 키워드 매칭 (우선순위 고려)
-  let tool = "loopCheck";
+  let tool = "afterDebugFromCode"; // 기본값을 afterDebugFromCode로 변경
   
-  // 반복문 관련 키워드가 있으면 loopCheck 유지
-  const loopKeywords = ['반복문', '루프', 'loop', 'for문', 'while문', 'do-while', '포문', '와일문'];
+  // 반복문 관련 키워드가 있으면 loopCheck (오타 포함)
+  const loopKeywords = [
+    '반복문', '루프', 'loop', 'for문', 'while문', 'do-while', '포문', '와일문', 'dowhile', '두와일',
+    // 일반적인 오타들
+    '반복', '반복믄', '루프문', '룹', '포', '와일', '두와일문'
+  ];
   const hasLoopKeyword = flexibleMatch(normalizedQuery, loopKeywords);
   
-  if (flexibleMatch(normalizedQuery, ['변수', '추적', '변수추적', '트레이스', 'trace'])) {
+  if (hasLoopKeyword) {
+    tool = "loopCheck";
+  }
+  
+  // 변수 추적 관련 키워드가 있으면 traceVar (오타 포함)
+  if (flexibleMatch(normalizedQuery, [
+    '변수', '추적', '변수추적', '트레이스', 'trace',
+    // 일반적인 오타들
+    '변', '변주', '츄적', '추적해', 'trase', 'trce'
+  ])) {
     tool = "traceVar";
   }
-  if (flexibleMatch(normalizedQuery, ['메모리', '누수', '메모리누수', 'memory', 'leak'])) {
+  
+  // 메모리 관련 키워드가 있으면 testBreak (오타 포함)
+  if (flexibleMatch(normalizedQuery, [
+    '메모리', '누수', '메모리누수', 'memory', 'leak',
+    // 일반적인 오타들
+    '메모', '메모이', '누', '누스', 'memori', 'memorry', 'lek'
+  ])) {
     tool = "testBreak";
   }
-  // 반복문 키워드가 없을 때만 전체 분석으로 변경
-  if (flexibleMatch(normalizedQuery, ['전체', '종합', '전반적', '전체분석', '종합분석', 'overall']) && !hasLoopKeyword) {
-    // 추가 조건: 컴파일, 검사, 분석 등의 키워드가 있을 때만 afterDebugFromCode
-    if (flexibleMatch(normalizedQuery, ['컴파일', '검사', '분석', '전체검사', '전체분석', '종합검사', '종합분석'])) {
-      tool = "afterDebugFromCode";
+  
+  // 컴파일 관련 키워드 체크 (afterDebugFromCode는 기본값이지만 명시적으로 확인)
+  // 오타가 있어도 컴파일 의도를 명확히 파악
+  const compileKeywords = [
+    '컴파일', '컴파일해', 'compile', 'build', '빌드',
+    // 일반적인 오타들
+    '컴패일', '컴파', '컴팔', '컴파일해줘', 'complie', 'complile', 'compil', '빌드해'
+  ];
+  if (flexibleMatch(normalizedQuery, compileKeywords)) {
+    // 이미 기본값이 afterDebugFromCode이므로 명시적으로 설정할 필요는 없지만 
+    // 로그를 위해 명확히 표시
+    tool = "afterDebugFromCode";
+  }
+  
+  // 미리 정의하지 않은 오타에 대한 AI 기반 의도 파악
+  if (tool === "afterDebugFromCode" && normalizedQuery.length > 3) {
+    try {
+      const intentPrompt = `User query: "${query}"
+
+This query might contain typos. Please identify the most likely intent:
+1. "loopCheck" - if related to loops, for/while statements, loop analysis
+2. "traceVar" - if related to variable tracking, variable tracing  
+3. "testBreak" - if related to memory leaks, memory issues
+4. "afterDebugFromCode" - if related to compilation, overall analysis, debugging
+
+Consider common typos in Korean/English:
+- 컴파일 variations: 컴퓨일, 컴팔일, 컴파, etc.
+- 반복문 variations: 반보문, 반복믄, 반복, etc.
+- 변수 variations: 변, 변주, 변스, etc.
+
+Respond with only one word: loopCheck, traceVar, testBreak, or afterDebugFromCode`;
+
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const result = await model.generateContent(intentPrompt);
+      const aiTool = result.response.text().trim();
+      
+      if (['loopCheck', 'traceVar', 'testBreak', 'afterDebugFromCode'].includes(aiTool)) {
+        tool = aiTool;
+      }
+    } catch (err) {
+      // AI 실패 시 기본값 유지
+      console.log("AI 의도 파악 실패, 기본값 사용");
     }
   }
   
