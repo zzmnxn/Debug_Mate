@@ -131,38 +131,17 @@ function extractForWhileLoopWithEnd(code: string, startPos: number): {code: stri
     if (parenCount === 0) break;
   }
   
-  // 공백 건너뛰기
+  // 중괄호 찾기
   while (pos < code.length && /\s/.test(code[pos])) pos++;
-  if (pos >= code.length) return {code: '', end: startPos};
+  if (pos >= code.length || code[pos] !== '{') return {code: '', end: startPos};
   
-  // 중괄호가 있는 경우와 없는 경우 모두 처리
-  if (code[pos] === '{') {
-    // 중괄호 블록 매칭
-    let braceCount = 0;
-    while (pos < code.length) {
-      if (code[pos] === '{') braceCount++;
-      else if (code[pos] === '}') braceCount--;
-      pos++;
-      if (braceCount === 0) break;
-    }
-  } else {
-    // 단일 문장 처리 - 세미콜론까지 또는 줄 끝까지
-    while (pos < code.length) {
-      if (code[pos] === ';') {
-        pos++;
-        break;
-      }
-      if (code[pos] === '\n') {
-        // 다음 줄이 공백이 아닌 문자로 시작하면 종료
-        let nextPos = pos + 1;
-        while (nextPos < code.length && /[ \t]/.test(code[nextPos])) nextPos++;
-        if (nextPos < code.length && !/\s/.test(code[nextPos])) {
-          pos = nextPos;
-          break;
-        }
-      }
-      pos++;
-    }
+  // 중괄호 블록 매칭
+  let braceCount = 0;
+  while (pos < code.length) {
+    if (code[pos] === '{') braceCount++;
+    else if (code[pos] === '}') braceCount--;
+    pos++;
+    if (braceCount === 0) break;
   }
   
   return {code: code.substring(startPos, pos), end: pos};

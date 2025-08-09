@@ -10,13 +10,13 @@ interface CompileInput {
   code: string;
 }
 
+//유저의 자연어를 분석해 아래의 tool / target / details 형태로 반환
 interface ParsedIntent {
   tool: string;
   target?: string;
   details?: any;
 }
 
-//gemini model call
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
@@ -33,14 +33,14 @@ async function parseUserIntent(query: string): Promise<ParsedIntent> {
     // 루프 타입 패턴
     { pattern: /for문/i, loopType: "for" },
     { pattern: /while문/i, loopType: "while" },
-    { pattern: /do-?while문/i, loopType: "do-while" },
+    { pattern: /do?while문/i, loopType: "do-while" },
   ];
   
   // 기본 도구 결정
   let tool = "loopCheck";
   if (query.includes("변수") || query.includes("추적")) tool = "traceVar";
-  if (query.includes("컴파일") || query.includes("실행") || query.includes("결과") || 
-      query.includes("전체") || query.includes("종합") || query.includes("전반적")) tool = "afterDebugFromCode";
+  if (query.includes("메모리") || query.includes("누수")) tool = "testBreak";
+  if (query.includes("전체") || query.includes("종합") || query.includes("전반적")) tool = "afterDebugFromCode";
   
   let target = "all";
   let details: any = {};
@@ -78,7 +78,7 @@ async function parseUserIntent(query: string): Promise<ParsedIntent> {
   
   if (isComplexQuery) {
     // 짧은 프롬프트로 AI 파싱
-    const prompt = `Parse request to JSON:\nTools: loopCheck, traceVar, afterDebugFromCode\nExamples:\n"변수 a 추적" → {"tool": "traceVar", "target": "variable", "details": {"name": "a"}}\nJSON only:`;
+    const prompt = `Parse request to JSON:\nTools: loopCheck, traceVar, testBreak, afterDebugFromCode\nExamples:\n"변수 a 추적" → {"tool": "traceVar", "target": "variable", "details": {"name": "a"}}\nJSON only:`;
 
     try {
       const result = await model.generateContent(prompt + `\n\n"${query}"`);
