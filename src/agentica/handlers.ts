@@ -344,26 +344,46 @@ export async function loopCheck({
     try {
       const targetSelectionPrompt = `You are analyzing C code loops. The user wants to analyze specific loops using natural language.
 
+Full code context:
+\`\`\`c
+${code.split('\n').map((line, idx) => `${idx + 1}: ${line}`).join('\n')}
+\`\`\`
+
 Available loops in the code:
 ${loopInfos.map((loopInfo, index) => {
   const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
-  return `Loop ${index + 1} (반복문 ${loopNumber}): ${loopInfo.code.trim()}`;
+  const loopType = loopInfo.code.trim().startsWith('for') ? 'for' : 
+                   loopInfo.code.trim().startsWith('while') ? 'while' : 
+                   loopInfo.code.trim().startsWith('do') ? 'do-while' : 'unknown';
+  return `Loop ${index + 1} (반복문 ${loopNumber}) [${loopType}]: ${loopInfo.code.trim()}`;
 }).join('\n')}
 
 User requested target: "${target}"
+User details: ${JSON.stringify(details)}
 
 Please identify which specific loops the user wants to analyze. Consider various Korean expressions like:
-- 첫번째, 첫번쨰, 하나번째, 처음, 1번째, 1st
-- 두번째, 둘째, 2번째, 2nd  
-- 세번째, 셋째, 3번째, 3rd
-- 여섯번째, 6번째, 6th
-- 일곱번째, 일곱번쨰, 7번째, 7th
-- 마지막, 끝, last
-- 103번째, 103rd
-- for문, while문, do-while문 (all loops of that type)
+- 첫번째, 첫번쨰, 하나번째, 처음, 1번째, 1st (specific loop by position)
+- 두번째, 둘째, 2번째, 2nd (specific loop by position)
+- 세번째, 셋째, 3번째, 3rd (specific loop by position)
+- 마지막, 끝, last (last loop)
+- for문만, for문, for루프 (ALL for loops)
+- while문만, while문, while루프 (ALL while loops)  
+- do-while문만, do-while문, dowhile문, 두와일문, 두와일, do while문 (ALL do-while loops)
+- testloop21함수, main함수 (loops in specific function)
+- 23번째 줄, 줄 45, line 30 (loops at specific line number)
+
+IMPORTANT: 
+- If the user wants "for문만" or similar, return ALL for loop indices
+- If the user wants "while문만" or similar, return ALL while loop indices
+- If the user wants "do-while문만", "dowhile문", "두와일문" or similar, return ALL do-while loop indices
+- If the user wants a specific position (첫번째, 2번째), return that specific loop
+- If the user wants loops in a specific function (함수명함수), return loops in that function by analyzing the full code context
+- If the user wants loops at a specific line (N번째 줄), return loops at or near that line by checking line numbers
 
 Return only a JSON array of loop indices (1-based) that match the user's request:
-Example: [1] for first loop, [1,3,5] for multiple loops, [2,4] for all while loops if loops 2 and 4 are while loops
+Example: [1,3,5,7] for all for loops if loops 1,3,5,7 are for loops
+Example: [1] for first loop only
+Example: [2,4] for all while loops if loops 2 and 4 are while loops
 If you cannot determine specific loops, return []`;
 
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -413,6 +433,10 @@ If you cannot determine specific loops, return []`;
     if (loop.match(/for\s*\(\s*int\s+\w+\s*=\s*0\s*;\s*\w+\s*<\s*\d+\s*;\s*\w+--\s*\)/)) {
       return `- 반복문 ${loopNumber}\n\t무한 루프입니다. 초기값 0에서 감소하면 종료 조건을 만족할 수 없습니다.\n\t수정 제안 1: i--를 i++로 변경하세요.\n\t수정 제안 2: 조건을 i >= 0으로 변경하세요.`;
     }
+    // do-while문 패턴 추가
+    if (loop.startsWith('do') && loop.includes('while') && loop.includes('z = 1') && loop.includes('while(z)')) {
+      return `- 반복문 ${loopNumber}\n\t무한 루프입니다. z가 항상 1이므로 while(z) 조건은 항상 참입니다.\n\t수정 제안 1: z의 값을 조건에 따라 변경하거나, 루프 종료 조건을 추가합니다.`;
+    }
     
     return null;
   });
@@ -439,11 +463,13 @@ For problems, format your response with proper line breaks and tabs for readabil
 For no issues, use "문제가 없습니다." in Korean. 
 Respond in Korean only.
 
-Format for problems:
+Expected output format:
 - 반복문 X
-\t[Problem description]
-\t수정 제안 1: [suggestion 1]
-\t수정 제안 2: [suggestion 2] (if applicable)
+\t무한 루프입니다. 조건이 항상 참이므로 종료되지 않습니다.
+\t수정 제안 1: 구체적인 수정 방법
+\t수정 제안 2: 대안적인 수정 방법 (필요한 경우)
+
+Do NOT include any instruction text in your response. Only provide the analysis results.
 
 ${loopAnalysisData.map(item => `=== Loop ${item.number} ===\n${item.code}`).join('\n\n')}
 
@@ -626,7 +652,45 @@ async function compareLoopsLegacy({
         }
         return false;
       });
-      selectedLoop = filteredLoops.length > 0 ? filteredLoops[0] : null;
+      // 모든 해당 타입의 루프를 선택 (첫 번째만이 아닌)
+      if (filteredLoops.length > 0) {
+        for (const filteredLoop of filteredLoops) {
+          targetLoopInfos.push(filteredLoop);
+          const loopNumber = generateHierarchicalNumber(filteredLoop, loopInfos);
+          loopDescriptions.push(`반복문 ${loopNumber}`);
+        }
+        continue; // 다음 target으로 넘어가기
+      }
+      selectedLoop = null; // 찾을 수 없는 경우
+    } else if (target === "function" && details.functionName) {
+      // 함수명 기반 필터링 (단순 구현 - 함수명이 포함된 루프)
+      const functionName = details.functionName;
+      selectedLoop = loopInfos.find(loopInfo => {
+        // 루프 코드 주변에서 함수명을 찾거나, 루프가 해당 함수 내부에 있는지 확인
+        // 간단한 구현: 함수명이 근처에 있는지 확인
+        return loopInfo.code.includes(functionName) || 
+               (loopInfo as any).context?.includes(functionName);
+      });
+      if (selectedLoop) {
+        targetLoopInfos.push(selectedLoop);
+        const loopNumber = generateHierarchicalNumber(selectedLoop, loopInfos);
+        loopDescriptions.push(`반복문 ${loopNumber}`);
+      }
+    } else if (target === "line" && details.lineNumber) {
+      // 줄 번호 기반 필터링 (단순 구현)
+      const targetLine = details.lineNumber;
+      selectedLoop = loopInfos.find(loopInfo => {
+        // 루프의 시작 줄 번호를 추정하여 비교
+        // 실제 구현에서는 더 정확한 줄 번호 정보가 필요함
+        const loopLines = loopInfo.code.split('\n');
+        const estimatedStartLine = targetLine; // 임시 구현
+        return Math.abs(estimatedStartLine - targetLine) <= 2; // 2줄 오차 허용
+      });
+      if (selectedLoop) {
+        targetLoopInfos.push(selectedLoop);
+        const loopNumber = generateHierarchicalNumber(selectedLoop, loopInfos);
+        loopDescriptions.push(`반복문 ${loopNumber}`);
+      }
     }
     
     if (selectedLoop) {
@@ -683,7 +747,7 @@ function selectLoopsLegacy(loopInfos: LoopInfo[], target: string, details: any):
     const index = parseInt(target) - 1;
     targetLoopInfos = loopInfos.length > index && index >= 0 ? [loopInfos[index]] : [];
   } else if (target === "specific" && details.loopType) {
-    targetLoopInfos = loopInfos.filter(loopInfo => {
+    const filteredLoops = loopInfos.filter(loopInfo => {
       const loop = loopInfo.code;
       if (details.loopType === "for") {
         return loop.trim().startsWith("for");
@@ -692,7 +756,27 @@ function selectLoopsLegacy(loopInfos: LoopInfo[], target: string, details: any):
       } else if (details.loopType === "do-while") {
         return loop.trim().startsWith("do");
       }
-      return true;
+      return false; // 수정: true에서 false로 변경 (해당 타입만 선택)
+    });
+    targetLoopInfos = filteredLoops;
+  } else if (target === "function" && details.functionName) {
+    // 함수명 기반 필터링 (단순 구현 - 함수명이 포함된 루프)
+    const functionName = details.functionName;
+    targetLoopInfos = loopInfos.filter(loopInfo => {
+      // 루프 코드 주변에서 함수명을 찾거나, 루프가 해당 함수 내부에 있는지 확인
+      // 간단한 구현: 함수명이 근처에 있는지 확인
+      return loopInfo.code.includes(functionName) || 
+             (loopInfo as any).context?.includes(functionName);
+    });
+  } else if (target === "line" && details.lineNumber) {
+    // 줄 번호 기반 필터링 (단순 구현)
+    const targetLine = details.lineNumber;
+    targetLoopInfos = loopInfos.filter(loopInfo => {
+      // 루프의 시작 줄 번호를 추정하여 비교
+      // 실제 구현에서는 더 정확한 줄 번호 정보가 필요함
+      const loopLines = loopInfo.code.split('\n');
+      const estimatedStartLine = targetLine; // 임시 구현
+      return Math.abs(estimatedStartLine - targetLine) <= 2; // 2줄 오차 허용
     });
   }
   

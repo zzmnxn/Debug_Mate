@@ -177,48 +177,8 @@ export function extractLoopsWithNesting(code: string): LoopInfo[] {
     }
   }
   
-  // Find while loops
-  const whilePattern = /\bwhile\s*\(/g;
-  while ((match = whilePattern.exec(sanitizedCode)) !== null) {
-    const startPos = match.index;
-    let pos = startPos;
-    
-    // Skip to opening parenthesis
-    while (pos < sanitizedCode.length && sanitizedCode[pos] !== '(') pos++;
-    
-    // Match parentheses
-    let parenCount = 0;
-    while (pos < sanitizedCode.length) {
-      if (sanitizedCode[pos] === '(') parenCount++;
-      else if (sanitizedCode[pos] === ')') parenCount--;
-      pos++;
-      if (parenCount === 0) break;
-    }
-    
-    // Skip whitespace
-    while (pos < sanitizedCode.length && /\s/.test(sanitizedCode[pos])) pos++;
-    
-    let endPos: number;
-    if (pos < sanitizedCode.length && sanitizedCode[pos] === '{') {
-      // Block statement
-      endPos = findMatchingBrace(sanitizedCode, pos);
-      if (endPos !== -1) endPos++;
-    } else {
-      // Single statement
-      endPos = extractSingleStatement(sanitizedCode, pos);
-    }
-    
-    if (endPos > startPos) {
-      positions.push({
-        start: startPos,
-        end: endPos,
-        code: code.substring(startPos, endPos),
-        type: 'while'
-      });
-    }
-  }
-  
-  // Find do-while loops
+  // Find do-while loops first (to exclude their while parts from standalone while loops)
+  const doWhileRanges: Array<{start: number, end: number}> = [];
   const doPattern = /\bdo\s*\{/g;
   while ((match = doPattern.exec(sanitizedCode)) !== null) {
     const startPos = match.index;
@@ -256,11 +216,63 @@ export function extractLoopsWithNesting(code: string): LoopInfo[] {
       while (pos < sanitizedCode.length && sanitizedCode[pos] !== ';') pos++;
       if (pos < sanitizedCode.length) pos++; // Include semicolon
       
+      // Store do-while range for exclusion
+      doWhileRanges.push({start: startPos, end: pos});
+      
       positions.push({
         start: startPos,
         end: pos,
         code: code.substring(startPos, pos),
         type: 'do-while'
+      });
+    }
+  }
+  
+  // Find while loops (excluding those that are part of do-while)
+  const whilePattern = /\bwhile\s*\(/g;
+  while ((match = whilePattern.exec(sanitizedCode)) !== null) {
+    const startPos = match.index;
+    
+    // Check if this while is part of a do-while loop
+    const isPartOfDoWhile = doWhileRanges.some(range => 
+      startPos >= range.start && startPos < range.end
+    );
+    
+    if (isPartOfDoWhile) continue; // Skip while parts of do-while loops
+    
+    let pos = startPos;
+    
+    // Skip to opening parenthesis
+    while (pos < sanitizedCode.length && sanitizedCode[pos] !== '(') pos++;
+    
+    // Match parentheses
+    let parenCount = 0;
+    while (pos < sanitizedCode.length) {
+      if (sanitizedCode[pos] === '(') parenCount++;
+      else if (sanitizedCode[pos] === ')') parenCount--;
+      pos++;
+      if (parenCount === 0) break;
+    }
+    
+    // Skip whitespace
+    while (pos < sanitizedCode.length && /\s/.test(sanitizedCode[pos])) pos++;
+    
+    let endPos: number;
+    if (pos < sanitizedCode.length && sanitizedCode[pos] === '{') {
+      // Block statement
+      endPos = findMatchingBrace(sanitizedCode, pos);
+      if (endPos !== -1) endPos++;
+    } else {
+      // Single statement
+      endPos = extractSingleStatement(sanitizedCode, pos);
+    }
+    
+    if (endPos > startPos) {
+      positions.push({
+        start: startPos,
+        end: endPos,
+        code: code.substring(startPos, endPos),
+        type: 'while'
       });
     }
   }

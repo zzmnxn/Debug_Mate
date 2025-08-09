@@ -176,48 +176,101 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   
   const loopTypePatterns = [
     { keywords: ['for문', 'for루프', 'for반복문', '포문', 'for'], loopType: "for" },
+    // do-while을 while보다 먼저 매칭 (더 구체적이므로)
+    { keywords: ['do while문', 'dowhile문', 'do-while문', 'do-while', 'do while루프', 'do while반복문', '두와일문', '두와일', 'dowhile', 'do while'], loopType: "do-while" },
     { keywords: ['while문', 'while루프', 'while반복문', '와일문', 'while'], loopType: "while" },
-    { keywords: ['do while문', 'dowhile문', 'do-while', 'do while루프'], loopType: "do-while" },
   ];
   
-  // 도구 결정 - 더 유연한 키워드 매칭
+  // 도구 결정 - 더 유연한 키워드 매칭 (우선순위 고려)
   let tool = "loopCheck";
+  
+  // 반복문 관련 키워드가 있으면 loopCheck 유지
+  const loopKeywords = ['반복문', '루프', 'loop', 'for문', 'while문', 'do-while', '포문', '와일문'];
+  const hasLoopKeyword = flexibleMatch(normalizedQuery, loopKeywords);
+  
   if (flexibleMatch(normalizedQuery, ['변수', '추적', '변수추적', '트레이스', 'trace'])) {
     tool = "traceVar";
   }
   if (flexibleMatch(normalizedQuery, ['메모리', '누수', '메모리누수', 'memory', 'leak'])) {
     tool = "testBreak";
   }
-  if (flexibleMatch(normalizedQuery, ['전체', '종합', '전반적', '전체분석', '종합분석', 'overall'])) {
-    tool = "afterDebugFromCode";
+  // 반복문 키워드가 없을 때만 전체 분석으로 변경
+  if (flexibleMatch(normalizedQuery, ['전체', '종합', '전반적', '전체분석', '종합분석', 'overall']) && !hasLoopKeyword) {
+    // 추가 조건: 컴파일, 검사, 분석 등의 키워드가 있을 때만 afterDebugFromCode
+    if (flexibleMatch(normalizedQuery, ['컴파일', '검사', '분석', '전체검사', '전체분석', '종합검사', '종합분석'])) {
+      tool = "afterDebugFromCode";
+    }
   }
   
   let target = "all";
   let details: any = {};
   
-  // 숫자 패턴 검사 - 더 유연하게 (우선순위 높임)
-  const numberPatterns = [
-    /(\d+)\s*번째/i,
-    /번째\s*(\d+)/i,
-    /(\d+)\s*번/i,
-    /(\d+)th/i,
-    /(\d+)st/i,
-    /(\d+)nd/i,
-    /(\d+)rd/i
+  // 함수명 패턴 검사 (우선순위 높음)
+  const functionPatterns = [
+    /(\w+)\s*함수/i,
+    /함수\s*(\w+)/i,
+    /(\w+)\s*function/i,
+    /function\s*(\w+)/i
   ];
   
-  for (const pattern of numberPatterns) {
+  for (const pattern of functionPatterns) {
     const match = normalizedQuery.match(pattern);
     if (match) {
-      const number = match[1];
-      const index = parseInt(number);
-      if (index >= 1 && index <= 5) {
-        const targets = ["first", "second", "third", "fourth", "fifth"];
-        target = targets[index - 1];
-      } else if (index >= 6) {
-        target = index.toString();
-      }
+      const functionName = match[1];
+      target = "function";
+      details.functionName = functionName;
       break;
+    }
+  }
+  
+  // 줄 번호 패턴 검사 (더 구체적으로 - "줄" 키워드가 반드시 포함되어야 함)
+  const linePatterns = [
+    /(\d+)\s*번째\s*줄/i,  // "16번째 줄"
+    /(\d+)\s*줄/i,         // "16줄"  
+    /줄\s*(\d+)/i,         // "줄 16"
+    /line\s*(\d+)/i,       // "line 16"
+    /(\d+)\s*line/i        // "16 line"
+  ];
+  
+  if (target === "all") { // 함수 패턴이 없을 때만
+    for (const pattern of linePatterns) {
+      const match = normalizedQuery.match(pattern);
+      if (match) {
+        const lineNumber = parseInt(match[1]);
+        target = "line";
+        details.lineNumber = lineNumber;
+        break;
+      }
+    }
+  }
+  
+  // 반복문 순서 패턴 검사 (함수/줄 번호 패턴이 없을 때만)
+  if (target === "all") {
+    const numberPatterns = [
+      /(\d+)\s*번째\s*반복문/i,  // "16번째 반복문" (가장 명확)
+      /반복문\s*(\d+)/i,         // "반복문 16"
+      /(\d+)\s*번째/i,           // "16번째" (반복문 컨텍스트에서)
+      /번째\s*(\d+)/i,           // "번째 16"
+      /(\d+)\s*번/i,             // "16번"
+      /(\d+)th/i,
+      /(\d+)st/i,
+      /(\d+)nd/i,
+      /(\d+)rd/i
+    ];
+    
+    for (const pattern of numberPatterns) {
+      const match = normalizedQuery.match(pattern);
+      if (match) {
+        const number = match[1];
+        const index = parseInt(number);
+        if (index >= 1 && index <= 5) {
+          const targets = ["first", "second", "third", "fourth", "fifth"];
+          target = targets[index - 1];
+        } else if (index >= 6) {
+          target = index.toString();
+        }
+        break;
+      }
     }
   }
   
@@ -234,7 +287,10 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   // 루프 타입 패턴 매칭
   for (const pattern of loopTypePatterns) {
     if (flexibleMatch(normalizedQuery, pattern.keywords)) {
-      if (target === "all") {
+      // "만" 키워드가 있으면 해당 타입만 검사
+      if (normalizedQuery.includes('만') || normalizedQuery.includes('only')) {
+        target = "specific";
+      } else if (target === "all") {
         target = "specific";
       }
       details.loopType = pattern.loopType;
