@@ -1,6 +1,6 @@
 import { WebSocketServer } from "tgrid";
 import { SGlobal } from "../config/SGlobal";
-import { beforeDebug, afterDebug, afterDebugFromCode, loopCheck, traceVar, testBreak, inProgressDebug, markErrors } from "./handlers";
+import { beforeDebug, afterDebug, afterDebugFromCode, loopCheck, traceVar, testBreak, inProgressDebug, markErrors, compareLoops } from "./handlers";
 
 const main = async (): Promise<void> => {
   const port = Number(SGlobal.env.PORT);
@@ -16,10 +16,11 @@ const main = async (): Promise<void> => {
       traceVar,
       testBreak,
       inProgressDebug,
-      markErrors
+      markErrors,
+      compareLoops
     });
     console.log(`Connection accepted: ${acceptor.path}`);
-    console.log(`Available controllers: beforeDebug, afterDebug, loopCheck, traceVar, testBreak, inProgressDebug, markErrors`);
+    console.log(`Available controllers: beforeDebug, afterDebug, loopCheck, traceVar, testBreak, inProgressDebug, markErrors, compareLoops`);
   });
   console.log(`WebSocket server running on port ${port}.`);
 };

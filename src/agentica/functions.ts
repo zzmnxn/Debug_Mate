@@ -1,5 +1,5 @@
 import { CompilerError, CompilerWarning } from "../parsing/compilerResultParser";
-import { loopCheck, testBreak, traceVar, afterDebugFromCode, markErrors, inProgressDebug, beforeDebug } from "./handlers";
+import { loopCheck, testBreak, traceVar, afterDebugFromCode, markErrors, inProgressDebug, beforeDebug, compareLoops } from "./handlers";
 import typia from "typia";
 
 export class ErrorDiagnosisService {
@@ -24,6 +24,9 @@ export class ErrorDiagnosisService {
   }
   async inProgressDebug({ code }: { code: string }) {
     return inProgressDebug(code);
+  }
+  async compareLoops({ code, targets, details }: { code: string, targets: string[], details?: any }) {
+    return compareLoops({ code, targets, details });
   }
 
 }
