@@ -524,13 +524,14 @@ export async function testBreak({ codeSnippet }: { codeSnippet: string }) {
 // moonjeong's hw1   (code: string): Promise<string> {
 export async function beforeDebug({ code }: { code: string }) {
   const tmpDir = process.platform === "win32" ? path.join(process.cwd(), "tmp") : "/tmp";
-  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);  // Windows에서는 tmp 폴더 없을 수 있음
+  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);  // Windows 테스트 시 tmp 폴더 없을 수 있음
   
+  // 임시 파일/출력 경로 구성
   const tmpFile = path.join(tmpDir, `code_${Date.now()}.c`);
   const outputFile = path.join(tmpDir, `a.out`);
 
   try {
-    // 코드 저장
+    // 임시파일에 코드 저장
     fs.writeFileSync(tmpFile, code);
 
     // GCC 컴파일 수행
@@ -573,15 +574,15 @@ ${log}
 [Suggestion] 핵심 수정 제안 (1~2줄)
 
 `.trim();
-
+    // 모델 호출
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    return result.response.text().trim(); // 모델 응답 텍스트 반환
 
   } catch (e: any) {
     return `[Result] 분석 실패\n[Reason] ${e.message || e.toString()}\n[Suggestion] 로그 확인 필요`;
   } finally {
-    // 정리
+    // 리소스 정리
     [tmpFile, outputFile].forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
   }
 }
@@ -591,6 +592,7 @@ export async function inProgressDebug(code: string) {
   let compileLog = "";
 
   try {
+    // GCC 호출
     const compileResult = spawnSync("gcc", [
       "-Wall",
       "-Wextra",
@@ -604,15 +606,16 @@ export async function inProgressDebug(code: string) {
       stdio: ["pipe", "pipe", "pipe"]  // stdin, stdout, stderr 모두 파이프
     });
 
-    compileLog += compileResult.stderr || "";
+    compileLog += compileResult.stderr || ""; // GCC 경고/오류 메세지 수집
 
   } catch (err) {
-    compileLog += `GCC Error: ${(err as Error).message}`;
+    compileLog += `GCC Error: ${(err as Error).message}`; // 예외 처리
   }
-
+  //컴파일 로그 파싱 및 오약 생성
   const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
   const summary = CompilerResultParser.generateSummary(parsed);
 
+  // 모델 프롬프츠 구성
   const prompt = `
 당신은 숙련된 C 디버깅 도우미입니다.
 사용자가 아직 완성하지 않은 C 코드 일부를 작성하고 있습니다.
@@ -637,7 +640,7 @@ ${code}
 [Issues] 발견된 문제 요약 (없으면 없음)
 [Suggestions] 간단한 수정 제안
 `.trim();
-
+  // 모델 호출 및 결과 텍스트 반환
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
   return result.response.text().trim();
