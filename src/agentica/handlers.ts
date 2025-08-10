@@ -37,7 +37,6 @@ export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[
 
   return `
 You are a senior compiler engineer and static analysis expert with 15+ years of experience in C/C++ development and debugging.
-
 Your task is to analyze the compiler output and runtime log from a C/C++ program and determine whether the code has any critical problems that need to be addressed before deployment.
 
 === Summary ===
@@ -71,18 +70,11 @@ Do not add anything outside this format.
 - If a warning or message contains "memory leak", "leaked", "AddressSanitizer", or "LeakSanitizer", treat it as a critical issue.
 - For unused variable warnings, if variable name is vague (like 'temp'), suggest renaming or removal.
 - If runtime log contains "runtime error", "segmentation fault", "core dumped", or "undefined behavior", treat as critical.
-- If runtime log contains "runtime error", check if it follows a dangerous cast (e.g., int to pointer). If the code contains a dangerous cast pattern (예: (char*)정수, (int*)정수 등), 반드시 Reason에 'dangerous cast 의심'을 명시하고, Suggestion에 포인터 변환 및 역참조 코드를 점검하라고 안내할 것.
-- If the summary or runtime log contains "[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.", do NOT analyze the cause. Just output the hint exactly as the Suggestion and say "Critical issue detected" in Result.
+- If runtime log contains "runtime error", check if it follows a dangerous cast (e.g., int to pointer). 
+- If the summary or runtime log contains "[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.", do NOT analyze the cause. Just output the hint exactly as the Suggestion.
 - If execution timed out, suggest using loopCheck() function to analyze loop conditions.
 - For memory-related errors, always suggest checking pointer operations and memory allocation/deallocation.
 
-=== Error Priority ===
-1. Fatal errors (compilation failure)
-2. Runtime errors (segmentation fault, undefined behavior)
-3. Memory leaks and address sanitizer errors
-4. Syntax errors
-5. Semantic errors
-6. Warnings (unused variables, deprecated features)
 
 `.trim();
 }
@@ -93,7 +85,7 @@ Do not add anything outside this format.
 export async function afterDebug(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[], executionOutput?: string): Promise<string> {
   try {
     // 1. 입력 검증
-    if (!logSummary || typeof logSummary !== 'string') {
+    if (!logSummary || typeof logSummary !== 'string' || logSummary.trim() === '') {
       throw new Error('Invalid logSummary: must be a non-empty string');
     }
     
@@ -241,15 +233,6 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
           executionOutput += runResult.stderr; // 에러도 실행 결과에 포함
         }
         
-        // 런타임 에러 타입 분류 개선
-        if (runResult.stderr.includes("runtime error:")) {
-          compileLog += `\n[Runtime Type] UndefinedBehaviorSanitizer runtime error (UB 가능성)`;
-        } else if (runResult.stderr.includes("AddressSanitizer")) {
-          compileLog += `\n[Runtime Type] AddressSanitizer memory error`;
-        } else if (runResult.stderr.includes("LeakSanitizer")) {
-          compileLog += `\n[Runtime Type] Memory leak detected`;
-        }
-        
         if (runResult.error) {
           const errorAny = runResult.error as any;
           if (errorAny && errorAny.code === 'ETIMEDOUT') {
@@ -292,7 +275,7 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
         fs.unlinkSync(outputFile);
       }
     } catch (cleanupError) {
-      console.warn('⚠️ 임시 파일 정리 중 오류:', cleanupError);
+      console.warn(' 임시 파일 정리 중 오류:', cleanupError);
     }
   }
 
@@ -322,7 +305,7 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
     };
     
   } catch (analysisError: any) {
-    console.error('❌ 분석 중 오류:', analysisError);
+    console.error(' 분석 중 오류:', analysisError);
     
     const fallbackAnalysis = `[Result] X\n[Reason] 분석 과정에서 오류가 발생했습니다: ${analysisError.message}\n[Suggestion] 코드를 다시 확인하고 시도해주세요.`;
     
