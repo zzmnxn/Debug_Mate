@@ -16,14 +16,13 @@ echo "👀 ${TARGET_FILE} 저장 감시 시작 (Ctrl+C로 중단)"
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 
 # inotifywait로 감시
-inotifywait -m -e close_write "$TARGET_FILE" |
-while read path action file; do
-  echo "🔁 저장됨: $file → 디버깅 실행 중..."
-  # ts-node로 TypeScript 테스트 코드 실행
+inotifywait -m -e close_write --format '%w%f' "$TARGET_FILE" | \
+while IFS= read -r FULLPATH; do
+  echo "🔁 저장됨: $FULLPATH → InProgressDebug 실행 중..."
   (
     cd "$SCRIPT_DIR"
-    npx ts-node src/testcode/test_InProgressDebug.ts "$path$file"
+    # 👇 핵심: 표준입력을 /dev/tty로 붙여서 readline이 키보드 입력을 받게 함
+    npx ts-node src/testcode/test_InProgressDebug.ts "$FULLPATH" < /dev/tty
   )
-
   echo "✅ 실행 완료"
 done
