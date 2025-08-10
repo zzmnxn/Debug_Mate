@@ -1,6 +1,7 @@
 #include <stdio.h>
 // 반복문이 매우 많을 경우의 테스트코드
 // for 14개, while 9개, do-while 1개, 전체 24개
+
 // 1
 void testLoop21(){
     for (int a = 0; a < 1; a++) {
@@ -59,7 +60,7 @@ int main() {
         i++;
     }
     //16
-    for (i = 0; i < 2;) { // ❌ 종료 조건 있음, 증가 없음
+    for (i = 0; i < 2;) { // 종료 조건 있음, 증가 없음
         printf("Loop 15\n");
     }
 

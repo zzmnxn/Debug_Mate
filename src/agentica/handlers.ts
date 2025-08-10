@@ -352,10 +352,17 @@ ${code.split('\n').map((line, idx) => `${idx + 1}: ${line}`).join('\n')}
 Available loops in the code:
 ${loopInfos.map((loopInfo, index) => {
   const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
-  const loopType = loopInfo.code.trim().startsWith('for') ? 'for' : 
-                   loopInfo.code.trim().startsWith('while') ? 'while' : 
-                   loopInfo.code.trim().startsWith('do') ? 'do-while' : 'unknown';
-  return `Loop ${index + 1} (반복문 ${loopNumber}) [${loopType}]: ${loopInfo.code.trim()}`;
+  const loopCode = loopInfo.code.trim();
+  // 더 정확한 for문 식별
+  let loopType = 'unknown';
+  if (loopCode.startsWith('for') || loopCode.match(/^\s*for\s*\(/)) {
+    loopType = 'for';
+  } else if (loopCode.startsWith('while') || loopCode.match(/^\s*while\s*\(/)) {
+    loopType = 'while';
+  } else if (loopCode.startsWith('do') || loopCode.match(/^\s*do\s*\{/)) {
+    loopType = 'do-while';
+  }
+  return `Loop ${index + 1} (반복문 ${loopNumber}) [${loopType}]: ${loopCode}`;
 }).join('\n')}
 
 User requested target: "${target}"
@@ -380,8 +387,10 @@ IMPORTANT:
 - If the user wants loops in a specific function (함수명함수), return loops in that function by analyzing the full code context
 - If the user wants loops at a specific line (N번째 줄), return loops at or near that line by checking line numbers
 
+**CRITICAL**: When identifying for loops, look for ANY line that starts with "for" or contains "for (" pattern. Do not skip any for loops.
+
 Return only a JSON array of loop indices (1-based) that match the user's request:
-Example: [1,3,5,7] for all for loops if loops 1,3,5,7 are for loops
+Example: [1,3,4,5,6,7,8,14,15,18,19,21,22,23] for all for loops (including loop 18 which is "for (i = 0; i < 2;)")
 Example: [1] for first loop only
 Example: [2,4] for all while loops if loops 2 and 4 are while loops
 If you cannot determine specific loops, return []`;

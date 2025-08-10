@@ -184,16 +184,30 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   // 도구 결정 - 더 유연한 키워드 매칭 (우선순위 고려)
   let tool = "afterDebugFromCode"; // 기본값을 afterDebugFromCode로 변경
   
-  // 반복문 관련 키워드가 있으면 loopCheck (오타 포함)
-  const loopKeywords = [
-    '반복문', '루프', 'loop', 'for문', 'while문', 'do-while', '포문', '와일문', 'dowhile', '두와일',
+  // 전체 검사/최종 검사/수정 제안 관련 키워드가 있으면 afterDebugFromCode (우선순위 높음)
+  const overallAnalysisKeywords = [
+    '전체', '전체적으로', '전체코드', '전체 코드', '최종', '최종검사', '최종 검사', '수정', '어디를', '어디를 수정', '수정할까',
+    '컴파일', '컴파일해', 'compile', 'build', '빌드', '분석', '전체분석', '전체 분석', '문제', '문제점', '오류', '에러',
     // 일반적인 오타들
-    '반복', '반복믄', '루프문', '룹', '포', '와일', '두와일문'
+    '전체코', '전체코드', '최종검', '최종 검', '수정해', '어디', '컴패일', '컴파', '컴팔', 'complie', 'complile', 'compil',
+    '수정할', '수정할까', '문제', '문제점', '오류', '에러'
   ];
-  const hasLoopKeyword = flexibleMatch(normalizedQuery, loopKeywords);
+  const hasOverallAnalysis = flexibleMatch(normalizedQuery, overallAnalysisKeywords);
   
-  if (hasLoopKeyword) {
-    tool = "loopCheck";
+  if (hasOverallAnalysis) {
+    tool = "afterDebugFromCode";
+  } else {
+    // 반복문 관련 키워드가 있으면 loopCheck (오타 포함)
+    const loopKeywords = [
+      '반복문', '루프', 'loop', 'for문', 'while문', 'do-while', '포문', '와일문', 'dowhile', '두와일',
+      // 일반적인 오타들
+      '반복', '반복믄', '루프문', '룹', '포', '와일', '두와일문'
+    ];
+    const hasLoopKeyword = flexibleMatch(normalizedQuery, loopKeywords);
+    
+    if (hasLoopKeyword) {
+      tool = "loopCheck";
+    }
   }
   
   // 변수 추적 관련 키워드가 있으면 traceVar (오타 포함)
@@ -228,7 +242,8 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   }
   
   // 미리 정의하지 않은 오타에 대한 AI 기반 의도 파악
-  if (tool === "afterDebugFromCode" && normalizedQuery.length > 3) {
+  // 전체 분석 키워드가 이미 매칭된 경우에는 AI 파싱을 건너뜀
+  if (tool === "afterDebugFromCode" && normalizedQuery.length > 3 && !hasOverallAnalysis) {
     try {
       const intentPrompt = `User query: "${query}"
 
