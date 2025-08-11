@@ -395,7 +395,13 @@ Example: [1] for first loop only
 Example: [2,4] for all while loops if loops 2 and 4 are while loops
 If you cannot determine specific loops, return []`;
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-1.5-flash",
+        generationConfig: {
+          temperature: 0.3, // 더 일관된 응답을 위해 낮은 온도 설정
+          maxOutputTokens: 1000, // 응답 길이 제한
+        }
+      });
       const selectionResult = await model.generateContent(targetSelectionPrompt);
       const responseText = selectionResult.response.text().trim();
       const jsonMatch = responseText.match(/\[[\d\s,]*\]/);
@@ -483,8 +489,16 @@ Do NOT include any instruction text in your response. Only provide the analysis 
 ${loopAnalysisData.map(item => `=== Loop ${item.number} ===\n${item.code}`).join('\n\n')}
 
 Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.`;
-  
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+
+//모델 파라미터 추가 완료  
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash",
+    generationConfig: {
+      temperature: 0.3, // 더 일관된 응답을 위해 낮은 온도 설정
+      maxOutputTokens: 1000, // 응답 길이 제한
+    }
+  });
   const result = await model.generateContent(batchPrompt);
   const batchAnalysis = result.response.text();
   
