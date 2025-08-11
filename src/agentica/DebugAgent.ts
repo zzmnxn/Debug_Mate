@@ -109,9 +109,19 @@ async function main() {
       const result = await loopCheck({ code });
       resultText = result.result ?? "";
     } else if (selectedTool === "afterDebugFromCode") {
-      // 파일명은 main.c로 고정하거나, 필요시 인자로 받을 수 있음
-      const { analysis, markedFilePath } = await afterDebugFromCode(code, "main.c");
-      resultText = analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "");
+      // 사용자가' 실행 전 리뷰' 뉘앙스거나 미완성 코드면 beforeDebug로 전환
+      if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
+        if (isIncompleteCode(code)) {
+          console.log("ℹ️ 코드가 미완성으로 판단되어 beforeDebug를 실행합니다.");
+        } else {
+          console.log("ℹ️ 사용자가 '실행 전/리뷰' 요청을 명시하여 beforeDebug를 실행합니다.");
+        }
+        const analysis = await beforeDebug({ code });      // handlers.ts의 beforeDebug는 string 반환
+        resultText = analysis;
+      } else {
+        const { analysis, markedFilePath } = await afterDebugFromCode(code, "main.c");
+        resultText = analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "");
+      }
     } else if (selectedTool === "testBreak") {
       const result = await testBreak({ codeSnippet: code });
       resultText = JSON.stringify(result, null, 2);
@@ -126,5 +136,7 @@ async function main() {
     console.error("❌ 오류 발생:", err.message || err);
   }
 }
+
+
 
 main();
