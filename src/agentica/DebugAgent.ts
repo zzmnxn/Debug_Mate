@@ -473,16 +473,40 @@ Output JSON only:`;
 }
 
 async function main() {
-  const [,, filePath, ...queryParts] = process.argv;
-  const userQuery = queryParts.join(" ").trim();
+  try {
+    const [,, filePath, ...queryParts] = process.argv;
+    const userQuery = queryParts.join(" ").trim();
 
-  if (!filePath || !userQuery) {
-    console.error("Usage: debug <filePath> \"<natural language query>\"");
-    process.exit(1);
-  }
+    if (!filePath || !userQuery) {
+      console.error("Usage: debug <filePath> \"<natural language query>\"");
+      process.exit(1);
+    }
 
-  const absolutePath = path.resolve(filePath);
-  const code = fs.readFileSync(absolutePath, "utf-8");
+    // API 키 검증
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("[Error] GEMINI_API_KEY 환경변수가 설정되지 않았습니다.");
+      process.exit(1);
+    }
+
+    // 파일 경로 검증
+    const absolutePath = path.resolve(filePath);
+    if (!fs.existsSync(absolutePath)) {
+      console.error(`[Error] 파일을 찾을 수 없습니다: ${absolutePath}`);
+      process.exit(1);
+    }
+
+    // 파일 읽기
+    let code: string;
+    try {
+      code = fs.readFileSync(absolutePath, "utf-8");
+      if (!code || code.trim().length === 0) {
+        console.error("[Error] 파일이 비어있습니다.");
+        process.exit(1);
+      }
+    } catch (readError: any) {
+      console.error(`[Error] 파일 읽기 실패: ${readError.message}`);
+      process.exit(1);
+    }
 
   //add or modify your homework function here !! @@@@@@@@@@@@@@@@@@
   try {
@@ -549,7 +573,10 @@ async function main() {
     console.log("\n선택된 함수(테스트용) : ", toolNames);
     console.log("[Result] \n" + resultText);
   } catch (err: any) {
-    console.error("[Error] ", err.message || err);
+    console.error("[Error] 처리 중 오류 발생: ", err.message || err);
+  }
+  } catch (err: any) {
+    console.error("[Error] 초기화 중 오류 발생: ", err.message || err);
   }
 }
 

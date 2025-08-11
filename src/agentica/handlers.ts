@@ -318,6 +318,29 @@ export function markErrors(
 // 캐시 시스템 추가 (API 절약) - 전역으로 이동
 const analysisCache = new Map<string, string>();
 
+// 캐시 크기 제한 및 메모리 오버플로우 방지
+const MAX_CACHE_SIZE = 100;
+const MAX_CACHE_VALUE_SIZE = 10000; // 10KB
+
+function addToCache(key: string, value: string) {
+  // 캐시 크기 제한 확인
+  if (analysisCache.size >= MAX_CACHE_SIZE) {
+    // 가장 오래된 항목 제거 (Map은 삽입 순서를 유지)
+    const firstKey = analysisCache.keys().next().value;
+    if (firstKey) {
+      analysisCache.delete(firstKey);
+    }
+  }
+  
+  // 값 크기 제한 확인
+  if (value.length > MAX_CACHE_VALUE_SIZE) {
+    console.log("캐시 값이 너무 큽니다. 캐시하지 않습니다.");
+    return;
+  }
+  
+  analysisCache.set(key, value);
+}
+
 
 
 // uuyeong's hw
@@ -402,17 +425,47 @@ If you cannot determine specific loops, return []`;
           maxOutputTokens: 1000, // 응답 길이 제한
         }
       });
-      const selectionResult = await model.generateContent(targetSelectionPrompt);
+      
+      // 타임아웃 설정 (30초)
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+      });
+      
+      const selectionResult = await Promise.race([
+        model.generateContent(targetSelectionPrompt),
+        timeoutPromise
+      ]) as any;
       const responseText = selectionResult.response.text().trim();
+      
+      if (!responseText) {
+        throw new Error("AI 모델이 응답을 생성하지 못했습니다.");
+      }
+      
       const jsonMatch = responseText.match(/\[[\d\s,]*\]/);
       
       if (jsonMatch) {
-        const selectedIndices: number[] = JSON.parse(jsonMatch[0]);
-        if (selectedIndices.length > 0) {
-          targetLoopInfos = selectedIndices
-            .map(index => loopInfos[index - 1])
-            .filter(loop => loop !== undefined);
+        try {
+          const selectedIndices: number[] = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(selectedIndices) && selectedIndices.length > 0) {
+            // 유효한 인덱스 범위 검증
+            const validIndices = selectedIndices.filter(index => 
+              Number.isInteger(index) && index >= 1 && index <= loopInfos.length
+            );
+            
+            if (validIndices.length > 0) {
+              targetLoopInfos = validIndices
+                .map(index => loopInfos[index - 1])
+                .filter(loop => loop !== undefined);
+            } else {
+              console.log("유효한 루프 인덱스를 찾을 수 없습니다.");
+            }
+          }
+        } catch (parseError: any) {
+          console.log(`JSON 파싱 오류: ${parseError.message}`);
+          throw new Error("AI 응답 파싱에 실패했습니다.");
         }
+      } else {
+        console.log("AI 응답에서 유효한 배열을 찾을 수 없습니다.");
       }
     } catch (err) {
       console.log("AI 타겟 선택 실패, 기존 로직 사용:", err);
@@ -461,7 +514,7 @@ If you cannot determine specific loops, return []`;
   if (allSimple) {
     console.log("⚡ Simple pattern analysis (no API call)");
     const result = simpleChecks.join('\n\n');
-    analysisCache.set(cacheKey, result);
+    addToCache(cacheKey, result);
     return { result: `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${result}` };
   }
 
@@ -492,36 +545,78 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
 
 
 //모델 파라미터 추가 완료  
-  const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    generationConfig: {
-      temperature: 0.3, // 더 일관된 응답을 위해 낮은 온도 설정
-      maxOutputTokens: 1000, // 응답 길이 제한
+  try {
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        temperature: 0.3, // 더 일관된 응답을 위해 낮은 온도 설정
+        maxOutputTokens: 1000, // 응답 길이 제한
+      }
+    });
+    
+    // 타임아웃 설정 (30초)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+    });
+    
+    const result = await Promise.race([
+      model.generateContent(batchPrompt),
+      timeoutPromise
+    ]) as any;
+    const batchAnalysis = result.response.text();
+    
+    if (!batchAnalysis || batchAnalysis.trim().length === 0) {
+      throw new Error("AI 모델이 분석 결과를 생성하지 못했습니다.");
     }
-  });
-  const result = await model.generateContent(batchPrompt);
-  const batchAnalysis = result.response.text();
-  
-  analysisCache.set(cacheKey, batchAnalysis);
-  
-  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
-  return { result: formattedResult };
+    
+    addToCache(cacheKey, batchAnalysis);
+    
+      const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
+      return { result: formattedResult };
+  } catch (aiError: any) {
+    console.error(`AI 분석 실패: ${aiError.message}`);
+    
+    // 폴백: 간단한 패턴 분석 결과 반환
+    const fallbackResult = targetLoopInfos.map((loopInfo, i) => {
+      const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
+      return `- 반복문 ${loopNumber}\n\tAI 분석에 실패했습니다. 기본 패턴 검사만 수행됩니다.\n\t코드: ${loopInfo.code.trim()}`;
+    }).join('\n\n');
+    
+    const fallbackFormatted = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${fallbackResult}`;
+    return { result: fallbackFormatted };
+  }
 }
 
 /**
  * 계층적 번호 생성 (1, 2.1, 2.2, 3 등)
  */
 function generateHierarchicalNumber(currentLoop: LoopInfo, allLoops: LoopInfo[]): string {
+  if (!currentLoop || !allLoops) {
+    return "unknown";
+  }
+  
   if (currentLoop.level === 0) {
     // 최상위 루프
     return currentLoop.index.toString();
   }
   
   // 부모 루프 찾기
-  const parentLoop = allLoops[currentLoop.parentIndex!];
-  const parentNumber = generateHierarchicalNumber(parentLoop, allLoops);
+  if (currentLoop.parentIndex === undefined || currentLoop.parentIndex < 0 || currentLoop.parentIndex >= allLoops.length) {
+    return currentLoop.index.toString(); // 부모 정보가 유효하지 않으면 기본 번호 반환
+  }
   
-  return `${parentNumber}.${currentLoop.index}`;
+  const parentLoop = allLoops[currentLoop.parentIndex];
+  if (!parentLoop) {
+    return currentLoop.index.toString(); // 부모 루프를 찾을 수 없으면 기본 번호 반환
+  }
+  
+  try {
+    const parentNumber = generateHierarchicalNumber(parentLoop, allLoops);
+    return `${parentNumber}.${currentLoop.index}`;
+  } catch (error) {
+    console.log(`계층적 번호 생성 중 오류: ${error}`);
+    return currentLoop.index.toString(); // 오류 발생 시 기본 번호 반환
+  }
 }
 
 // 복수 루프 비교를 위한 새로운 함수
@@ -566,25 +661,62 @@ Example: [1, 3] for comparing first and third loops
 If you cannot determine specific loops, return []`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const selectionResult = await model.generateContent(targetSelectionPrompt);
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 1000,
+      }
+    });
+    
+    // 타임아웃 설정 (30초)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+    });
+    
+    const selectionResult = await Promise.race([
+      model.generateContent(targetSelectionPrompt),
+      timeoutPromise
+    ]) as any;
     const responseText = selectionResult.response.text().trim();
+    
+    if (!responseText) {
+      throw new Error("AI 모델이 응답을 생성하지 못했습니다.");
+    }
+    
     const jsonMatch = responseText.match(/\[[\d\s,]*\]/);
     
     let selectedIndices: number[] = [];
     if (jsonMatch) {
-      selectedIndices = JSON.parse(jsonMatch[0]);
+      try {
+        selectedIndices = JSON.parse(jsonMatch[0]);
+        if (!Array.isArray(selectedIndices)) {
+          selectedIndices = [];
+        }
+      } catch (parseError: any) {
+        console.log(`JSON 파싱 오류: ${parseError.message}`);
+        selectedIndices = [];
+      }
     }
     
     if (selectedIndices.length === 0) {
       return { result: "요청하신 반복문들을 찾을 수 없습니다. 더 구체적으로 지정해주세요." };
     }
     
+    // 유효한 인덱스 범위 검증
+    const validIndices = selectedIndices.filter(index => 
+      Number.isInteger(index) && index >= 1 && index <= loopInfos.length
+    );
+    
+    if (validIndices.length === 0) {
+      return { result: "요청하신 반복문들의 인덱스가 유효하지 않습니다." };
+    }
+    
     // 선택된 루프들 추출
     const targetLoopInfos: LoopInfo[] = [];
     const loopDescriptions: string[] = [];
     
-    for (const index of selectedIndices) {
+    for (const index of validIndices) {
       const loopIndex = index - 1; // 0-based로 변환
       if (loopIndex >= 0 && loopIndex < loopInfos.length) {
         const selectedLoop = loopInfos[loopIndex];
