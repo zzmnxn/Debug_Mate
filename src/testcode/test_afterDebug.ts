@@ -37,9 +37,9 @@ async function runAfterDebugTest(rawOutput: string, label: string) {
 }
 
 async function main() {
-  await runAfterDebugTest(sampleOutput_success, "✅ 경고만 있는 경우");
-  await runAfterDebugTest(sampleOutput_withError, "❌ 에러/크래시가 있는 경우");
-  await runAfterDebugTest(sampleOutput_clean, "✅ 완전히 깨끗한 경우");
+  await runAfterDebugTest(sampleOutput_success, " 경고만 있는 경우");
+  await runAfterDebugTest(sampleOutput_withError, " 에러/크래시가 있는 경우");
+  await runAfterDebugTest(sampleOutput_clean, "완전히 깨끗한 경우");
 }
 
 main();
