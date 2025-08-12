@@ -1,9 +1,19 @@
-import { CompilerError, CompilerWarning } from "../parsing/compilerResultParser";
-import { loopCheck, testBreak, traceVar, afterDebug, markErrors, inProgressDebug, beforeDebug } from "./handlers";
+import {
+  CompilerError,
+  CompilerWarning,
+} from "../parsing/compilerResultParser";
+import {
+  loopCheck,
+  testBreak,
+  traceVar,
+  afterDebug,
+  markErrors,
+  inProgressDebug,
+  beforeDebug,
+} from "./handlers";
 import typia from "typia";
 
 export class ErrorDiagnosisService {
-  
   async loopCheck({ code }: { code: string }) {
     return loopCheck({ code });
   }
@@ -13,7 +23,15 @@ export class ErrorDiagnosisService {
   async testBreak({ codeSnippet }: { codeSnippet: string }) {
     return testBreak({ codeSnippet });
   }
-  async afterDebug({ logSummary, errors, warnings }: { logSummary: string, errors: CompilerError[], warnings: CompilerWarning[] }) {
+  async afterDebug({
+    logSummary,
+    errors,
+    warnings,
+  }: {
+    logSummary: string;
+    errors: CompilerError[];
+    warnings: CompilerWarning[];
+  }) {
     return afterDebug(logSummary, errors, warnings);
   }
   async beforeDebug({ code }: { code: string }) {
@@ -22,7 +40,17 @@ export class ErrorDiagnosisService {
   async inProgressDebug({ code }: { code: string }) {
     return inProgressDebug(code);
   }
-  async markErrors({ originalFilePath, code, errors, warnings }: { originalFilePath: string, code: string, errors: CompilerError[], warnings: CompilerWarning[] }) {
+  async markErrors({
+    originalFilePath,
+    code,
+    errors,
+    warnings,
+  }: {
+    originalFilePath: string;
+    code: string;
+    errors: CompilerError[];
+    warnings: CompilerWarning[];
+  }) {
     return markErrors(originalFilePath, code, errors, warnings);
   }
 }
