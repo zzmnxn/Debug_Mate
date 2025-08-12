@@ -513,6 +513,25 @@ async function main() {
     const parsedIntents = await parseUserIntent(userQuery);
     let resultText = "";
 
+<<<<<<< HEAD
+    if (parsedIntent.tool === "loopCheck") {
+      const result = await loopCheck({ 
+        code, 
+        target: parsedIntent.target,
+        details: parsedIntent.details 
+      });
+      resultText = result.result ?? "";
+    } else if (parsedIntent.tool === "afterDebugFromCode") {
+      // 파일명은 main.c로 고정하거나, 필요시 인자로 받을 수 있음
+      const { analysis, markedFilePath } = await afterDebugFromCode(code, "main.c");
+      resultText = analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "");
+    } else if (parsedIntent.tool === "testBreak") {
+      const result = await testBreak({ codeSnippet: code });
+      resultText = JSON.stringify(result, null, 2);
+    } else if (parsedIntent.tool === "traceVar") {
+      const result = await traceVar({ code, userQuery });
+      resultText = result.variableTrace ?? "";
+=======
     if (parsedIntents.isMultiple) {
       // 복합 요청인 경우 - 비교 요청인지 확인
       const isComparison = userQuery.includes("비교") || userQuery.includes("차이");
@@ -567,6 +586,7 @@ async function main() {
         const result = await traceVar({ code, userQuery: userQuery });
         resultText = result.variableTrace ?? "";
       }
+>>>>>>> main
     }
 
     const toolNames = parsedIntents.intents.map(intent => intent.tool).join(", ");
