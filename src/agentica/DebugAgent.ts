@@ -1,4 +1,4 @@
-import { loopCheck, afterDebugFromCode, traceVar, compareLoops } from "./handlers";
+import { loopCheck, afterDebugFromCode, traceVar } from "./handlers";
 import * as fs from "fs";
 import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -188,6 +188,8 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   const overallAnalysisKeywords = [
     '전체', '전체적으로', '전체코드', '전체 코드', '최종', '최종검사', '최종 검사', '수정', '어디를', '어디를 수정', '수정할까',
     '컴파일', '컴파일해', 'compile', 'build', '빌드', '분석', '전체분석', '전체 분석', '문제', '문제점', '오류', '에러',
+    // 실행 결과 및 디버깅 관련 키워드
+    '실행', '실행결과', '실행 결과', '출력', '출력결과', '출력 결과', '디버깅', '디버그', 'debug', 'debugging',
     // 일반적인 오타들
     '전체코', '전체코드', '최종검', '최종 검', '수정해', '어디', '컴패일', '컴파', '컴팔', 'complie', 'complile', 'compil',
     '수정할', '수정할까', '문제', '문제점', '오류', '에러'
@@ -537,14 +539,8 @@ async function main() {
       const isComparison = userQuery.includes("비교") || userQuery.includes("차이");
       
       if (isComparison && parsedIntents.intents.every(intent => intent.tool === "loopCheck")) {
-        // 루프 비교 요청인 경우
-        const targets = parsedIntents.intents.map(intent => intent.target || "all");
-        const result = await compareLoops({ 
-          code, 
-          targets,
-          details: parsedIntents.intents[0].details || {}
-        });
-        resultText = result.result ?? "";
+        // 루프 비교 요청인 경우 - compareLoops 기능 제거됨
+        resultText = "루프 비교 기능이 제거되었습니다. 개별 루프 검사를 사용해주세요.";
       } else {
         // 일반적인 복수 요청 처리
         for (let i = 0; i < parsedIntents.intents.length; i++) {
