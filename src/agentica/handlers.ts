@@ -11,7 +11,7 @@ const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
 
 //jm hw - 개선된 버전
 export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[], executionOutput?: string): string {
-  const MAX_ITEMS = 5; // 더 많은 항목을 보여주도록 증가
+  const MAX_ITEMS = 50; // 모든 에러와 경고를 표시하도록 증가
 
   const formatError = (e: CompilerError, i: number) => {
     const location = e.file ? ` at ${e.file}:${e.line || '?'}:${e.column || '?'}` : '';
