@@ -138,26 +138,26 @@ function isIncompleteCode(code: string): boolean {
 async function runAfterOrBeforeDebug(
   code: string,
   userQuery: string
-): Promise<string> {
+): Promise<{ result: string; executedFunction: string }> {
   if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
     if (isIncompleteCode(code)) {
-      console.log("코드가 미완성으로 판단되어 beforeDebug를 실행합니다.");
+      console.log("ℹ️ 코드가 미완성으로 판단되어 beforeDebug를 실행합니다.");
     } else {
       console.log(
-        "사용자가 '실행 전/리뷰' 요청을 명시하여 beforeDebug를 실행합니다."
+        "ℹ️ 사용자가 '실행 전/리뷰' 요청을 명시하여 beforeDebug를 실행합니다."
       );
     }
     const analysis = await beforeDebug({ code }); // handlers.ts의 beforeDebug는 string 반환 가정
-    return analysis;
+    return { result: analysis, executedFunction: "beforeDebug" };
   } else {
     const { analysis, markedFilePath } = await afterDebugFromCode(
       code,
       "main.c"
     );
-    return (
-      analysis +
-      (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "")
-    );
+    return { 
+      result: analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : ""),
+      executedFunction: "afterDebugFromCode"
+    };
   }
 }
 
@@ -682,7 +682,10 @@ async function main() {
       resultText = result.result ?? "";
     } else if (parsedIntents.intents[0].tool === "afterDebugFromCode") {
       // runAfterOrBeforeDebug를 사용하여 코드 상태에 따라 beforeDebug 또는 afterDebugFromCode 실행
-      resultText = await runAfterOrBeforeDebug(code, userQuery);
+      const debugResult = await runAfterOrBeforeDebug(code, userQuery);
+      resultText = debugResult.result;
+      // 실행된 함수 정보를 로그에 표시
+      console.log(`실제 실행된 함수: ${debugResult.executedFunction}`);
     } else if (parsedIntents.intents[0].tool === "testBreak") {
       const result = await testBreak({ codeSnippet: code });
       resultText = JSON.stringify(result, null, 2);
