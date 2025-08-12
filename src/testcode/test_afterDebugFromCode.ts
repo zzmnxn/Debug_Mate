@@ -1,7 +1,7 @@
 import { afterDebugFromCode } from "../agentica/handlers";
 const tests = [
    {
-     name: "❌ Syntax Error (missing semicolon)",
+     name: " Syntax Error (missing semicolon)",
      code: `
  #include <stdio.h>
  int main() {
@@ -11,7 +11,7 @@ const tests = [
  `,
    },
    {
-     name: "❌ Undeclared Variable",
+     name: " Undeclared Variable",
      code: `
  #include <stdio.h>
  int main() {
@@ -21,7 +21,7 @@ const tests = [
  `,
    },
    {
-     name: "❌ Division by Zero",
+     name: " Division by Zero",
      code: `
  #include <stdio.h>
  int main() {
@@ -34,7 +34,7 @@ const tests = [
 `,
   },
    {
-     name: "❌ Null Pointer Dereference",
+     name: " Null Pointer Dereference",
      code: `
  #include <stdio.h>
  int main() {
@@ -45,7 +45,7 @@ const tests = [
  `,
    },
   {
-    name: "❌ Memory Leak",
+    name: " Memory Leak",
     code: `
 #include <stdlib.h>
 int main() {
@@ -56,7 +56,7 @@ int main() {
 `,
   },
   {
-    name: "❌ Use After Free",
+    name: " Use After Free",
     code: `
 #include <stdlib.h>
 #include <stdio.h>
@@ -70,7 +70,7 @@ int main() {
 `,
   },
   {
-    name: "❌ Unused Variable",
+    name: " Unused Variable",
     code: `
 #include <stdio.h>
 
@@ -81,7 +81,7 @@ int main() {
 `,
   },
   {
-    name: "❌ Dangerous Type Cast",
+    name: " Dangerous Type Cast",
     code: `
 #include <stdio.h>
 int main() {
@@ -92,7 +92,7 @@ int main() {
 `,
   },
   {
-    name: "❌ Infinite Loop",
+    name: " Infinite Loop",
     code: `
 int main() {
     while(1) {}
@@ -104,7 +104,7 @@ int main() {
 
 async function main() {
   for (const { name, code } of tests) {
-    console.log(`\n==== 🧪 ${name} ====\n`);
+    console.log(`\n====  ${name} ====\n`);
     const { analysis, markedFilePath } = await afterDebugFromCode(code, `${name}.c`);
     console.log("[AI 분석 결과]\n" + analysis);
     console.log("[마킹된 파일 경로]", markedFilePath);

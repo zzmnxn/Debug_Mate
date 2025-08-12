@@ -84,8 +84,7 @@ git pull origin main
 브랜치 생성 및 이동
  git checkout -b jimin
 
-=======
-#  작업 후 커밋 & 푸시
+작업 후 커밋 & 푸시
 git add .
 git commit -m "소희: 일기 작성 기능"
 git push origin sohee/feature-diary
