@@ -141,10 +141,10 @@ async function runAfterOrBeforeDebug(
 ): Promise<{ result: string; executedFunction: string }> {
   if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
     if (isIncompleteCode(code)) {
-      console.log("ℹ️ 코드가 미완성으로 판단되어 beforeDebug를 실행합니다.");
+      console.log("코드가 미완성으로 판단되어 beforeDebug를 실행합니다.");
     } else {
       console.log(
-        "ℹ️ 사용자가 '실행 전/리뷰' 요청을 명시하여 beforeDebug를 실행합니다."
+        "사용자가 '실행 전/리뷰' 요청을 명시하여 beforeDebug를 실행합니다."
       );
     }
     const analysis = await beforeDebug({ code }); // handlers.ts의 beforeDebug는 string 반환 가정
@@ -684,8 +684,8 @@ async function main() {
       // runAfterOrBeforeDebug를 사용하여 코드 상태에 따라 beforeDebug 또는 afterDebugFromCode 실행
       const debugResult = await runAfterOrBeforeDebug(code, userQuery);
       resultText = debugResult.result;
-      // 실행된 함수 정보를 로그에 표시
-      console.log(`실제 실행된 함수: ${debugResult.executedFunction}`);
+      // 실행된 함수 정보를 전역 변수로 저장하여 나중에 사용
+      (global as any).lastExecutedFunction = debugResult.executedFunction;
     } else if (parsedIntents.intents[0].tool === "testBreak") {
       const result = await testBreak({ codeSnippet: code });
       resultText = JSON.stringify(result, null, 2);
@@ -695,8 +695,16 @@ async function main() {
 
     }
 
-    const toolNames = parsedIntents.intents.map(intent => intent.tool).join(", ");
-    console.log("\n선택된 함수(테스트용) : ", toolNames);
+    // 실제 실행된 함수 정보를 표시
+    let actualExecutedFunction = parsedIntents.intents[0].tool;
+    if (parsedIntents.intents[0].tool === "afterDebugFromCode") {
+      // runAfterOrBeforeDebug에서 실제로 실행된 함수 정보를 가져옴
+      if ((global as any).lastExecutedFunction) {
+        actualExecutedFunction = (global as any).lastExecutedFunction;
+      }
+    }
+    
+    console.log("\n선택된 함수(테스트용) : ", actualExecutedFunction);
     console.log(resultText);
   } catch (err: any) {
     console.error("[Error] 처리 중 오류 발생: ", err.message || err);
