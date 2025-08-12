@@ -399,7 +399,7 @@ Please identify which specific loops the user wants to analyze. Consider various
 - for문만, for문, for루프 (ALL for loops)
 - while문만, while문, while루프 (ALL while loops)  
 - do-while문만, do-while문, dowhile문, 두와일문, 두와일, do while문 (ALL do-while loops)
-- testloop21함수, main함수 (loops in specific function)
+- testloop21함수, main함수 (loops INSIDE specific function only)
 - 23번째 줄, 줄 45, line 30 (loops at specific line number)
 
 IMPORTANT: 
@@ -410,12 +410,16 @@ IMPORTANT:
 - If the user wants loops in a specific function (함수명함수), return loops in that function by analyzing the full code context
 - If the user wants loops at a specific line (N번째 줄), return loops at or near that line by checking line numbers
 
-**CRITICAL**: When identifying for loops, look for ANY line that starts with "for" or contains "for (" pattern. Do not skip any for loops.
+**CRITICAL**: 
+- When identifying for loops, look for ANY line that starts with "for" or contains "for (" pattern. Do not skip any for loops.
+- When user requests "함수명함수" (e.g., "testloop21함수"), ONLY return loops that are INSIDE that specific function, not loops with similar names or patterns.
+- Analyze the code structure to identify function boundaries and only include loops within the requested function.
 
 Return only a JSON array of loop indices (1-based) that match the user's request:
 Example: [1,3,4,5,6,7,8,14,15,18,19,21,22,23] for all for loops (including loop 18 which is "for (i = 0; i < 2;)")
 Example: [1] for first loop only
 Example: [2,4] for all while loops if loops 2 and 4 are while loops
+Example: [3,5,7] for loops inside "testloop21함수" only (if loops 3, 5, 7 are inside that function)
 If you cannot determine specific loops, return []`;
 
       const model = genAI.getGenerativeModel({ 
@@ -501,10 +505,10 @@ If you cannot determine specific loops, return []`;
     if (loop.match(/for\s*\(\s*int\s+\w+\s*=\s*0\s*;\s*\w+\s*<\s*\d+\s*;\s*\w+--\s*\)/)) {
       return `- 반복문 ${loopNumber}\n\t무한 루프입니다. 초기값 0에서 감소하면 종료 조건을 만족할 수 없습니다.\n\t수정 제안 1: i--를 i++로 변경하세요.\n\t수정 제안 2: 조건을 i >= 0으로 변경하세요.`;
     }
-    // do-while문 패턴 추가
-    if (loop.startsWith('do') && loop.includes('while') && loop.includes('z = 1') && loop.includes('while(z)')) {
-      return `- 반복문 ${loopNumber}\n\t무한 루프입니다. z가 항상 1이므로 while(z) 조건은 항상 참입니다.\n\t수정 제안 1: z의 값을 조건에 따라 변경하거나, 루프 종료 조건을 추가합니다.`;
-    }
+    // do-while문 패턴은 AI 분석으로 처리하도록 제거
+    // if (loop.startsWith('do') && loop.includes('while') && loop.includes('z = 1') && loop.includes('while(z)')) {
+    //   return `- 반복문 ${loopNumber}\n\t무한 루프입니다. z가 항상 1이므로 while(z) 조건은 항상 참입니다.\n\t수정 제안 1: z의 값을 조건에 따라 변경하거나, 루프 종료 조건을 추가합니다.`;
+    // }
     
     return null;
   });
@@ -563,16 +567,16 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
       model.generateContent(batchPrompt),
       timeoutPromise
     ]) as any;
-    const batchAnalysis = result.response.text();
-    
+  const batchAnalysis = result.response.text();
+  
     if (!batchAnalysis || batchAnalysis.trim().length === 0) {
       throw new Error("AI 모델이 분석 결과를 생성하지 못했습니다.");
     }
     
     addToCache(cacheKey, batchAnalysis);
-    
-      const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
-      return { result: formattedResult };
+  
+  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
+  return { result: formattedResult };
   } catch (aiError: any) {
     console.error(`AI 분석 실패: ${aiError.message}`);
     
@@ -612,7 +616,7 @@ function generateHierarchicalNumber(currentLoop: LoopInfo, allLoops: LoopInfo[])
   
   try {
     const parentNumber = generateHierarchicalNumber(parentLoop, allLoops);
-    return `${parentNumber}.${currentLoop.index}`;
+  return `${parentNumber}.${currentLoop.index}`;
   } catch (error) {
     console.log(`계층적 번호 생성 중 오류: ${error}`);
     return currentLoop.index.toString(); // 오류 발생 시 기본 번호 반환
