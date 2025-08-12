@@ -11,7 +11,7 @@ int main() {
     int uninitialized;
     printf("Value: %d\n", uninitialized);  // 경고: 초기화되지 않은 변수 사용
     
-    // 메모리 누수 가능성 (경고)
+    // 메모리 누수 가능성 (경고j)
     int* ptr = malloc(100);
     // free(ptr);  // 주석 처리로 메모리 누수 시뮬레이션
     

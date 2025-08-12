@@ -591,7 +591,7 @@ async function main() {
 
     const toolNames = parsedIntents.intents.map(intent => intent.tool).join(", ");
     console.log("\n선택된 함수(테스트용) : ", toolNames);
-    console.log("[Result] \n" + resultText);
+    console.log(resultText);
   } catch (err: any) {
     console.error("[Error] 처리 중 오류 발생: ", err.message || err);
   }
