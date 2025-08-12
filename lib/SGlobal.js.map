@@ -1,1 +1,0 @@
-{"version":3,"file":"SGlobal.js","sourceRoot":"","sources":["../src/SGlobal.ts"],"names":[],"mappings":";;;AAAA,yBAAuB;AAEV,QAAA,OAAO,GAAG;IACrB,GAAG,EAAE;QACH,cAAc,EAAE,OAAO,CAAC,GAAG,CAAC,cAAc;QAC1C,IAAI,EAAE,OAAO,CAAC,GAAG,CAAC,IAAI;KACvB;CACF,CAAC"}

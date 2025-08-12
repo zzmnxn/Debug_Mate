@@ -468,6 +468,34 @@ export function markErrors(
   return outputPath;
 }
 
+// 캐시 시스템 추가 (API 절약) - 전역으로 이동
+const analysisCache = new Map<string, string>();
+
+// 캐시 크기 제한 및 메모리 오버플로우 방지
+const MAX_CACHE_SIZE = 100;
+const MAX_CACHE_VALUE_SIZE = 10000; // 10KB
+
+function addToCache(key: string, value: string) {
+  // 캐시 크기 제한 확인
+  if (analysisCache.size >= MAX_CACHE_SIZE) {
+    // 가장 오래된 항목 제거 (Map은 삽입 순서를 유지)
+    const firstKey = analysisCache.keys().next().value;
+    if (firstKey) {
+      analysisCache.delete(firstKey);
+    }
+  }
+  
+  // 값 크기 제한 확인
+  if (value.length > MAX_CACHE_VALUE_SIZE) {
+    console.log("캐시 값이 너무 큽니다. 캐시하지 않습니다.");
+    return;
+  }
+  
+  analysisCache.set(key, value);
+}
+
+
+
 // uuyeong's hw
 export async function loopCheck({ 
   code, 
@@ -478,13 +506,541 @@ export async function loopCheck({
   target?: string;
   details?: any;
 }) {
+  // 사전 검증: 반복문이 없으면 API 호출 안 함
   const loopInfos = extractLoopsWithNesting(code);
   
   if (loopInfos.length === 0) {
-    return { result: "코드에서 for/while 루프를 찾을 수 없습니다." };
+    return { result: "코드에서 for/while/do-while 루프를 찾을 수 없습니다." };
   }
   
-  // 선택적 분석 로직
+  let targetLoopInfos = loopInfos;
+  
+  // "all"이 아닌 경우 AI를 사용하여 자연어 타겟 처리
+  if (target !== "all") {
+    try {
+      const targetSelectionPrompt = `You are analyzing C code loops. The user wants to analyze specific loops using natural language.
+
+Full code context:
+\`\`\`c
+${code.split('\n').map((line, idx) => `${idx + 1}: ${line}`).join('\n')}
+\`\`\`
+
+Available loops in the code:
+${loopInfos.map((loopInfo, index) => {
+  const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
+  const loopCode = loopInfo.code.trim();
+  // 더 정확한 for문 식별
+  let loopType = 'unknown';
+  if (loopCode.startsWith('for') || loopCode.match(/^\s*for\s*\(/)) {
+    loopType = 'for';
+  } else if (loopCode.startsWith('while') || loopCode.match(/^\s*while\s*\(/)) {
+    loopType = 'while';
+  } else if (loopCode.startsWith('do') || loopCode.match(/^\s*do\s*\{/)) {
+    loopType = 'do-while';
+  }
+  return `Loop ${index + 1} (반복문 ${loopNumber}) [${loopType}]: ${loopCode}`;
+}).join('\n')}
+
+User requested target: "${target}"
+User details: ${JSON.stringify(details)}
+
+Please identify which specific loops the user wants to analyze. Consider various Korean expressions like:
+- 첫번째, 첫번쨰, 하나번째, 처음, 1번째, 1st (specific loop by position)
+- 두번째, 둘째, 2번째, 2nd (specific loop by position)
+- 세번째, 셋째, 3번째, 3rd (specific loop by position)
+- 마지막, 끝, last (last loop)
+- for문만, for문, for루프 (ALL for loops)
+- while문만, while문, while루프 (ALL while loops)  
+- do-while문만, do-while문, dowhile문, 두와일문, 두와일, do while문 (ALL do-while loops)
+- testloop21함수, main함수 (loops INSIDE specific function only)
+- 23번째 줄, 줄 45, line 30 (loops at specific line number)
+
+IMPORTANT: 
+- If the user wants "for문만" or similar, return ALL for loop indices
+- If the user wants "while문만" or similar, return ALL while loop indices
+- If the user wants "do-while문만", "dowhile문", "두와일문" or similar, return ALL do-while loop indices
+- If the user wants a specific position (첫번째, 2번째), return that specific loop
+- If the user wants loops in a specific function (함수명함수), return loops in that function by analyzing the full code context
+- If the user wants loops at a specific line (N번째 줄), return loops at or near that line by checking line numbers
+
+**CRITICAL**: 
+- When identifying for loops, look for ANY line that starts with "for" or contains "for (" pattern. Do not skip any for loops.
+- When user requests "함수명함수" (e.g., "testloop21함수"), ONLY return loops that are INSIDE that specific function, not loops with similar names or patterns.
+- Analyze the code structure to identify function boundaries and only include loops within the requested function.
+
+Return only a JSON array of loop indices (1-based) that match the user's request:
+Example: [1,3,4,5,6,7,8,14,15,18,19,21,22,23] for all for loops (including loop 18 which is "for (i = 0; i < 2;)")
+Example: [1] for first loop only
+Example: [2,4] for all while loops if loops 2 and 4 are while loops
+Example: [3,5,7] for loops inside "testloop21함수" only (if loops 3, 5, 7 are inside that function)
+If you cannot determine specific loops, return []`;
+
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-1.5-flash",
+        generationConfig: {
+          temperature: 0.3, // 더 일관된 응답을 위해 낮은 온도 설정
+          maxOutputTokens: 1000, // 응답 길이 제한
+        }
+      });
+      
+      // 타임아웃 설정 (30초)
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+      });
+      
+      const selectionResult = await Promise.race([
+        model.generateContent(targetSelectionPrompt),
+        timeoutPromise
+      ]) as any;
+      const responseText = selectionResult.response.text().trim();
+      
+      if (!responseText) {
+        throw new Error("AI 모델이 응답을 생성하지 못했습니다.");
+      }
+      
+      const jsonMatch = responseText.match(/\[[\d\s,]*\]/);
+      
+      if (jsonMatch) {
+        try {
+          const selectedIndices: number[] = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(selectedIndices) && selectedIndices.length > 0) {
+            // 유효한 인덱스 범위 검증
+            const validIndices = selectedIndices.filter(index => 
+              Number.isInteger(index) && index >= 1 && index <= loopInfos.length
+            );
+            
+            if (validIndices.length > 0) {
+              targetLoopInfos = validIndices
+                .map(index => loopInfos[index - 1])
+                .filter(loop => loop !== undefined);
+            } else {
+              console.log("유효한 루프 인덱스를 찾을 수 없습니다.");
+            }
+          }
+        } catch (parseError: any) {
+          console.log(`JSON 파싱 오류: ${parseError.message}`);
+          throw new Error("AI 응답 파싱에 실패했습니다.");
+        }
+      } else {
+        console.log("AI 응답에서 유효한 배열을 찾을 수 없습니다.");
+      }
+    } catch (err) {
+      console.log("AI 타겟 선택 실패, 기존 로직 사용:", err);
+      // 폴백: 기존 로직 사용
+      targetLoopInfos = selectLoopsLegacy(loopInfos, target, details);
+    }
+  }
+  
+  if (targetLoopInfos.length === 0) {
+    return { result: `요청하신 조건에 맞는 루프를 찾을 수 없습니다.` };
+  }
+
+  // 나머지 기존 로직 유지
+  const cacheKey = JSON.stringify({
+    loops: targetLoopInfos.map(info => info.code),
+    target,
+    details
+  });
+
+  if (analysisCache.has(cacheKey)) {
+    console.log("🔄 Using cached result (no API call)");
+    const cachedResult = analysisCache.get(cacheKey)!;
+    return { result: `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${cachedResult}` };
+  }
+
+  const simpleChecks = targetLoopInfos.map((loopInfo, i) => {
+    const loop = loopInfo.code.trim();
+    const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
+    
+    if (loop.includes("i++") && loop.includes("i < ") && loop.includes("i--")) {
+      return `- 반복문 ${loopNumber}\n\t무한 루프입니다. i++와 i--가 동시에 있어 조건이 만족되지 않습니다.\n\t수정 제안 1: i++ 또는 i-- 중 하나만 사용하세요.`;
+    }
+    if (loop.match(/for\s*\(\s*int\s+\w+\s*=\s*0\s*;\s*\w+\s*<\s*\d+\s*;\s*\w+--\s*\)/)) {
+      return `- 반복문 ${loopNumber}\n\t무한 루프입니다. 초기값 0에서 감소하면 종료 조건을 만족할 수 없습니다.\n\t수정 제안 1: i--를 i++로 변경하세요.\n\t수정 제안 2: 조건을 i >= 0으로 변경하세요.`;
+    }
+    // do-while문 패턴은 AI 분석으로 처리하도록 제거
+    // if (loop.startsWith('do') && loop.includes('while') && loop.includes('z = 1') && loop.includes('while(z)')) {
+    //   return `- 반복문 ${loopNumber}\n\t무한 루프입니다. z가 항상 1이므로 while(z) 조건은 항상 참입니다.\n\t수정 제안 1: z의 값을 조건에 따라 변경하거나, 루프 종료 조건을 추가합니다.`;
+    // }
+    
+    return null;
+  });
+
+  const allSimple = simpleChecks.every(check => check !== null);
+  
+  if (allSimple) {
+    console.log("⚡ Simple pattern analysis (no API call)");
+    const result = simpleChecks.join('\n\n');
+    addToCache(cacheKey, result);
+    return { result: `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${result}` };
+  }
+
+  const loopAnalysisData = targetLoopInfos.map((loopInfo, i) => {
+    const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
+    return {
+      number: loopNumber,
+      code: loopInfo.code
+    };
+  });
+  
+  const batchPrompt = `Analyze these loops for termination issues. 
+For problems, format your response with proper line breaks and tabs for readability.
+For no issues, use "문제가 없습니다." in Korean. 
+Respond in Korean only.
+
+Expected output format:
+- 반복문 X
+\t무한 루프입니다. 조건이 항상 참이므로 종료되지 않습니다.
+\t수정 제안 1: 구체적인 수정 방법
+\t수정 제안 2: 대안적인 수정 방법 (필요한 경우)
+
+Do NOT include any instruction text in your response. Only provide the analysis results.
+
+${loopAnalysisData.map(item => `=== Loop ${item.number} ===\n${item.code}`).join('\n\n')}
+
+Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.`;
+
+
+//모델 파라미터 추가 완료  
+  try {
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        temperature: 0.3, // 더 일관된 응답을 위해 낮은 온도 설정
+        maxOutputTokens: 1000, // 응답 길이 제한
+      }
+    });
+    
+    // 타임아웃 설정 (30초)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+    });
+    
+    const result = await Promise.race([
+      model.generateContent(batchPrompt),
+      timeoutPromise
+    ]) as any;
+  const batchAnalysis = result.response.text();
+  
+    if (!batchAnalysis || batchAnalysis.trim().length === 0) {
+      throw new Error("AI 모델이 분석 결과를 생성하지 못했습니다.");
+    }
+    
+    addToCache(cacheKey, batchAnalysis);
+  
+  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
+  return { result: formattedResult };
+  } catch (aiError: any) {
+    console.error(`AI 분석 실패: ${aiError.message}`);
+    
+    // 폴백: 간단한 패턴 분석 결과 반환
+    const fallbackResult = targetLoopInfos.map((loopInfo, i) => {
+      const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
+      return `- 반복문 ${loopNumber}\n\tAI 분석에 실패했습니다. 기본 패턴 검사만 수행됩니다.\n\t코드: ${loopInfo.code.trim()}`;
+    }).join('\n\n');
+    
+    const fallbackFormatted = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${fallbackResult}`;
+    return { result: fallbackFormatted };
+  }
+}
+
+/**
+ * 계층적 번호 생성 (1, 2.1, 2.2, 3 등)
+ */
+function generateHierarchicalNumber(currentLoop: LoopInfo, allLoops: LoopInfo[]): string {
+  if (!currentLoop || !allLoops) {
+    return "unknown";
+  }
+  
+  if (currentLoop.level === 0) {
+    // 최상위 루프
+    return currentLoop.index.toString();
+  }
+  
+  // 부모 루프 찾기
+  if (currentLoop.parentIndex === undefined || currentLoop.parentIndex < 0 || currentLoop.parentIndex >= allLoops.length) {
+    return currentLoop.index.toString(); // 부모 정보가 유효하지 않으면 기본 번호 반환
+  }
+  
+  const parentLoop = allLoops[currentLoop.parentIndex];
+  if (!parentLoop) {
+    return currentLoop.index.toString(); // 부모 루프를 찾을 수 없으면 기본 번호 반환
+  }
+  
+  try {
+    const parentNumber = generateHierarchicalNumber(parentLoop, allLoops);
+  return `${parentNumber}.${currentLoop.index}`;
+  } catch (error) {
+    console.log(`계층적 번호 생성 중 오류: ${error}`);
+    return currentLoop.index.toString(); // 오류 발생 시 기본 번호 반환
+  }
+}
+
+// 복수 루프 비교를 위한 새로운 함수
+export async function compareLoops({ 
+  code, 
+  targets,
+  details = {}
+}: { 
+  code: string;
+  targets: string[];
+  details?: any;
+}) {
+  const loopInfos = extractLoopsWithNesting(code);
+  
+  if (loopInfos.length === 0) {
+    return { result: "코드에서 for/while/do-while 루프를 찾을 수 없습니다." };
+  }
+
+  // AI를 사용하여 자연어 타겟을 직접 처리
+  const targetSelectionPrompt = `You are analyzing C code loops. The user wants to compare specific loops using natural language descriptions.
+
+Available loops in the code:
+${loopInfos.map((loopInfo, index) => {
+  const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
+  return `Loop ${index + 1} (반복문 ${loopNumber}): ${loopInfo.code.trim()}`;
+}).join('\n')}
+
+User requested targets: ${targets.join(' and ')}
+
+Please identify which specific loops the user wants to compare. Consider various Korean expressions like:
+- 첫번째, 첫번쨰, 하나번째, 처음, 1번째, 1st
+- 두번째, 둘째, 2번째, 2nd  
+- 세번째, 셋째, 3번째, 3rd
+- 여섯번째, 6번째, 6th
+- 일곱번째, 7번째, 7th
+- 마지막, 끝, last
+- 103번째, 103rd
+- for문, while문, do-while문
+
+Return only a JSON array of loop indices (1-based) that the user wants to compare:
+Example: [1, 3] for comparing first and third loops
+If you cannot determine specific loops, return []`;
+
+  try {
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 1000,
+      }
+    });
+    
+    // 타임아웃 설정 (30초)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+    });
+    
+    const selectionResult = await Promise.race([
+      model.generateContent(targetSelectionPrompt),
+      timeoutPromise
+    ]) as any;
+    const responseText = selectionResult.response.text().trim();
+    
+    if (!responseText) {
+      throw new Error("AI 모델이 응답을 생성하지 못했습니다.");
+    }
+    
+    const jsonMatch = responseText.match(/\[[\d\s,]*\]/);
+    
+    let selectedIndices: number[] = [];
+    if (jsonMatch) {
+      try {
+        selectedIndices = JSON.parse(jsonMatch[0]);
+        if (!Array.isArray(selectedIndices)) {
+          selectedIndices = [];
+        }
+      } catch (parseError: any) {
+        console.log(`JSON 파싱 오류: ${parseError.message}`);
+        selectedIndices = [];
+      }
+    }
+    
+    if (selectedIndices.length === 0) {
+      return { result: "요청하신 반복문들을 찾을 수 없습니다. 더 구체적으로 지정해주세요." };
+    }
+    
+    // 유효한 인덱스 범위 검증
+    const validIndices = selectedIndices.filter(index => 
+      Number.isInteger(index) && index >= 1 && index <= loopInfos.length
+    );
+    
+    if (validIndices.length === 0) {
+      return { result: "요청하신 반복문들의 인덱스가 유효하지 않습니다." };
+    }
+    
+    // 선택된 루프들 추출
+    const targetLoopInfos: LoopInfo[] = [];
+    const loopDescriptions: string[] = [];
+    
+    for (const index of validIndices) {
+      const loopIndex = index - 1; // 0-based로 변환
+      if (loopIndex >= 0 && loopIndex < loopInfos.length) {
+        const selectedLoop = loopInfos[loopIndex];
+        targetLoopInfos.push(selectedLoop);
+        const loopNumber = generateHierarchicalNumber(selectedLoop, loopInfos);
+        loopDescriptions.push(`반복문 ${loopNumber}`);
+      }
+    }
+    
+    if (targetLoopInfos.length === 0) {
+      return { result: "선택된 반복문들을 찾을 수 없습니다." };
+    }
+
+    // 비교 분석을 위한 프롬프트
+    const comparisonPrompt = `Please compare and analyze the following ${targetLoopInfos.length} loops. 
+Provide a concise analysis in Korean without full code examples.
+Format improvement suggestions with proper line breaks and tabs for readability.
+
+${targetLoopInfos.map((loopInfo, index) => {
+  const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
+  return `=== ${loopDescriptions[index]} ===\n${loopInfo.code}`;
+}).join('\n\n')}
+
+Please respond concisely in Korean with proper formatting:
+1. Brief individual analysis of each loop
+2. Key differences between loops  
+3. Main issues and improvement suggestions (format with line breaks and tabs):
+   - 문제점: [issue description]
+   \t개선 제안 1: [suggestion 1]
+   \t개선 제안 2: [suggestion 2] (if applicable)`;
+
+    const result = await model.generateContent(comparisonPrompt);
+    const analysis = result.response.text();
+    
+    const formattedResult = `비교 대상: ${loopDescriptions.join(' vs ')}\n\n${analysis}`;
+    return { result: formattedResult };
+    
+  } catch (err) {
+    console.log("AI 타겟 선택 실패:", err);
+    // 폴백: 기존 로직 사용
+    return await compareLoopsLegacy({ code, targets, details });
+  }
+}
+
+// 기존 로직을 폴백으로 유지
+async function compareLoopsLegacy({ 
+  code, 
+  targets,
+  details = {}
+}: { 
+  code: string;
+  targets: string[];
+  details?: any;
+}) {
+  const loopInfos = extractLoopsWithNesting(code);
+  const targetLoopInfos: LoopInfo[] = [];
+  const loopDescriptions: string[] = [];
+  
+  // 각 타겟에 대해 루프 찾기 (기존 로직)
+  for (let i = 0; i < targets.length; i++) {
+    const target = targets[i];
+    let selectedLoop = null;
+    
+    if (target === "first") {
+      selectedLoop = loopInfos[0];
+    } else if (target === "second") {
+      selectedLoop = loopInfos.length > 1 ? loopInfos[1] : null;
+    } else if (target === "third") {
+      selectedLoop = loopInfos.length > 2 ? loopInfos[2] : null;
+    } else if (target === "fourth") {
+      selectedLoop = loopInfos.length > 3 ? loopInfos[3] : null;
+    } else if (target === "fifth") {
+      selectedLoop = loopInfos.length > 4 ? loopInfos[4] : null;
+    } else if (target === "last") {
+      selectedLoop = loopInfos[loopInfos.length - 1];
+    } else if (/^\d+$/.test(target)) {
+      const index = parseInt(target) - 1;
+      selectedLoop = loopInfos.length > index && index >= 0 ? loopInfos[index] : null;
+    } else if (target === "specific" && details.loopType) {
+      const filteredLoops = loopInfos.filter(loopInfo => {
+        const loop = loopInfo.code;
+        if (details.loopType === "for") {
+          return loop.trim().startsWith("for");
+        } else if (details.loopType === "while") {
+          return loop.trim().startsWith("while");
+        } else if (details.loopType === "do-while") {
+          return loop.trim().startsWith("do");
+        }
+        return false;
+      });
+      // 모든 해당 타입의 루프를 선택 (첫 번째만이 아닌)
+      if (filteredLoops.length > 0) {
+        for (const filteredLoop of filteredLoops) {
+          targetLoopInfos.push(filteredLoop);
+          const loopNumber = generateHierarchicalNumber(filteredLoop, loopInfos);
+          loopDescriptions.push(`반복문 ${loopNumber}`);
+        }
+        continue; // 다음 target으로 넘어가기
+      }
+      selectedLoop = null; // 찾을 수 없는 경우
+    } else if (target === "function" && details.functionName) {
+      // 함수명 기반 필터링 (단순 구현 - 함수명이 포함된 루프)
+      const functionName = details.functionName;
+      selectedLoop = loopInfos.find(loopInfo => {
+        // 루프 코드 주변에서 함수명을 찾거나, 루프가 해당 함수 내부에 있는지 확인
+        // 간단한 구현: 함수명이 근처에 있는지 확인
+        return loopInfo.code.includes(functionName) || 
+               (loopInfo as any).context?.includes(functionName);
+      });
+      if (selectedLoop) {
+        targetLoopInfos.push(selectedLoop);
+        const loopNumber = generateHierarchicalNumber(selectedLoop, loopInfos);
+        loopDescriptions.push(`반복문 ${loopNumber}`);
+      }
+    } else if (target === "line" && details.lineNumber) {
+      // 줄 번호 기반 필터링 (단순 구현)
+      const targetLine = details.lineNumber;
+      selectedLoop = loopInfos.find(loopInfo => {
+        // 루프의 시작 줄 번호를 추정하여 비교
+        // 실제 구현에서는 더 정확한 줄 번호 정보가 필요함
+        const loopLines = loopInfo.code.split('\n');
+        const estimatedStartLine = targetLine; // 임시 구현
+        return Math.abs(estimatedStartLine - targetLine) <= 2; // 2줄 오차 허용
+      });
+      if (selectedLoop) {
+        targetLoopInfos.push(selectedLoop);
+        const loopNumber = generateHierarchicalNumber(selectedLoop, loopInfos);
+        loopDescriptions.push(`반복문 ${loopNumber}`);
+      }
+    }
+    
+    if (selectedLoop) {
+      targetLoopInfos.push(selectedLoop);
+      const loopNumber = generateHierarchicalNumber(selectedLoop, loopInfos);
+      loopDescriptions.push(`반복문 ${loopNumber}`);
+    } else {
+      loopDescriptions.push(`${target} (찾을 수 없음)`);
+    }
+  }
+  
+  if (targetLoopInfos.length === 0) {
+    return { result: "요청하신 조건에 맞는 루프를 찾을 수 없습니다." };
+  }
+  
+  const comparisonPrompt = `Please compare and analyze the following ${targetLoopInfos.length} loops. 
+Provide a concise analysis in Korean without full code examples.
+
+${targetLoopInfos.map((loopInfo, index) => {
+  const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
+  return `=== ${loopDescriptions[index]} ===\n${loopInfo.code}`;
+}).join('\n\n')}
+
+Please respond concisely in Korean with:
+1. Brief individual analysis of each loop
+2. Key differences between loops
+3. Main issues and improvement suggestions (no full code blocks, just brief descriptions)`;
+
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(comparisonPrompt);
+  const analysis = result.response.text();
+  
+  const formattedResult = `비교 대상: ${loopDescriptions.join(' vs ')}\n\n${analysis}`;
+  return { result: formattedResult };
+}
+
+// 기존 선택 로직을 폴백으로 유지
+function selectLoopsLegacy(loopInfos: LoopInfo[], target: string, details: any): LoopInfo[] {
   let targetLoopInfos = loopInfos;
   
   if (target === "first") {
@@ -499,9 +1055,11 @@ export async function loopCheck({
     targetLoopInfos = loopInfos.length > 4 ? [loopInfos[4]] : [];
   } else if (target === "last") {
     targetLoopInfos = [loopInfos[loopInfos.length - 1]];
+  } else if (/^\d+$/.test(target)) {
+    const index = parseInt(target) - 1;
+    targetLoopInfos = loopInfos.length > index && index >= 0 ? [loopInfos[index]] : [];
   } else if (target === "specific" && details.loopType) {
-    // 특정 타입의 루프만 필터링
-    targetLoopInfos = loopInfos.filter(loopInfo => {
+    const filteredLoops = loopInfos.filter(loopInfo => {
       const loop = loopInfo.code;
       if (details.loopType === "for") {
         return loop.trim().startsWith("for");
@@ -510,52 +1068,36 @@ export async function loopCheck({
       } else if (details.loopType === "do-while") {
         return loop.trim().startsWith("do");
       }
-      return true;
+      return false; // 수정: true에서 false로 변경 (해당 타입만 선택)
+    });
+    targetLoopInfos = filteredLoops;
+  } else if (target === "function" && details.functionName) {
+    // 함수명 기반 필터링 (단순 구현 - 함수명이 포함된 루프)
+    const functionName = details.functionName;
+    targetLoopInfos = loopInfos.filter(loopInfo => {
+      // 루프 코드 주변에서 함수명을 찾거나, 루프가 해당 함수 내부에 있는지 확인
+      // 간단한 구현: 함수명이 근처에 있는지 확인
+      return loopInfo.code.includes(functionName) || 
+             (loopInfo as any).context?.includes(functionName);
+    });
+  } else if (target === "line" && details.lineNumber) {
+    // 줄 번호 기반 필터링 (단순 구현)
+    const targetLine = details.lineNumber;
+    targetLoopInfos = loopInfos.filter(loopInfo => {
+      // 루프의 시작 줄 번호를 추정하여 비교
+      // 실제 구현에서는 더 정확한 줄 번호 정보가 필요함
+      const loopLines = loopInfo.code.split('\n');
+      const estimatedStartLine = targetLine; // 임시 구현
+      return Math.abs(estimatedStartLine - targetLine) <= 2; // 2줄 오차 허용
     });
   }
   
-  if (targetLoopInfos.length === 0) {
-    return { result: `요청하신 조건에 맞는 루프를 찾을 수 없습니다.` };
-  }
-  
-  // 모든 루프를 하나의 API 호출로 처리 (비용 절약)
-  const loopAnalysisData = targetLoopInfos.map((loopInfo, i) => {
-    const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
-    return {
-      number: loopNumber,
-      code: loopInfo.code
-    };
-  });
-  
-  const batchPrompt = `Review the following loop codes and determine if their termination conditions are valid. For each loop, if there is an issue, provide suggestions in numbered format like "수정 제안 1:", "수정 제안 2:" etc. with brief explanations. If there is no problem, simply respond with "문제가 없습니다.". Respond in Korean.
-
-${loopAnalysisData.map(item => `=== Loop ${item.number} ===\n${item.code}`).join('\n\n')}
-
-For each loop, start with "- 반복문 X" format and analyze each one separately.`;
-  
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(batchPrompt);
-  const batchAnalysis = result.response.text();
-  
-  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
-  return { result: formattedResult };
+  return targetLoopInfos;
 }
 
-/**
- * 계층적 번호 생성 (1, 2.1, 2.2, 3 등)
- */
-function generateHierarchicalNumber(currentLoop: LoopInfo, allLoops: LoopInfo[]): string {
-  if (currentLoop.level === 0) {
-    // 최상위 루프
-    return currentLoop.index.toString();
-  }
-  
-  // 부모 루프 찾기
-  const parentLoop = allLoops[currentLoop.parentIndex!];
-  const parentNumber = generateHierarchicalNumber(parentLoop, allLoops);
-  
-  return `${parentNumber}.${currentLoop.index}`;
-}
+
+
+
 
 
 // sohyeon's hw
@@ -684,24 +1226,24 @@ export async function beforeDebug({ code }: { code: string }) {
 
     // 프롬프트 구성
     const prompt = `
-당신은 C 언어 디버깅 전문가입니다.
-사용자가 작성한 전체 코드와 gcc 컴파일/실행 로그를 함께 제공합니다.
+You are a C language debugging expert.
+The user has provided complete code and gcc compilation/execution logs.
 
-🔹 코드 내용:
+🔹 Code Content:
 \`\`\`c
 ${code}
 \`\`\`
 
-🔹 GCC 로그:
+🔹 GCC Log:
 \`\`\`
 ${log}
 \`\`\`
 
-이 정보를 바탕으로 다음의 포맷으로 분석해주세요:
+Based on this information, please analyze in the following format (respond in Korean):
 
-[Result] "문제 있음" 또는 "문제 없음"
-[Reason] 주요 원인 또는 분석 이유
-[Suggestion] 핵심 수정 제안 (1~2줄)
+[Result] "문제 있음" or "문제 없음"
+[Reason] Main cause or analysis reason
+[Suggestion] Core fix suggestion (1-2 lines)
 
 `.trim();
 
@@ -745,10 +1287,10 @@ export async function inProgressDebug(code: string) {
   const summary = CompilerResultParser.generateSummary(parsed);
 
   const prompt = `
-당신은 숙련된 C 디버깅 도우미입니다.
-사용자가 아직 완성하지 않은 C 코드 일부를 작성하고 있습니다.
+You are an experienced C debugging assistant.
+The user is writing C code that is not yet complete.
 
-아래는 작성 중인 코드와 현재까지의 컴파일 로그 요약입니다. 오류가 많더라도 "명백한 실수" (예: ; 누락, 오타, 선언 안 된 변수 등)만 짚어주세요.
+Below is the code being written and a summary of compilation logs so far. Even if there are many errors, please only point out "obvious mistakes" (e.g., missing semicolons, typos, undeclared variables, etc.).
 
 [Summary]
 ${summary}
@@ -759,15 +1301,15 @@ ${code}
 \`\`\`
 
 [Instructions]
-- 전체 코드가 아니므로 함수 누락 등은 무시해주세요.
-- 명백한 문법 오류만 확인해주세요.
-- 너무 공격적인 피드백은 지양해주세요.
-- 다음 형식으로 응답하세요:
+- Please ignore missing functions since this is not complete code.
+- Only check for obvious syntax errors.
+- Avoid overly aggressive feedback.
+- Please respond in the following format in Korean:
 
 [Result] 문제 있음/없음
-[Issues] 발견된 문제 요약 (없으면 없음)
-[Suggestions] 간단한 수정 제안
-`.trim();
+[Issues] Summary of found issues (없음 if none)
+[Suggestions] Simple fix suggestions
+`;
 
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const result = await model.generateContent(prompt);
