@@ -752,10 +752,12 @@ export async function loopCheck({
   
   let targetLoopInfos = loopInfos;
   
-  // "all"이 아닌 경우 AI를 사용하여 자연어 타겟 처리
-  if (target !== "all") {
-    try {
-      const targetSelectionPrompt = `You are analyzing C code loops. The user wants to analyze specific loops using natural language.
+      // "all"이 아닌 경우 AI를 사용하여 자연어 타겟 처리
+    if (target !== "all") {
+      let selectionTimeoutId: NodeJS.Timeout | undefined;
+      
+      try {
+        const targetSelectionPrompt = `You are analyzing C code loops. The user wants to analyze specific loops using natural language.
 
 Full code context:
 \`\`\`c
@@ -820,15 +822,18 @@ If you cannot determine specific loops, return []`;
         }
       });
       
-      // 타임아웃 설정 (30초)
+      // 타임아웃 설정 (30초) - 정리 가능하도록 수정
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+        selectionTimeoutId = setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
       });
       
       const selectionResult = await Promise.race([
         model.generateContent(targetSelectionPrompt),
         timeoutPromise
       ]) as any;
+      
+      // 성공 시 타임아웃 정리
+      if (selectionTimeoutId) clearTimeout(selectionTimeoutId);
       const responseText = selectionResult.response.text().trim();
       
       if (!responseText) {
@@ -861,11 +866,14 @@ If you cannot determine specific loops, return []`;
       } else {
         console.log("AI 응답에서 유효한 배열을 찾을 수 없습니다.");
       }
-    } catch (err) {
-      console.log("AI 타겟 선택 실패, 기존 로직 사용:", err);
-      // 폴백: 기존 로직 사용
-      targetLoopInfos = selectLoopsLegacy(loopInfos, target, details);
-    }
+          } catch (err) {
+        // 에러 시에도 타임아웃 정리
+        if (selectionTimeoutId) clearTimeout(selectionTimeoutId);
+        
+        console.log("AI 타겟 선택 실패, 기존 로직 사용:", err);
+        // 폴백: 기존 로직 사용
+        targetLoopInfos = selectLoopsLegacy(loopInfos, target, details);
+      }
   }
   
   if (targetLoopInfos.length === 0) {
@@ -939,6 +947,8 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
 
 
 //모델 파라미터 추가 완료  
+  let timeoutId: NodeJS.Timeout | undefined;
+  
   try {
     const model = genAI.getGenerativeModel({ 
       model: "gemini-1.5-flash",
@@ -948,15 +958,18 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
       }
     });
     
-    // 타임아웃 설정 (30초)
+    // 타임아웃 설정 (30초) - 정리 가능하도록 수정
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+      timeoutId = setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
     });
     
     const result = await Promise.race([
       model.generateContent(batchPrompt),
       timeoutPromise
     ]) as any;
+    
+    // 성공 시 타임아웃 정리
+    if (timeoutId) clearTimeout(timeoutId);
   const batchAnalysis = result.response.text();
   
     if (!batchAnalysis || batchAnalysis.trim().length === 0) {
@@ -965,9 +978,12 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
     
     addToCache(cacheKey, batchAnalysis);
   
-  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
+  const formattedResult = `[Result]\n검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
   return { result: formattedResult };
   } catch (aiError: any) {
+    // 에러 시에도 타임아웃 정리
+    if (timeoutId) clearTimeout(timeoutId);
+    
     console.error(`AI 분석 실패: ${aiError.message}`);
     
     // 폴백: 간단한 패턴 분석 결과 반환
@@ -1029,6 +1045,8 @@ export async function compareLoops({
     return { result: "코드에서 for/while/do-while 루프를 찾을 수 없습니다." };
   }
 
+  let compareTimeoutId: NodeJS.Timeout | undefined;
+
   // AI를 사용하여 자연어 타겟을 직접 처리
   const targetSelectionPrompt = `You are analyzing C code loops. The user wants to compare specific loops using natural language descriptions.
 
@@ -1063,15 +1081,18 @@ If you cannot determine specific loops, return []`;
       }
     });
     
-    // 타임아웃 설정 (30초)
+    // 타임아웃 설정 (30초) - 정리 가능하도록 수정
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+      compareTimeoutId = setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
     });
     
     const selectionResult = await Promise.race([
       model.generateContent(targetSelectionPrompt),
       timeoutPromise
     ]) as any;
+    
+          // 성공 시 타임아웃 정리
+      if (compareTimeoutId) clearTimeout(compareTimeoutId);
     const responseText = selectionResult.response.text().trim();
     
     if (!responseText) {
@@ -1149,6 +1170,9 @@ Please respond concisely in Korean with proper formatting:
     return { result: formattedResult };
     
   } catch (err) {
+    // 에러 시에도 타임아웃 정리
+    if (compareTimeoutId) clearTimeout(compareTimeoutId);
+    
     console.log("AI 타겟 선택 실패:", err);
     // 폴백: 기존 로직 사용
     return await compareLoopsLegacy({ code, targets, details });
