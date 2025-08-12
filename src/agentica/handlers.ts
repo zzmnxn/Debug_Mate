@@ -728,7 +728,7 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
     
     addToCache(cacheKey, batchAnalysis);
   
-  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
+  const formattedResult = `[Result]\n검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
   return { result: formattedResult };
   } catch (aiError: any) {
     console.error(`AI 분석 실패: ${aiError.message}`);
