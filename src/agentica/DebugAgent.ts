@@ -1,4 +1,4 @@
-import { loopCheck, afterDebugFromCode, traceVar } from "./handlers";
+import { loopCheck, afterDebugFromCode, traceVar, testBreak } from "./handlers";
 import * as fs from "fs";
 import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -587,21 +587,21 @@ async function main() {
     const parsedIntents = await parseUserIntent(userQuery);
     let resultText = "";
 
-    if (parsedIntent.tool === "loopCheck") {
+    if (parsedIntents.intents[0].tool === "loopCheck") {
       const result = await loopCheck({ 
         code, 
-        target: parsedIntent.target,
-        details: parsedIntent.details 
+        target: parsedIntents.intents[0].target,
+        details: parsedIntents.intents[0].details 
       });
       resultText = result.result ?? "";
-    } else if (parsedIntent.tool === "afterDebugFromCode") {
+    } else if (parsedIntents.intents[0].tool === "afterDebugFromCode") {
       // 파일명은 main.c로 고정하거나, 필요시 인자로 받을 수 있음
       const { analysis, markedFilePath } = await afterDebugFromCode(code, "main.c");
       resultText = analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "");
-    } else if (parsedIntent.tool === "testBreak") {
+    } else if (parsedIntents.intents[0].tool === "testBreak") {
       const result = await testBreak({ codeSnippet: code });
       resultText = JSON.stringify(result, null, 2);
-    } else if (parsedIntent.tool === "traceVar") {
+    } else if (parsedIntents.intents[0].tool === "traceVar") {
       const result = await traceVar({ code, userQuery });
       resultText = result.variableTrace ?? "";
 
