@@ -600,4 +600,13 @@ async function main() {
   }
 }
 
+// 프로그램 종료 시 정리 작업
+process.on('exit', () => {
+  // 정리 작업
+});
+
+process.on('SIGINT', () => {
+  process.exit(0);
+});
+
 main();
