@@ -35,17 +35,34 @@ function normalizeText(text: string): string {
     .trim();
 }
 
-// 유연한 키워드 매칭 함수
+// 유연한 키워드 매칭 함수 (오타 및 변형 고려)
 function flexibleMatch(text: string, keywords: string[]): boolean {
   const normalizedText = normalizeText(text);
   return keywords.some(keyword => {
     const normalizedKeyword = normalizeText(keyword);
-    // 완전 일치 또는 부분 일치
-    return normalizedText.includes(normalizedKeyword) || 
-           normalizedKeyword.includes(normalizedText) ||
-           // 간단한 유사도 체크 (길이가 비슷하고 많은 글자가 일치)
-           (Math.abs(normalizedText.length - normalizedKeyword.length) <= 2 && 
-            similarity(normalizedText, normalizedKeyword) > 0.7);
+    
+    // 1. 완전 일치
+    if (normalizedText === normalizedKeyword) return true;
+    
+    // 2. 부분 일치 (포함 관계)
+    if (normalizedText.includes(normalizedKeyword) || normalizedKeyword.includes(normalizedText)) return true;
+    
+    // 3. 오타 감지 (한 글자 차이)
+    if (Math.abs(normalizedText.length - normalizedKeyword.length) <= 1) {
+      if (levenshteinDistance(normalizedText, normalizedKeyword) <= 1) return true;
+    }
+    
+    // 4. 유사도 체크 (길이가 비슷하고 많은 글자가 일치)
+    if (Math.abs(normalizedText.length - normalizedKeyword.length) <= 2) {
+      if (similarity(normalizedText, normalizedKeyword) > 0.6) return true;
+    }
+    
+    // 5. 자음/모음 패턴 매칭 (한국어 오타)
+    if (isKoreanText(normalizedText) && isKoreanText(normalizedKeyword)) {
+      if (consonantVowelMatch(normalizedText, normalizedKeyword)) return true;
+    }
+    
+    return false;
   });
 }
 
@@ -56,6 +73,45 @@ function similarity(str1: string, str2: string): number {
   const intersection = new Set([...set1].filter(x => set2.has(x)));
   const union = new Set([...set1, ...set2]);
   return intersection.size / union.size;
+}
+
+// Levenshtein 거리 계산 (오타 감지용)
+function levenshteinDistance(str1: string, str2: string): number {
+  const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
+  
+  for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
+  for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
+  
+  for (let j = 1; j <= str2.length; j++) {
+    for (let i = 1; i <= str1.length; i++) {
+      const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[j][i] = Math.min(
+        matrix[j][i - 1] + 1,      // 삭제
+        matrix[j - 1][i] + 1,      // 삽입
+        matrix[j - 1][i - 1] + indicator // 치환
+      );
+    }
+  }
+  
+  return matrix[str2.length][str1.length];
+}
+
+// 한국어 텍스트 여부 확인
+function isKoreanText(text: string): boolean {
+  return /[가-힣]/.test(text);
+}
+
+// 자음/모음 패턴 매칭 (한국어 오타 감지)
+function consonantVowelMatch(str1: string, str2: string): boolean {
+  // 간단한 구현: 자음/모음 패턴이 비슷한지 확인
+  const consonants1 = str1.replace(/[가-힣]/g, '').replace(/[aeiou]/gi, '');
+  const consonants2 = str2.replace(/[가-힣]/g, '').replace(/[aeiou]/gi, '');
+  
+  if (consonants1.length > 0 && consonants2.length > 0) {
+    return Math.abs(consonants1.length - consonants2.length) <= 1;
+  }
+  
+  return false;
 }
 
 // AI 파싱 강화를 위한 헬퍼 함수
@@ -186,13 +242,29 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   
   // 전체 검사/최종 검사/수정 제안 관련 키워드가 있으면 afterDebugFromCode (우선순위 높음)
   const overallAnalysisKeywords = [
+    // 전체 및 최종 관련
     '전체', '전체적으로', '전체코드', '전체 코드', '최종', '최종검사', '최종 검사', '수정', '어디를', '어디를 수정', '수정할까',
-    '컴파일', '컴파일해', 'compile', 'build', '빌드', '분석', '전체분석', '전체 분석', '문제', '문제점', '오류', '에러',
-    // 실행 결과 및 디버깅 관련 키워드
+    
+    // 컴파일 및 빌드 관련
+    '컴파일', '컴파일해', 'compile', 'build', '빌드', '빌드해', '빌드해줘',
+    
+    // 분석 및 문제점 관련
+    '분석', '전체분석', '전체 분석', '문제', '문제점', '오류', '에러', '버그', 'bug', 'bugs',
+    
+    // 실행 결과 및 디버깅 관련
     '실행', '실행결과', '실행 결과', '출력', '출력결과', '출력 결과', '디버깅', '디버그', 'debug', 'debugging',
-    // 일반적인 오타들
-    '전체코', '전체코드', '최종검', '최종 검', '수정해', '어디', '컴패일', '컴파', '컴팔', 'complie', 'complile', 'compil',
-    '수정할', '수정할까', '문제', '문제점', '오류', '에러'
+    
+    // 오타 및 변형 (한국어)
+    '전체코', '전체코드', '최종검', '최종 검', '수정해', '어디', '컴패일', '컴파', '컴팔', '컴파일해줘',
+    '수정할', '수정할까', '문제', '문제점', '오류', '에러', '실행해', '출력해', '분석해', '디버그해',
+    
+    // 오타 및 변형 (영어)
+    'complie', 'complile', 'compil', 'compiler', 'compiling', 'buid', 'bild', 'bld', 'analsis', 'anlysis',
+    'debg', 'debu', 'debuug', 'debbug', 'execut', 'exec', 'outpt', 'outpu', 'reslt', 'rsult',
+    
+    // 줄임말 및 축약형
+    '컴파', '컴팔', '빌드', '분석', '디버그', '실행', '출력', '결과', '문제', '오류', '에러',
+    'compile', 'build', 'analyze', 'debug', 'run', 'output', 'result', 'problem', 'error', 'bug'
   ];
   const hasOverallAnalysis = flexibleMatch(normalizedQuery, overallAnalysisKeywords);
   
