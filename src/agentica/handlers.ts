@@ -1,61 +1,18 @@
 import { SGlobal } from "../config/SGlobal";
-import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
-import {
-  CompilerError,
-  CompilerWarning,
-  CompilerResultParser,
-} from "../parsing/compilerResultParser";
-import {
-  extractLoopsFromCode,
-  extractLoopsWithNesting,
-  LoopInfo,
-} from "../parsing/loopExtractor";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { CompilerError, CompilerWarning, CompilerResultParser } from '../parsing/compilerResultParser';
+import { extractLoopsFromCode, extractLoopsWithNesting, LoopInfo } from '../parsing/loopExtractor';
 import { execSync } from "child_process";
 import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
-const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
-
-// sohyeon hw
-// [API] 오류에 대비한 재시도 로직 헬퍼 함수
-async function callWithRetry<T>(
-    apiCall: () => Promise<T>,
-    retries = 3,
-    delay = 1000 // 1초
-): Promise<T> {
-    for (let i = 0; i < retries; i++) {
-        try {
-            return await apiCall();
-        } catch (error: any) {
-            // [API] 키 오류는 재시도하지 않고 바로 던집니다.
-            if (error.response && error.response.status === 400 &&
-                error.response.data?.error?.details?.some((d: any) => d.reason === "API_KEY_INVALID")) {
-                throw new Error(`[API Key Error]: 유효한 [API] 키를 확인하세요.`);
-            }
-            // [Rate Limit](429), [Server Error](5xx), [Network Error] 등에 대해 재시도합니다.
-            if (error.response && (error.response.status === 429 || error.response.status >= 500) ||
-                error.message.includes("Network Error")) {
-                if (i < retries - 1) {
-                    console.warn(`[API] 호출 실패 ([Status]: ${error.response?.status}). ${delay / 1000}초 후 재시도...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    delay *= 2; // [Exponential Backoff] (점점 더 길게 대기)
-                } else {
-                    throw new Error(`[API Retry Failed]: ${error.message || "알 수 없는 [API] 오류"}. 최대 재시도 횟수 도달.`);
-                }
-            } else {
-                // 다른 예상치 못한 오류는 즉시 던집니다.
-                throw new Error(`[API Error]: ${error.message || "예상치 못한 오류 발생"}`);
-            }
-        }
-    }
-    // 이 부분은 도달하지 않아야 하지만, 안전을 위해 추가합니다.
-    throw new Error("[Unexpected Error] 재시도 로직에서 예상치 못한 오류로 종료되었습니다.");
-}
+const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
 
 
 //jm hw - 개선된 버전
 export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[], executionOutput?: string): string {
-  // MAX_ITEMS 제한을 제거하여 모든 에러와 경고를 표시
+  const MAX_ITEMS = 5; // 더 많은 항목을 보여주도록 증가
+
   const formatError = (e: CompilerError, i: number) => {
     const location = e.file ? ` at ${e.file}:${e.line || '?'}:${e.column || '?'}` : '';
     const code = e.code ? ` (${e.code})` : '';
@@ -75,11 +32,8 @@ export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[
     return 0;
   });
 
-
-  // 모든 에러와 경고를 포함 (제한 없음)
-  const errorText = sortedErrors.map(formatError).join('\n');
-  const warningText = warnings.map(formatWarning).join('\n');
-
+  const errorText = sortedErrors.slice(0, MAX_ITEMS).map(formatError).join('\n');
+  const warningText = warnings.slice(0, MAX_ITEMS).map(formatWarning).join('\n');
 
   return `
 You are a senior compiler engineer and static analysis expert with 15+ years of experience in C/C++ development and debugging.
@@ -89,17 +43,16 @@ Your task is to analyze the compiler output and runtime log from a C/C++ program
 ${logSummary}
 
 === Compiler Errors ===
-${errorText || "None"}
+${errorText || 'None'}
 
 === Compiler Warnings ===
-${warningText || "None"}
+${warningText || 'None'}
 
 ${executionOutput ? `=== Program Execution Output ===
 ${executionOutput}` : ''}
 
 IMPORTANT NOTES:
-- Analyze ALL errors and warnings listed above, not just the first one.
-- If multiple issues are present: State the most critical cause and suggest concrete fixes for each major issue.
+- If issues are present: State the most likely cause and suggest a concrete fix (1–2 lines).
 - Do NOT guess beyond the given log. If something is unclear, say so briefly.
 - Prioritize critical issues that could cause crashes, memory corruption, or undefined behavior.
 
@@ -108,8 +61,8 @@ IMPORTANT: Please respond in Korean, but keep the [Result], [Reason], and [Sugge
 Format your response in the following structure:
 
 [Result] {Short message: "O" or "X"}
-[Reason] {Brief explanation of why - in Korean, covering all major issues found}
-[Suggestion] {Fix or say "Suggestion 없음" if none needed - in Korean, addressing all critical issues}
+[Reason] {Brief explanation of why - in Korean}
+[Suggestion] {Fix or say "Suggestion 없음" if none needed - in Korean}
 Do not add anything outside this format.
 
 === Analysis Rules ===
@@ -121,19 +74,14 @@ Do not add anything outside this format.
 - If the summary or runtime log contains "[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.", do NOT analyze the cause. Just output the hint exactly as the Suggestion.
 - If execution timed out, suggest using loopCheck() function to analyze loop conditions.
 - For memory-related errors, always suggest checking pointer operations and memory allocation/deallocation.
-- IMPORTANT: When multiple errors/warnings exist, analyze each significant issue and provide comprehensive suggestions covering all problems.
 
 
 `.trim();
-
-  ///다른 함수를 이용해야할 거 같으면 [Hint] ~~ 을 사용해보세요라고 유도 함////////
-
 }
 
 /**
  * 1. afterDebug: 에러/경고 로그 + 요약을 받아 Gemini 분석 수행
  */
-
 export async function afterDebug(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[], executionOutput?: string): Promise<string> {
   try {
     // 1. 입력 검증
@@ -306,6 +254,7 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
         compileLog += `[Compile Signal] ${compileResult.signal}\n`;
       }
     }
+
   } catch (err: any) {
     // 8. 예상치 못한 에러 처리
     compileLog += "\n\n=== Unexpected Error ===\n";
@@ -367,6 +316,8 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
     };
   }
 }
+
+
 
 /**
  * 코드에서 에러와 경고 위치를 주석으로 표시하고 파일로 저장하는 함수
@@ -546,28 +497,30 @@ function addToCache(key: string, value: string) {
 
 
 // uuyeong's hw
-export async function loopCheck({
-  code,
+export async function loopCheck({ 
+  code, 
   target = "all",
-  details = {},
-}: {
+  details = {}
+}: { 
   code: string;
   target?: string;
   details?: any;
 }) {
   // 사전 검증: 반복문이 없으면 API 호출 안 함
   const loopInfos = extractLoopsWithNesting(code);
-
+  
   if (loopInfos.length === 0) {
     return { result: "코드에서 for/while/do-while 루프를 찾을 수 없습니다." };
   }
   
   let targetLoopInfos = loopInfos;
   
-  // "all"이 아닌 경우 AI를 사용하여 자연어 타겟 처리
-  if (target !== "all") {
-    try {
-      const targetSelectionPrompt = `You are analyzing C code loops. The user wants to analyze specific loops using natural language.
+      // "all"이 아닌 경우 AI를 사용하여 자연어 타겟 처리
+    if (target !== "all") {
+      let selectionTimeoutId: NodeJS.Timeout | undefined;
+      
+      try {
+        const targetSelectionPrompt = `You are analyzing C code loops. The user wants to analyze specific loops using natural language.
 
 Full code context:
 \`\`\`c
@@ -632,15 +585,18 @@ If you cannot determine specific loops, return []`;
         }
       });
       
-      // 타임아웃 설정 (30초)
+      // 타임아웃 설정 (30초) - 정리 가능하도록 수정
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+        selectionTimeoutId = setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
       });
       
       const selectionResult = await Promise.race([
         model.generateContent(targetSelectionPrompt),
         timeoutPromise
       ]) as any;
+      
+      // 성공 시 타임아웃 정리
+      if (selectionTimeoutId) clearTimeout(selectionTimeoutId);
       const responseText = selectionResult.response.text().trim();
       
       if (!responseText) {
@@ -674,6 +630,9 @@ If you cannot determine specific loops, return []`;
         console.log("AI 응답에서 유효한 배열을 찾을 수 없습니다.");
       }
           } catch (err) {
+        // 에러 시에도 타임아웃 정리
+        if (selectionTimeoutId) clearTimeout(selectionTimeoutId);
+        
         console.log("AI 타겟 선택 실패, 기본 로직 사용:", err);
         // 폴백: 기본 로직 사용 - 모든 루프 선택
         targetLoopInfos = loopInfos;
@@ -751,6 +710,8 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
 
 
 //모델 파라미터 추가 완료  
+  let timeoutId: NodeJS.Timeout | undefined;
+  
   try {
     const model = genAI.getGenerativeModel({ 
       model: "gemini-1.5-flash",
@@ -760,15 +721,18 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
       }
     });
     
-    // 타임아웃 설정 (30초)
+    // 타임아웃 설정 (30초) - 정리 가능하도록 수정
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+      timeoutId = setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
     });
     
     const result = await Promise.race([
       model.generateContent(batchPrompt),
       timeoutPromise
     ]) as any;
+    
+    // 성공 시 타임아웃 정리
+    if (timeoutId) clearTimeout(timeoutId);
   const batchAnalysis = result.response.text();
   
     if (!batchAnalysis || batchAnalysis.trim().length === 0) {
@@ -777,9 +741,12 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
     
     addToCache(cacheKey, batchAnalysis);
   
-  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
+  const formattedResult = `[Result]\n검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
   return { result: formattedResult };
   } catch (aiError: any) {
+    // 에러 시에도 타임아웃 정리
+    if (timeoutId) clearTimeout(timeoutId);
+    
     console.error(`AI 분석 실패: ${aiError.message}`);
     
     // 폴백: 간단한 패턴 분석 결과 반환
@@ -825,20 +792,25 @@ function generateHierarchicalNumber(currentLoop: LoopInfo, allLoops: LoopInfo[])
   }
 }
 
+// 복수 루프 비교를 위한 새로운 함수
 // sohyeon's hw
 // traceVar 함수를 비동기(async) 함수로 정의합니다.
 // 이 함수는 'code'와 'userQuery'라는 두 개의 인자를 받습니다.
 export async function traceVar({
-  code, // 사용자가 제공한 코드 문자열
-  userQuery, // 변수 추적에 대한 사용자의 질문
+  code,         // 사용자가 제공한 코드 문자열
+  userQuery,    // 변수 추적에 대한 사용자의 질문
 }: {
   code: string;
   userQuery: string;
 }) {
-  // [Gemini Model]에 전달할 프롬프트([Prompt])를 정의합니다.
+  // Gemini 모델에 전달할 프롬프트(prompt)를 정의합니다.
   const prompt = `
-  // Analyze the following C code and the user's question to trace the flow of variables.
-  Analyze the following C code and the user's question to trace the flow of variables.
+  // 사용자 코드와 질문을 분석하여 변수의 흐름을 추적하라는 지시
+  Analyze the following code and the user's question to trace the flow of variables the user wants to understand.
+  // 만약 사용자가 특정 변수나 함수를 지정하지 않았다면, 주요 변수들의 흐름을 설명하라는 지시
+  If the user's question does not specify a function or variable name, identify and explain the flow of key variables in the code.
+  // 만약 사용자의 질문이 변수 추적과 관련이 없다면, 특정 응답("The question is not related to variable tracing.")을 반환하라는 지시
+  If the user's question is not related to variable tracing, respond with "The question is not related to variable tracing."
 
   **User Question:**
   "${userQuery}"
@@ -848,71 +820,38 @@ export async function traceVar({
   ${code}
   \`\`\`
 
-  **Instructions:**
-  1. Analyze the user's natural language query to understand their intent. If there are typos, infer the most likely correct variable or function name.
-  2. If the query mentions a **struct, union, or enum** variable, analyze it as follows:
-     - **struct:** Trace the flow of each individual member variable.
-     - **union:** State that it shares memory and trace the flow of the member that was most recently assigned a value.
-     - **enum:** Trace the flow of the enum variable and specify which constant value it holds at each point.
-  3. If the user does not specify a variable or function name, explain the flow of all key variables in the code.
-  4. If the user's question is not related to variable tracing, respond with "The question is not related to variable tracing."
-  5. Respond in Korean.
-
   **Response Format:**
-  // Response Format
-  - Present each variable with its function scope using the format **Variable Name: variable_name (in function_name function)**.
+  // 응답 형식
+  - Present each variable using the format Variable Name: variable_name.
   - Include the following sections for each variable:
     - [Initial Value]: Describe the initial value of the variable(Output only the numeric or literal value (no explanation)).
     - [Update Process]: Summarize the changes step-by-step using short bullet points (use "-" at the beginning of each line, avoid long sentences).
     - [Final Value]: Indicate the final value stored in the variable(Output only the final value (no explanation)).
   - Write all section titles in English (Variable Name, Initial Value, Update Process, Final Value), and provide the explanations in Korean.
 
-  // Example of the response format
+  // 응답 형식의 예시 제공
   - For example:
   \`\`\`
-  Variable Name: counter (in main function)
+  Variable Name: counter
   [Initial Value] 0
   [Update Process]
     - 루프 진입 시마다 1씩 증가
     - 총 10회 반복
   [Final Value] 10
   \`\`\`
-  // Instruct the AI to follow this format
+  // 위의 형식을 따르도록 지시
   Please follow this format for your explanation.
   `.trim(); // 문자열의 양쪽 공백을 제거합니다.
 
-  // '[gemini-1.5-flash]' 모델을 사용하여 [Gemini AI Model] 인스턴스를 생성합니다.
-  const model: GenerativeModel = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    generationConfig: {
-      temperature: 0.3, // 더 일관된 응답을 위해 낮은 [Temperature] 설정
-      maxOutputTokens: 2048, // 응답 길이 제한
-    },
-  });
+  // 'gemini-1.5-flash' 모델을 사용하여 Gemini AI 모델 인스턴스를 생성합니다.
 
-  try {
-    // [API] 호출을 재시도 로직으로 감싸서 호출합니다.
-    const result = await callWithRetry(() => model.generateContent(prompt));
-
-    const responseText = result.response.text();
-
-    // 1. 응답이 비어있는 경우를 처리합니다.
-    if (!responseText || responseText.trim().length === 0) {
-      return { variableTrace: "AI로부터 유효한 변수 추적 결과를 받지 못했습니다. 코드가 복잡하거나 질문이 모호할 수 있습니다." };
-    }
-
-    // 2. [AI]가 "[Not Related]" 응답을 보낸 경우를 처리합니다.
-    if (responseText.includes("The question is not related to variable tracing.")) {
-      return { variableTrace: responseText };
-    }
-
-    // 모든 처리가 정상일 경우 최종 결과를 반환합니다.
-    return { variableTrace: responseText };
-
-  } catch (error: any) {
-    // callWithRetry 함수에서 던져진 오류를 받아서 처리합니다.
-    throw new Error(`[traceVar Error]: ${error.message || "변수 추적 중 알 수 없는 오류 발생"}`);
-  }
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  
+  // 생성된 모델에 프롬프트를 전달하여 콘텐츠를 생성하도록 요청합니다.
+  const result = await model.generateContent(prompt);
+  
+  // AI 응답 텍스트를 'variableTrace' 키를 가진 객체 형태로 반환합니다.
+  return { variableTrace: result.response.text() };
 }
 
 // jimin's hw
@@ -933,10 +872,9 @@ export async function testBreak({ codeSnippet }: { codeSnippet: string }) {
     } else {
       // JSON이 없으면 텍스트 형태로 반환
       return {
-        isBuggy:
-          responseText.includes("buggy") || responseText.includes("error"),
+        isBuggy: responseText.includes("buggy") || responseText.includes("error"),
         reason: responseText,
-        suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요.",
+        suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요."
       };
     }
   } catch (err) {
@@ -944,17 +882,16 @@ export async function testBreak({ codeSnippet }: { codeSnippet: string }) {
     return {
       isBuggy: responseText.includes("buggy") || responseText.includes("error"),
       reason: responseText,
-      suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요.",
+      suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요."
     };
   }
 }
 
 // moonjeong's hw1   (code: string): Promise<string> {
 export async function beforeDebug({ code }: { code: string }) {
-  const tmpDir =
-    process.platform === "win32" ? path.join(process.cwd(), "tmp") : "/tmp";
-  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir); // Windows에서는 tmp 폴더 없을 수 있음
-
+  const tmpDir = process.platform === "win32" ? path.join(process.cwd(), "tmp") : "/tmp";
+  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);  // Windows에서는 tmp 폴더 없을 수 있음
+  
   const tmpFile = path.join(tmpDir, `code_${Date.now()}.c`);
   const outputFile = path.join(tmpDir, `a.out`);
 
@@ -963,32 +900,18 @@ export async function beforeDebug({ code }: { code: string }) {
     fs.writeFileSync(tmpFile, code);
 
     // GCC 컴파일 수행
-    const compileResult = spawnSync(
-      "gcc",
-      [
-        "-Wall",
-        "-Wextra",
-        "-O2",
-        "-fanalyzer",
-        "-fsanitize=undefined",
-        "-fsanitize=address",
-        tmpFile,
-        "-o",
-        outputFile,
-      ],
-      {
-        encoding: "utf-8",
-        stdio: ["ignore", "pipe", "pipe"],
-      }
-    );
+    const compileResult = spawnSync("gcc", [
+      "-Wall", "-Wextra", "-O2", "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address",
+      tmpFile, "-o", outputFile
+    ], {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"]
+    });
 
     // 로그 수집
     let log = (compileResult.stdout || "") + (compileResult.stderr || "");
     if (compileResult.status === 0) {
-      const runResult = spawnSync(outputFile, [], {
-        encoding: "utf-8",
-        timeout: 1000,
-      });
+      const runResult = spawnSync(outputFile, [], { encoding: "utf-8", timeout: 1000 });
       log += "\n\n=== Runtime Output ===\n";
       log += runResult.stdout || "";
       log += runResult.stderr || "";
@@ -1034,24 +957,21 @@ export async function inProgressDebug(code: string) {
   let compileLog = "";
 
   try {
-    const compileResult = spawnSync(
-      "gcc",
-      [
-        "-Wall",
-        "-Wextra",
-        "-Wpedantic",
-        "-fsyntax-only",
-        "-xc", // 입력 형식 명시
-        "-", // stdin 입력
-      ],
-      {
-        input: code, // 여기서 코드 전달
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr 모두 파이프
-      }
-    );
+    const compileResult = spawnSync("gcc", [
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-fsyntax-only",
+      "-xc",  // 입력 형식 명시
+      "-"     // stdin 입력
+    ], {
+      input: code,           // 여기서 코드 전달
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"]  // stdin, stdout, stderr 모두 파이프
+    });
 
     compileLog += compileResult.stderr || "";
+
   } catch (err) {
     compileLog += `GCC Error: ${(err as Error).message}`; // 예외 처리
   }
