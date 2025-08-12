@@ -383,10 +383,24 @@ export function markErrors(
       
       markedLines.push(`//AI 분석: 치명적 문제 감지`);
       if (reasonMatch) {
-        markedLines.push(`// 원인: ${reasonMatch[1].trim()}`);
+        const reasonText = reasonMatch[1].trim();
+        // 멀티라인 텍스트를 여러 줄의 주석으로 분할
+        const reasonLines = reasonText.split('\n');
+        reasonLines.forEach(line => {
+          if (line.trim()) {
+            markedLines.push(`// 원인: ${line.trim()}`);
+          }
+        });
       }
       if (suggestionMatch) {
-        markedLines.push(`// 해결책: ${suggestionMatch[1].trim()}`);
+        const suggestionText = suggestionMatch[1].trim();
+        // 멀티라인 텍스트를 여러 줄의 주석으로 분할
+        const suggestionLines = suggestionText.split('\n');
+        suggestionLines.forEach(line => {
+          if (line.trim()) {
+            markedLines.push(`// 해결책: ${line.trim()}`);
+          }
+        });
       }
       markedLines.push("");
     }
