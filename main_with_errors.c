@@ -1,32 +1,86 @@
 #include <stdio.h>
-#include <stdlib.h>
+// 반복문이 매우 많을 경우의 테스트코드
+// for 14개, while 9개, do-while 1개, 전체 24개
+
+// 1
+void testLoop21(){
+    for (int a = 0; a < 1; a++) {
+        printf("Loop 1\n");
+    }
+}
+
+// 2
+void testLoop22() {
+    int b = 0;
+    while (b < 1) {
+        printf("Loop 2\n");
+        b++;
+    }
+}
+
+// 3
+void testLoop23() {
+    for (;;) { printf("Loop 3\n"); break; }
+}
 
 int main() {
-    // 미선언 변수 사용 (컴파일 에러)
-    int x = 10;
-    int y = 20;
-    int z = x + y + undeclared_var;  // 에러: undeclared_var가 선언되지 않음
-    
-    // 초기화되지 않은 변수 사용 (경고)
-    int uninitialized;
-    printf("Value: %d\n", uninitialized);  // 경고: 초기화되지 않은 변수 사용
-    
-    // 메모리 누수 가능성 (경고)
-    int* ptr = malloc(100);
-    // free(ptr);  // 주석 처리로 메모리 누수 시뮬레이션
-    
-    // 0으로 나누기 (런타임 에러 가능성)
-    int divisor = 0;
-    int result = x / divisor;  // 런타임 에러: 0으로 나누기
-    
-    // 배열 범위 초과 (런타임 에러 가능성)
-    int arr[5];
-    arr[10] = 100;  // 런타임 에러: 배열 범위 초과
-    
-    // 무한 루프 (런타임 에러 가능성)
-    while(1) {
-        // 무한 루프
+    int i = 0;
+
+    // 4~8
+    for (i = 0; i < 3; i++) printf("Loop 4\n");
+    printf("for"); //일반 문자도 계산하는지 체크
+    printf("while");
+    printf("do while");
+    for (i = 0; i < 3; i++) printf("Loop 5\n");
+    for (i = 0; i < 3; i++) printf("Loop 6\n");
+    for (i = 0; i < 3; i++) printf("Loop 7\n");
+    for (i = 0; i < 3; i++) printf("Loop 8\n");
+
+    // 9~13 
+    i = 0; while (i < 2) { printf("Loop 9\n"); i++; }
+    i = 0; while (i < 2) { printf("Loop 10\n"); i++; }
+    i = 0; while (i < 2) { printf("Loop 11\n"); i++; }
+    i = 0; while (i < 2) { printf("Loop 12\n"); i++; }
+    i = 0; while (i < 2) { printf("Loop 13\n"); i++; }
+
+    // 14, 14.1
+    for (i = 0; i < 2; i++) {
+        for (int j = 0; j < 2; j++) {
+            printf("Loop 14 & 14.1\n");
+        }
     }
-    
+    i = 0;
+    // 15, 15.1
+    while (i < 2) {
+        int j = 0;
+        while (j < 2) {
+            printf("Loop 15 & 15.1\n");
+            j++;
+        }
+        i++;
+    }
+    //16
+    for (i = 0; i < 2;) { // 종료 조건 있음, 증가 없음
+        printf("Loop 16\n");
+    }
+
+    // 17~21
+    for (;;) { printf("Loop 17\n"); break; }     // 무한 루프 + break
+    while (1) { printf("Loop 18\n"); break; }    // 무한 while + break
+    for (int k = 10; k > 5; k--) { -printf("Loop 19\n"); }
+    for (int x = 0; x < 3; ++x) { printf("Loop 20\n"); }
+    for (int y = 0; y < 1; y++) { printf("Loop 21\n"); }
+    int z;
+
+    // 22
+    do{
+        z = 1;
+        printf("Loop 22\n");
+    } while(z);
+
+    testLoop21();
+    testLoop22();
+    testLoop23();
+
     return 0;
 }
