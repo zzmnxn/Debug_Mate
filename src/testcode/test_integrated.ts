@@ -1,6 +1,6 @@
-import { testLoopCheck, testCompareLoops } from './test_loopCheck';
+import { testLoopCheck } from './test_loopCheck';
 import { testTypoCheck, testRealCodeFile } from './test_typoCheck';
-import { loopCheck, compareLoops } from '../agentica/handlers';
+import { loopCheck } from '../agentica/handlers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -33,38 +33,7 @@ async function testSpecificLoopRequests() {
 
 async function testLoopComparisonRequests() {
     console.log('\n=== 반복문 비교 요청 테스트 ===\n');
-    
-    try {
-        const testCodePath = path.join(__dirname, 'test_loopCheck.c');
-        const code = fs.readFileSync(testCodePath, 'utf-8');
-        
-        // "반복문 ~와 ~를 비교해줘" 형태의 요청 테스트
-        console.log('1. "반복문 1과 15를 비교해줘" 요청:');
-        const compare1vs15Result = await compareLoops({ 
-            code, 
-            targets: ["1", "15"] 
-        });
-        console.log(compare1vs15Result.result);
-        console.log('\n' + '='.repeat(50) + '\n');
-        
-        console.log('2. "반복문 14와 15를 비교해줘" 요청 (중첩 vs 무한):');
-        const compare14vs15Result = await compareLoops({ 
-            code, 
-            targets: ["14", "15"] 
-        });
-        console.log(compare14vs15Result.result);
-        console.log('\n' + '='.repeat(50) + '\n');
-        
-        console.log('3. "반복문 1, 2, 3을 비교해줘" 요청 (여러 개):');
-        const compareMultiResult = await compareLoops({ 
-            code, 
-            targets: ["1", "2", "3"] 
-        });
-        console.log(compareMultiResult.result);
-        
-    } catch (error) {
-        console.error('반복문 비교 요청 테스트 중 오류 발생:', error);
-    }
+    console.log('compareLoops 기능이 제거되었습니다.');
 }
 
 async function testEdgeCases() {
@@ -80,19 +49,11 @@ async function testEdgeCases() {
         console.log('\n' + '='.repeat(50) + '\n');
         
         console.log('2. 빈 타겟으로 비교 요청:');
-        const emptyTargetResult = await compareLoops({ 
-            code, 
-            targets: [] 
-        });
-        console.log(emptyTargetResult.result);
+        console.log('compareLoops 기능이 제거되었습니다.');
         console.log('\n' + '='.repeat(50) + '\n');
         
         console.log('3. 중복된 타겟으로 비교 요청:');
-        const duplicateTargetResult = await compareLoops({ 
-            code, 
-            targets: ["1", "1"] 
-        });
-        console.log(duplicateTargetResult.result);
+        console.log('compareLoops 기능이 제거되었습니다.');
         
     } catch (error) {
         console.error('엣지 케이스 테스트 중 오류 발생:', error);
@@ -105,7 +66,6 @@ async function runIntegratedTests() {
     
     // 기본 기능 테스트
     await testLoopCheck();
-    await testCompareLoops();
     await testTypoCheck();
     await testRealCodeFile();
     
