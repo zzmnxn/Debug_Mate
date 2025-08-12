@@ -151,17 +151,7 @@ Do not add anything outside this format.
 /**
  * 1. afterDebug: 에러/경고 로그 + 요약을 받아 Gemini 분석 수행
  */
-<<<<<<< HEAD
-export async function afterDebug(
-  logSummary: string,
-  errors: CompilerError[],
-  warnings: CompilerWarning[]
-): Promise<string> {
-  const prompt = buildAfterDebugPrompt(logSummary, errors, warnings);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-  return result.response.text().trim();
-=======
+
 export async function afterDebug(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[], executionOutput?: string): Promise<string> {
   try {
     // 1. 입력 검증
@@ -242,56 +232,23 @@ export async function afterDebug(logSummary: string, errors: CompilerError[], wa
     
     return `[Result] X\n[Reason] ${errorMessage}\n[Suggestion] 시스템 오류로 인해 분석을 완료할 수 없습니다. 잠시 후 다시 시도해주세요.`;
   }
->>>>>>> main
 }
 
 /**
  * 2. afterDebugFromCode: 코드 입력 → 컴파일 → 로그 파싱 → Gemini 분석까지 자동 수행
  * 개선: 실행 결과도 함께 표시
  */
-<<<<<<< HEAD
-export async function afterDebugFromCode(
-  code: string,
-  originalFileName: string = "input.c"
-): Promise<{ analysis: string; markedFilePath: string }> {
-  const tmpFile = path.join("/tmp", `code_${Date.now()}.c`);
-  fs.writeFileSync(tmpFile, code);
-
-=======
 export async function afterDebugFromCode(code: string, originalFileName: string = "input.c"): Promise<{ analysis: string, markedFilePath: string, executionOutput?: string }> {
   // 임시 파일 경로 설정 (Windows 호환성)
   const tmpDir = process.platform === "win32" ? path.join(process.cwd(), "tmp") : "/tmp";
   const tmpFile = path.join(tmpDir, `code_${Date.now()}.c`);
   const outputFile = path.join(tmpDir, `a.out_${Date.now()}`);
   
->>>>>>> main
   let compileLog = "";
   let markedFilePath = "";
   let executionOutput = ""; // 실행 결과 저장용
 
   try {
-<<<<<<< HEAD
-    // 컴파일 단계 - spawnSync 사용으로 변경하여 stderr 확실히 캡처
-    const compileResult = spawnSync(
-      "gcc",
-      [
-        "-Wall",
-        "-Wextra",
-        "-Wpedantic",
-        "-O2",
-        "-Wdiv-by-zero",
-        "-fanalyzer",
-        "-fsanitize=undefined",
-        "-fsanitize=address",
-        tmpFile,
-        "-o",
-        "/tmp/a.out",
-      ],
-      {
-        encoding: "utf-8",
-      }
-    );
-=======
     // 1. 입력 검증
     if (!code || typeof code !== 'string') {
       throw new Error('Invalid code: must be a non-empty string');
@@ -320,7 +277,6 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
     });
 
     // 5. 컴파일 로그 수집
->>>>>>> main
     if (compileResult.stdout) {
       compileLog += compileResult.stdout;
     }
@@ -331,28 +287,6 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
     // 6. 컴파일 성공 시 실행
     if (compileResult.status === 0) {
       compileLog += "\n\n=== Runtime Output ===\n";
-<<<<<<< HEAD
-      const runResult = spawnSync("/tmp/a.out", [], {
-        encoding: "utf-8",
-        timeout: 1000,
-      }); // 1초 제한
-
-      if (runResult.stdout) {
-        compileLog += runResult.stdout;
-      }
-      if (runResult.stderr) {
-        compileLog += runResult.stderr;
-      }
-      if (runResult.stderr.includes("runtime error:")) {
-        compileLog += `\n[Runtime Type] UndefinedBehaviorSanitizer runtime error (UB 가능성)`;
-      }
-      if (runResult.error) {
-        const errorAny = runResult.error as any;
-        if (errorAny && errorAny.code === "ETIMEDOUT") {
-          compileLog += `\n[Runtime Error] Execution timed out (possible infinite loop)\n loopCheck() 함수를 사용해보세요`;
-        } else {
-          compileLog += `\n[Runtime Error] ${runResult.error.message}`;
-=======
       
       try {
         const runResult = spawnSync(outputFile, [], { 
@@ -363,7 +297,6 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
         if (runResult.stdout) {
           compileLog += runResult.stdout;
           executionOutput += runResult.stdout; // 실행 결과 저장
->>>>>>> main
         }
         if (runResult.stderr) {
           compileLog += runResult.stderr;
@@ -451,17 +384,6 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
       executionOutput: executionOutput.trim() || undefined
     };
   }
-<<<<<<< HEAD
-  const markedFilePath = markErrors(
-    originalFileName,
-    code,
-    parsed.errors,
-    parsed.warnings,
-    aiAnalysisForMark
-  );
-  return { analysis, markedFilePath };
-=======
->>>>>>> main
 }
 
 /**
@@ -521,14 +443,7 @@ export function markErrors(
   if (aiAnalysis) {
     const resultMatch = aiAnalysis.match(/\[Result\]\s*([OX])/);
     if (resultMatch && resultMatch[1] === "X") {
-<<<<<<< HEAD
-      // Reason, Suggestion 추출
-      const reasonMatch = aiAnalysis.match(
-        /\[Reason\]([\s\S]*?)(\[Suggestion\]|$)/
-      );
-=======
       const reasonMatch = aiAnalysis.match(/\[Reason\]([\s\S]*?)(\[Suggestion\]|$)/);
->>>>>>> main
       const suggestionMatch = aiAnalysis.match(/\[Suggestion\]([\s\S]*)/);
       
       markedLines.push(`//AI 분석: 치명적 문제 감지`);
@@ -546,68 +461,6 @@ export function markErrors(
   lines.forEach((line, index) => {
     const lineNum = index + 1;
     const issues = lineIssues.get(lineNum);
-<<<<<<< HEAD
-    let outputLine = line;
-    let comments: string[] = [];
-    if (issues) {
-      // 에러 메시지들 표시 (컴파일 타임 + 런타임)
-      issues.errors.forEach((error) => {
-        let indicator = "";
-        const isRuntimeError = error.type === "runtime";
-        const errorPrefix = isRuntimeError ? "[RUNTIME ERROR]" : "[ERROR]";
-
-        if (error.column) {
-          indicator = " ".repeat(Math.max(0, error.column - 1)) + "^";
-          if (error.code) {
-            comments.push(`${errorPrefix} ${error.code}: ${error.message}`);
-          } else {
-            comments.push(`${errorPrefix} ${error.message}`);
-          }
-          // 런타임 에러의 경우 화살표 표시 추가
-          if (isRuntimeError) {
-            outputLine += `\n${indicator} // ${error.message}`;
-          } else {
-            outputLine += `\n${indicator}`;
-          }
-        } else {
-          // 컬럼 정보가 없는 경우
-          if (error.code) {
-            comments.push(`${errorPrefix} ${error.code}: ${error.message}`);
-          } else {
-            comments.push(`${errorPrefix} ${error.message}`);
-          }
-          // 런타임 에러인데 컬럼이 없는 경우
-          if (isRuntimeError) {
-            outputLine += `  // ${error.message}`;
-          }
-        }
-      });
-
-      // 경고 메시지들 표시
-      issues.warnings.forEach((warning) => {
-        let indicator = "";
-        if (warning.column) {
-          indicator = " ".repeat(Math.max(0, warning.column - 1)) + "^";
-          if (warning.code) {
-            comments.push(`[WARNING] ${warning.code}: ${warning.message}`);
-          } else {
-            comments.push(`[WARNING] ${warning.message}`);
-          }
-          outputLine += `\n${indicator}`;
-        } else {
-          if (warning.code) {
-            comments.push(`[WARNING] ${warning.code}: ${warning.message}`);
-          } else {
-            comments.push(`[WARNING] ${warning.message}`);
-          }
-        }
-      });
-      markedLines.push(outputLine);
-      if (comments.length > 0) {
-        comments.forEach((comment) => {
-          markedLines.push(`// ${"=".repeat(50)}`);
-          markedLines.push(comment);
-=======
     
     if (issues && (issues.errors.size > 0 || issues.warnings.size > 0)) {
       // 문제가 있는 라인: 코드 + 간결한 주석
@@ -620,7 +473,6 @@ export function markErrors(
           const prefix = error.type === 'runtime' ? ' 런타임' : ' 컴파일';
           const code = error.code ? ` (${error.code})` : '';
           return `${prefix}${code}: ${error.message}`;
->>>>>>> main
         });
         
         // 여러 에러가 있으면 한 줄로 요약
@@ -652,23 +504,6 @@ export function markErrors(
     }
   });
 
-<<<<<<< HEAD
-  // 요약 정보 추가
-  markedLines.push("");
-  markedLines.push(`// ====== 요약 ======`);
-  const runtimeErrorCount = errors.filter((e) => e.type === "runtime").length;
-  const compileErrorCount = errors.length - runtimeErrorCount;
-
-  if (runtimeErrorCount > 0) {
-    markedLines.push(`// 런타임 오류: ${runtimeErrorCount}개`);
-  }
-  if (compileErrorCount > 0) {
-    markedLines.push(`// 컴파일 에러: ${compileErrorCount}개`);
-  }
-  if (warnings.length > 0) {
-    markedLines.push(`// 경고: ${warnings.length}개`);
-  }
-=======
   // 간결한 요약 정보 추가
   const runtimeErrorCount = errors.filter(e => e.type === 'runtime').length;
   const compileErrorCount = errors.length - runtimeErrorCount;
@@ -687,7 +522,6 @@ export function markErrors(
       markedLines.push(`//   경고: ${warnings.length}개`);
     }
   }
->>>>>>> main
 
   // 파일명 생성 (원본 파일명 기반)
   const parsedPath = path.parse(originalFilePath);
@@ -745,19 +579,13 @@ export async function loopCheck({
   if (loopInfos.length === 0) {
     return { result: "코드에서 for/while/do-while 루프를 찾을 수 없습니다." };
   }
-<<<<<<< HEAD
-
-  // 선택적 분석 로직
-=======
   
   let targetLoopInfos = loopInfos;
   
-      // "all"이 아닌 경우 AI를 사용하여 자연어 타겟 처리
-    if (target !== "all") {
-      let selectionTimeoutId: NodeJS.Timeout | undefined;
-      
-      try {
-        const targetSelectionPrompt = `You are analyzing C code loops. The user wants to analyze specific loops using natural language.
+  // "all"이 아닌 경우 AI를 사용하여 자연어 타겟 처리
+  if (target !== "all") {
+    try {
+      const targetSelectionPrompt = `You are analyzing C code loops. The user wants to analyze specific loops using natural language.
 
 Full code context:
 \`\`\`c
@@ -822,18 +650,15 @@ If you cannot determine specific loops, return []`;
         }
       });
       
-      // 타임아웃 설정 (30초) - 정리 가능하도록 수정
+      // 타임아웃 설정 (30초)
       const timeoutPromise = new Promise((_, reject) => {
-        selectionTimeoutId = setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+        setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
       });
       
       const selectionResult = await Promise.race([
         model.generateContent(targetSelectionPrompt),
         timeoutPromise
       ]) as any;
-      
-      // 성공 시 타임아웃 정리
-      if (selectionTimeoutId) clearTimeout(selectionTimeoutId);
       const responseText = selectionResult.response.text().trim();
       
       if (!responseText) {
@@ -866,14 +691,11 @@ If you cannot determine specific loops, return []`;
       } else {
         console.log("AI 응답에서 유효한 배열을 찾을 수 없습니다.");
       }
-          } catch (err) {
-        // 에러 시에도 타임아웃 정리
-        if (selectionTimeoutId) clearTimeout(selectionTimeoutId);
-        
-        console.log("AI 타겟 선택 실패, 기존 로직 사용:", err);
-        // 폴백: 기존 로직 사용
-        targetLoopInfos = selectLoopsLegacy(loopInfos, target, details);
-      }
+    } catch (err) {
+      console.log("AI 타겟 선택 실패, 기존 로직 사용:", err);
+      // 폴백: 기존 로직 사용
+      targetLoopInfos = selectLoopsLegacy(loopInfos, target, details);
+    }
   }
   
   if (targetLoopInfos.length === 0) {
@@ -947,8 +769,6 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
 
 
 //모델 파라미터 추가 완료  
-  let timeoutId: NodeJS.Timeout | undefined;
-  
   try {
     const model = genAI.getGenerativeModel({ 
       model: "gemini-1.5-flash",
@@ -958,18 +778,15 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
       }
     });
     
-    // 타임아웃 설정 (30초) - 정리 가능하도록 수정
+    // 타임아웃 설정 (30초)
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+      setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
     });
     
     const result = await Promise.race([
       model.generateContent(batchPrompt),
       timeoutPromise
     ]) as any;
-    
-    // 성공 시 타임아웃 정리
-    if (timeoutId) clearTimeout(timeoutId);
   const batchAnalysis = result.response.text();
   
     if (!batchAnalysis || batchAnalysis.trim().length === 0) {
@@ -978,12 +795,9 @@ Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.
     
     addToCache(cacheKey, batchAnalysis);
   
-  const formattedResult = `[Result]\n검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
+  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
   return { result: formattedResult };
   } catch (aiError: any) {
-    // 에러 시에도 타임아웃 정리
-    if (timeoutId) clearTimeout(timeoutId);
-    
     console.error(`AI 분석 실패: ${aiError.message}`);
     
     // 폴백: 간단한 패턴 분석 결과 반환
@@ -1045,8 +859,6 @@ export async function compareLoops({
     return { result: "코드에서 for/while/do-while 루프를 찾을 수 없습니다." };
   }
 
-  let compareTimeoutId: NodeJS.Timeout | undefined;
-
   // AI를 사용하여 자연어 타겟을 직접 처리
   const targetSelectionPrompt = `You are analyzing C code loops. The user wants to compare specific loops using natural language descriptions.
 
@@ -1081,18 +893,15 @@ If you cannot determine specific loops, return []`;
       }
     });
     
-    // 타임아웃 설정 (30초) - 정리 가능하도록 수정
+    // 타임아웃 설정 (30초)
     const timeoutPromise = new Promise((_, reject) => {
-      compareTimeoutId = setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
+      setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
     });
     
     const selectionResult = await Promise.race([
       model.generateContent(targetSelectionPrompt),
       timeoutPromise
     ]) as any;
-    
-          // 성공 시 타임아웃 정리
-      if (compareTimeoutId) clearTimeout(compareTimeoutId);
     const responseText = selectionResult.response.text().trim();
     
     if (!responseText) {
@@ -1170,9 +979,6 @@ Please respond concisely in Korean with proper formatting:
     return { result: formattedResult };
     
   } catch (err) {
-    // 에러 시에도 타임아웃 정리
-    if (compareTimeoutId) clearTimeout(compareTimeoutId);
-    
     console.log("AI 타겟 선택 실패:", err);
     // 폴백: 기존 로직 사용
     return await compareLoopsLegacy({ code, targets, details });
@@ -1302,7 +1108,6 @@ Please respond concisely in Korean with:
 
 // 기존 선택 로직을 폴백으로 유지
 function selectLoopsLegacy(loopInfos: LoopInfo[], target: string, details: any): LoopInfo[] {
->>>>>>> main
   let targetLoopInfos = loopInfos;
 
   if (target === "first") {
@@ -1321,12 +1126,7 @@ function selectLoopsLegacy(loopInfos: LoopInfo[], target: string, details: any):
     const index = parseInt(target) - 1;
     targetLoopInfos = loopInfos.length > index && index >= 0 ? [loopInfos[index]] : [];
   } else if (target === "specific" && details.loopType) {
-<<<<<<< HEAD
-    // 특정 타입의 루프만 필터링
-    targetLoopInfos = loopInfos.filter((loopInfo) => {
-=======
     const filteredLoops = loopInfos.filter(loopInfo => {
->>>>>>> main
       const loop = loopInfo.code;
       if (details.loopType === "for") {
         return loop.trim().startsWith("for");
@@ -1358,65 +1158,11 @@ function selectLoopsLegacy(loopInfos: LoopInfo[], target: string, details: any):
       return Math.abs(estimatedStartLine - targetLine) <= 2; // 2줄 오차 허용
     });
   }
-<<<<<<< HEAD
-
-  if (targetLoopInfos.length === 0) {
-    return { result: `요청하신 조건에 맞는 루프를 찾을 수 없습니다.` };
-  }
-
-  // 모든 루프를 하나의 API 호출로 처리 (비용 절약)
-  const loopAnalysisData = targetLoopInfos.map((loopInfo, i) => {
-    const loopNumber = generateHierarchicalNumber(loopInfo, loopInfos);
-    return {
-      number: loopNumber,
-      code: loopInfo.code,
-    };
-  });
-
-  const batchPrompt = `Review the following loop codes and determine if their termination conditions are valid. For each loop, if there is an issue, provide suggestions in numbered format like "수정 제안 1:", "수정 제안 2:" etc. with brief explanations. If there is no problem, simply respond with "문제가 없습니다.". Respond in Korean.
-
-${loopAnalysisData.map((item) => `=== Loop ${item.number} ===\n${item.code}`).join("\n\n")}
-
-For each loop, start with "- 반복문 X" format and analyze each one separately.`;
-
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(batchPrompt);
-  const batchAnalysis = result.response.text();
-
-  const formattedResult = `검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
-  return { result: formattedResult };
-}
-
-/**
- * 계층적 번호 생성 (1, 2.1, 2.2, 3 등)
- */
-function generateHierarchicalNumber(
-  currentLoop: LoopInfo,
-  allLoops: LoopInfo[]
-): string {
-  if (currentLoop.level === 0) {
-    // 최상위 루프
-    return currentLoop.index.toString();
-  }
-
-  // 부모 루프 찾기
-  const parentLoop = allLoops[currentLoop.parentIndex!];
-  const parentNumber = generateHierarchicalNumber(parentLoop, allLoops);
-
-  return `${parentNumber}.${currentLoop.index}`;
-}
-=======
   
   return targetLoopInfos;
 }
 
-
-
-
->>>>>>> main
-
 // sohyeon's hw
-
 // traceVar 함수를 비동기(async) 함수로 정의합니다.
 // 이 함수는 'code'와 'userQuery'라는 두 개의 인자를 받습니다.
 export async function traceVar({
