@@ -515,7 +515,6 @@ async function main() {
     const parsedIntents = await parseUserIntent(userQuery);
     let resultText = "";
 
-<<<<<<< HEAD
     if (parsedIntent.tool === "loopCheck") {
       const result = await loopCheck({ 
         code, 
@@ -533,56 +532,7 @@ async function main() {
     } else if (parsedIntent.tool === "traceVar") {
       const result = await traceVar({ code, userQuery });
       resultText = result.variableTrace ?? "";
-=======
-    if (parsedIntents.isMultiple) {
-      // 복합 요청인 경우 - 비교 요청인지 확인
-      const isComparison = userQuery.includes("비교") || userQuery.includes("차이");
-      
-      if (isComparison && parsedIntents.intents.every(intent => intent.tool === "loopCheck")) {
-        // 루프 비교 요청인 경우 - compareLoops 기능 제거됨
-        resultText = "루프 비교 기능이 제거되었습니다. 개별 루프 검사를 사용해주세요.";
-      } else {
-        // 일반적인 복수 요청 처리
-        for (let i = 0; i < parsedIntents.intents.length; i++) {
-          const intent = parsedIntents.intents[i];
-          let sectionResult = "";
-          
-          if (intent.tool === "loopCheck") {
-            const result = await loopCheck({ 
-              code, 
-              target: intent.target,
-              details: intent.details 
-            });
-            sectionResult = result.result ?? "";
-          } else if (intent.tool === "afterDebugFromCode") {
-            const { analysis, markedFilePath } = await afterDebugFromCode(code, "main.c");
-            sectionResult = analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "");
-          } else if (intent.tool === "traceVar") {
-            const result = await traceVar({ code, userQuery: userQuery });
-            sectionResult = result.variableTrace ?? "";
-          }
-          
-          resultText += `\n=== 요청 ${i + 1}: ${intent.tool} (${intent.target || 'all'}) ===\n${sectionResult}\n`;
-        }
-      }
-    } else {
-      // 단일 요청 처리
-      const intent = parsedIntents.intents[0];
-      if (intent.tool === "loopCheck") {
-        const result = await loopCheck({ 
-          code, 
-          target: intent.target,
-          details: intent.details 
-        });
-        resultText = result.result ?? "";
-      } else if (intent.tool === "afterDebugFromCode") {
-        const { analysis, markedFilePath } = await afterDebugFromCode(code, "main.c");
-        resultText = analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "");
-      } else if (intent.tool === "traceVar") {
-        const result = await traceVar({ code, userQuery: userQuery });
-        resultText = result.variableTrace ?? "";
-      }
->>>>>>> main
+
     }
 
     const toolNames = parsedIntents.intents.map(intent => intent.tool).join(", ");
