@@ -674,9 +674,6 @@ If you cannot determine specific loops, return []`;
         console.log("AI 응답에서 유효한 배열을 찾을 수 없습니다.");
       }
           } catch (err) {
-        // 에러 시에도 타임아웃 정리
-        if (selectionTimeoutId) clearTimeout(selectionTimeoutId);
-        
         console.log("AI 타겟 선택 실패, 기본 로직 사용:", err);
         // 폴백: 기본 로직 사용 - 모든 루프 선택
         targetLoopInfos = loopInfos;
