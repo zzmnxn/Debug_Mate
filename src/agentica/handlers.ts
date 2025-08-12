@@ -11,8 +11,7 @@ const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
 
 //jm hw - 개선된 버전
 export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[], executionOutput?: string): string {
-  const MAX_ITEMS = 50; // 모든 에러와 경고를 표시하도록 증가
-
+  // MAX_ITEMS 제한을 제거하여 모든 에러와 경고를 표시
   const formatError = (e: CompilerError, i: number) => {
     const location = e.file ? ` at ${e.file}:${e.line || '?'}:${e.column || '?'}` : '';
     const code = e.code ? ` (${e.code})` : '';
@@ -32,8 +31,9 @@ export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[
     return 0;
   });
 
-  const errorText = sortedErrors.slice(0, MAX_ITEMS).map(formatError).join('\n');
-  const warningText = warnings.slice(0, MAX_ITEMS).map(formatWarning).join('\n');
+  // 모든 에러와 경고를 포함 (제한 없음)
+  const errorText = sortedErrors.map(formatError).join('\n');
+  const warningText = warnings.map(formatWarning).join('\n');
 
   return `
 You are a senior compiler engineer and static analysis expert with 15+ years of experience in C/C++ development and debugging.
@@ -52,7 +52,8 @@ ${executionOutput ? `=== Program Execution Output ===
 ${executionOutput}` : ''}
 
 IMPORTANT NOTES:
-- If issues are present: State the most likely cause and suggest a concrete fix (1–2 lines).
+- Analyze ALL errors and warnings listed above, not just the first one.
+- If multiple issues are present: State the most critical cause and suggest concrete fixes for each major issue.
 - Do NOT guess beyond the given log. If something is unclear, say so briefly.
 - Prioritize critical issues that could cause crashes, memory corruption, or undefined behavior.
 
@@ -61,8 +62,8 @@ IMPORTANT: Please respond in Korean, but keep the [Result], [Reason], and [Sugge
 Format your response in the following structure:
 
 [Result] {Short message: "O" or "X"}
-[Reason] {Brief explanation of why - in Korean}
-[Suggestion] {Fix or say "Suggestion 없음" if none needed - in Korean}
+[Reason] {Brief explanation of why - in Korean, covering all major issues found}
+[Suggestion] {Fix or say "Suggestion 없음" if none needed - in Korean, addressing all critical issues}
 Do not add anything outside this format.
 
 === Analysis Rules ===
@@ -74,6 +75,7 @@ Do not add anything outside this format.
 - If the summary or runtime log contains "[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.", do NOT analyze the cause. Just output the hint exactly as the Suggestion.
 - If execution timed out, suggest using loopCheck() function to analyze loop conditions.
 - For memory-related errors, always suggest checking pointer operations and memory allocation/deallocation.
+- IMPORTANT: When multiple errors/warnings exist, analyze each significant issue and provide comprehensive suggestions covering all problems.
 
 
 `.trim();
