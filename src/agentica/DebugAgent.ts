@@ -1,4 +1,4 @@
-import { loopCheck, afterDebugFromCode, traceVar, testBreak, beforeDebug } from "./handlers";
+import { loopCheck, afterDebugFromCode, traceVar } from "./handlers";
 import * as fs from "fs";
 import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -35,34 +35,17 @@ function normalizeText(text: string): string {
     .trim();
 }
 
-// 유연한 키워드 매칭 함수 (오타 및 변형 고려)
+// 유연한 키워드 매칭 함수
 function flexibleMatch(text: string, keywords: string[]): boolean {
   const normalizedText = normalizeText(text);
   return keywords.some(keyword => {
     const normalizedKeyword = normalizeText(keyword);
-    
-    // 1. 완전 일치
-    if (normalizedText === normalizedKeyword) return true;
-    
-    // 2. 부분 일치 (포함 관계)
-    if (normalizedText.includes(normalizedKeyword) || normalizedKeyword.includes(normalizedText)) return true;
-    
-    // 3. 오타 감지 (한 글자 차이)
-    if (Math.abs(normalizedText.length - normalizedKeyword.length) <= 1) {
-      if (levenshteinDistance(normalizedText, normalizedKeyword) <= 1) return true;
-    }
-    
-    // 4. 유사도 체크 (길이가 비슷하고 많은 글자가 일치)
-    if (Math.abs(normalizedText.length - normalizedKeyword.length) <= 2) {
-      if (similarity(normalizedText, normalizedKeyword) > 0.6) return true;
-    }
-    
-    // 5. 자음/모음 패턴 매칭 (한국어 오타)
-    if (isKoreanText(normalizedText) && isKoreanText(normalizedKeyword)) {
-      if (consonantVowelMatch(normalizedText, normalizedKeyword)) return true;
-    }
-    
-    return false;
+    // 완전 일치 또는 부분 일치
+    return normalizedText.includes(normalizedKeyword) || 
+           normalizedKeyword.includes(normalizedText) ||
+           // 간단한 유사도 체크 (길이가 비슷하고 많은 글자가 일치)
+           (Math.abs(normalizedText.length - normalizedKeyword.length) <= 2 && 
+            similarity(normalizedText, normalizedKeyword) > 0.7);
   });
 }
 
@@ -75,129 +58,24 @@ function similarity(str1: string, str2: string): number {
   return intersection.size / union.size;
 }
 
-// 실행 전/리뷰 뉘앙스 키워드 판별 함수
-function wantsPreReview(userQuery: string): boolean {
-  const q = userQuery.toLowerCase();
-  const keywords = [
-    "실행 전",
-    "실행전에",
-    "실행 전에",
-    "실행하기 전에",
-    "실행 전에 한번",
-    "실행 전에 한 번",
-    "실행 전에 점검",
-    "실행 전에 검사",
-    "실행 전에 리뷰",
-    "run before",
-    "before run",
-    "before execution",
-    "pre-run",
-    "prerun",
-  ];
-  return keywords.some((k) => q.includes(k));
-}
 
-// beforeDebug, afterDebug 미완성 코드 판별하는 함수
-function isIncompleteCode(code: string): boolean {
-  // 괄호 균형 (중괄호/소괄호/대괄호)
-  let braces = 0,
-    parens = 0,
-    brackets = 0;
-  for (const ch of code) {
-    if (ch === "{") braces++;
-    else if (ch === "}") braces--;
-    else if (ch === "(") parens++;
-    else if (ch === ")") parens--;
-    else if (ch === "[") brackets++;
-    else if (ch === "]") brackets--;
-  }
-  if (braces !== 0 || parens !== 0 || brackets !== 0) return true;
 
-  // 블록 주석 미종결
-  const opens = (code.match(/\/\*/g) || []).length;
-  const closes = (code.match(/\*\//g) || []).length;
-  if (opens !== closes) return true;
 
-  // 문자열/문자 리터럴 미종결
-  // 큰따옴표/작은따옴표 개수의 짝이 맞지 않는지 대략 체크
-  const dqCount = (code.match(/"/g) || []).length;
-  const sqCount = (code.match(/'/g) || []).length;
-  if (dqCount % 2 !== 0 || sqCount % 2 !== 0) return true;
 
-  // 말미 블록/제어문을 막 연 상태로 끝나는지
-  const tail = code.trimEnd();
-  if (!tail) return false;
-  if (/{\s*$/.test(tail)) return true;
-  if (/^\s*do\s*$/m.test(tail)) return true; // do 다음 while 미존재
-  if (/\b(if|for|while|switch)\s*\([^)]*$/.test(tail)) return true; // 괄호 닫힘 누락
-
-  return false;
-}
-
-// afterDebug 호출을 감싸 조건부로 beforeDebug 실행
-async function runAfterOrBeforeDebug(
+// afterDebugFromCode를 직접 호출하는 함수
+async function runAfterDebug(
   code: string,
-  userQuery: string
-): Promise<{ result: string; executedFunction: string }> {
-  if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
-    if (isIncompleteCode(code)) {
-      console.log("코드가 미완성으로 판단되어 beforeDebug를 실행합니다.");
-    } else {
-      console.log(
-        "사용자가 '실행 전/리뷰' 요청을 명시하여 beforeDebug를 실행합니다."
-      );
-    }
-    const analysis = await beforeDebug({ code }); // handlers.ts의 beforeDebug는 string 반환 가정
-    return { result: analysis, executedFunction: "beforeDebug" };
-  } else {
-    const { analysis, markedFilePath } = await afterDebugFromCode(
-      code,
-      "main.c"
-    );
-    return { 
-      result: analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : ""),
-      executedFunction: "afterDebugFromCode"
-    };
-  }
-}
-
-// Levenshtein 거리 계산 (오타 감지용)
-function levenshteinDistance(str1: string, str2: string): number {
-  const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
-  
-  for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
-  for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
-  
-  for (let j = 1; j <= str2.length; j++) {
-    for (let i = 1; i <= str1.length; i++) {
-      const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-      matrix[j][i] = Math.min(
-        matrix[j][i - 1] + 1,      // 삭제
-        matrix[j - 1][i] + 1,      // 삽입
-        matrix[j - 1][i - 1] + indicator // 치환
-      );
-    }
-  }
-  
-  return matrix[str2.length][str1.length];
-}
-
-// 한국어 텍스트 여부 확인
-function isKoreanText(text: string): boolean {
-  return /[가-힣]/.test(text);
-}
-
-// 자음/모음 패턴 매칭 (한국어 오타 감지)
-function consonantVowelMatch(str1: string, str2: string): boolean {
-  // 간단한 구현: 자음/모음 패턴이 비슷한지 확인
-  const consonants1 = str1.replace(/[가-힣]/g, '').replace(/[aeiou]/gi, '');
-  const consonants2 = str2.replace(/[가-힣]/g, '').replace(/[aeiou]/gi, '');
-  
-  if (consonants1.length > 0 && consonants2.length > 0) {
-    return Math.abs(consonants1.length - consonants2.length) <= 1;
-  }
-  
-  return false;
+  userQuery: string,
+  fileName: string
+): Promise<string> {
+  const { analysis, markedFilePath } = await afterDebugFromCode(
+    code,
+    fileName
+  );
+  return (
+    analysis +
+    (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "")
+  );
 }
 
 // AI 파싱 강화를 위한 헬퍼 함수
@@ -208,7 +86,6 @@ Understand various expressions, typos, abbreviations, and colloquial language, a
 Available tools:
 - loopCheck: Loop analysis and infinite loop detection
 - traceVar: Variable tracking and flow analysis  
-- testBreak: Memory leak and breakpoint testing
 - afterDebugFromCode: Comprehensive code analysis
 
 Target specification:
@@ -223,7 +100,7 @@ Example conversions (Korean input):
 "3번째 와일문 체크" → {"tool": "loopCheck", "target": "third", "details": {"loopType": "while"}}
 "변수 i 어떻게 변하는지 봐줘" → {"tool": "traceVar", "target": "variable", "details": {"name": "i"}}
 "전체적으로 문제없나 확인" → {"tool": "afterDebugFromCode", "target": "all", "details": {}}
-"메모리 새는거 있나?" → {"tool": "testBreak", "target": "all", "details": {}}
+"메모리 새는거 있나?" → {"tool": "afterDebugFromCode", "target": "all", "details": {}}
 
 ${context ? `Additional context: ${context}` : ""}
 
@@ -240,7 +117,7 @@ Output the analysis result in JSON format only:`;
       const parsed = JSON.parse(jsonMatch[0]);
       
       // 결과 검증 및 정규화
-      if (parsed.tool && ['loopCheck', 'traceVar', 'testBreak', 'afterDebugFromCode'].includes(parsed.tool)) {
+      if (parsed.tool && ['loopCheck', 'traceVar', 'afterDebugFromCode'].includes(parsed.tool)) {
         return {
           tool: parsed.tool,
           target: parsed.target || 'all',
@@ -289,7 +166,19 @@ async function robustParseSingleIntent(query: string): Promise<ParsedIntent> {
       { pattern: /처음/i, target: "first" },
       { pattern: /시작/i, target: "first" },
       { pattern: /끝/i, target: "last" },
-      { pattern: /마지막/i, target: "last" }
+      { pattern: /마지막/i, target: "last" },
+      // 위치 기반 표현 추가
+      { pattern: /맨\s*앞/i, target: "first" },
+      { pattern: /맨\s*처음/i, target: "first" },
+      { pattern: /가장\s*앞/i, target: "first" },
+      { pattern: /앞쪽/i, target: "first" },
+      { pattern: /앞에\s*있는/i, target: "first" },
+      { pattern: /맨\s*뒤/i, target: "last" },
+      { pattern: /맨\s*끝/i, target: "last" },
+      { pattern: /가장\s*뒤/i, target: "last" },
+      { pattern: /가장\s*끝/i, target: "last" },
+      { pattern: /뒤쪽/i, target: "last" },
+      { pattern: /뒤에\s*있는/i, target: "last" }
     ];
     
     for (const pattern of hiddenNumberPatterns) {
@@ -306,51 +195,36 @@ async function robustParseSingleIntent(query: string): Promise<ParsedIntent> {
 async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   const normalizedQuery = normalizeText(query);
   
+
+  
   // 더 유연한 패턴 매칭
   const orderPatterns = [
-    { keywords: ['첫', '첫번째', '첫 번째', '1번째', '하나번째', '처음'], target: "first" },
+    { keywords: ['첫', '첫번째', '첫 번째', '1번째', '하나번째', '처음', '맨 앞', '맨앞', '맨 처음', '맨처음', '가장 앞', '가장앞', '앞쪽', '앞쪽에', '앞에', '앞에 있는', '앞에있는'], target: "first" },
     { keywords: ['두', '둘', '두번째', '두 번째', '2번째', '둘째', '이번째'], target: "second" },
     { keywords: ['세', '셋', '세번째', '세 번째', '3번째', '셋째', '삼번째'], target: "third" },
     { keywords: ['네', '넷', '네번째', '네 번째', '4번째', '넷째', '사번째'], target: "fourth" },
     { keywords: ['다섯', '다섯번째', '다섯 번째', '5번째', '오번째'], target: "fifth" },
-    { keywords: ['마지막', '마지막번째', '끝', '마지막거', '라스트'], target: "last" },
+    { keywords: ['마지막', '마지막번째', '끝', '마지막거', '라스트', '맨 뒤', '맨뒤', '맨 끝', '맨끝', '가장 뒤', '가장뒤', '가장 끝', '가장끝', '뒤쪽', '뒤쪽에', '뒤에', '뒤에 있는', '뒤에있는'], target: "last" },
   ];
   
   const loopTypePatterns = [
-    { keywords: ['for문', 'for루프', 'for반복문', '포문', 'for'], loopType: "for" },
+    { keywords: ['for문', 'for루프', 'for반복문', '포문', 'for', 'for검사', 'for분석', 'for체크', 'for확인', 'for점검', 'for리뷰'], loopType: "for" },
     // do-while을 while보다 먼저 매칭 (더 구체적이므로)
-    { keywords: ['do while문', 'dowhile문', 'do-while문', 'do-while', 'do while루프', 'do while반복문', '두와일문', '두와일', 'dowhile', 'do while'], loopType: "do-while" },
-    { keywords: ['while문', 'while루프', 'while반복문', '와일문', 'while'], loopType: "while" },
+    { keywords: ['do while문', 'dowhile문', 'do-while문', 'do-while', 'do while루프', 'do while반복문', '두와일문', '두와일', 'dowhile', 'do while', 'do-while검사', 'do-while분석', 'do-while체크', 'do-while확인', 'do-while점검', 'do-while리뷰', 'dowhile검사', 'dowhile분석', 'dowhile체크', 'dowhile확인', 'dowhile점검', 'dowhile리뷰'], loopType: "do-while" },
+    { keywords: ['while문', 'while루프', 'while반복문', '와일문', 'while', 'while검사', 'while분석', 'while체크', 'while확인', 'while점검', 'while리뷰'], loopType: "while" },
   ];
   
   // 도구 결정 - 더 유연한 키워드 매칭 (우선순위 고려)
   let tool = "afterDebugFromCode"; // 기본값을 afterDebugFromCode로 변경
   
-  // 전체 검사/최종 검사/수정 제안 관련 키워드가 있으면 afterDebugFromCode (우선순위 높음)
+  // 전체 검사/최종 검사/수정 제안/디버깅 관련 키워드가 있으면 afterDebugFromCode (우선순위 높음)
   const overallAnalysisKeywords = [
-    // 전체 및 최종 관련
     '전체', '전체적으로', '전체코드', '전체 코드', '최종', '최종검사', '최종 검사', '수정', '어디를', '어디를 수정', '수정할까',
-    
-    // 컴파일 및 빌드 관련
-    '컴파일', '컴파일해', 'compile', 'build', '빌드', '빌드해', '빌드해줘',
-    
-    // 분석 및 문제점 관련
-    '분석', '전체분석', '전체 분석', '문제', '문제점', '오류', '에러', '버그', 'bug', 'bugs',
-    
-    // 실행 결과 및 디버깅 관련
-    '실행', '실행결과', '실행 결과', '출력', '출력결과', '출력 결과', '디버깅', '디버그', 'debug', 'debugging',
-    
-    // 오타 및 변형 (한국어)
-    '전체코', '전체코드', '최종검', '최종 검', '수정해', '어디', '컴패일', '컴파', '컴팔', '컴파일해줘',
-    '수정할', '수정할까', '문제', '문제점', '오류', '에러', '실행해', '출력해', '분석해', '디버그해',
-    
-    // 오타 및 변형 (영어)
-    'complie', 'complile', 'compil', 'compiler', 'compiling', 'buid', 'bild', 'bld', 'analsis', 'anlysis',
-    'debg', 'debu', 'debuug', 'debbug', 'execut', 'exec', 'outpt', 'outpu', 'reslt', 'rsult',
-    
-    // 줄임말 및 축약형
-    '컴파', '컴팔', '빌드', '분석', '디버그', '실행', '출력', '결과', '문제', '오류', '에러',
-    'compile', 'build', 'analyze', 'debug', 'run', 'output', 'result', 'problem', 'error', 'bug'
+    '컴파일', '컴파일해', 'compile', 'build', '빌드', '분석', '전체분석', '전체 분석', '문제', '문제점', '오류', '에러',
+    '디버깅', '디버그', 'debug', 'debugging', '디버깅해', '디버깅해줘', '디버그해', '디버그해줘',
+    // 일반적인 오타들
+    '전체코', '전체코드', '최종검', '최종 검', '수정해', '어디', '컴패일', '컴파', '컴팔', 'complie', 'complile', 'compil',
+    '수정할', '수정할까', '문제', '문제점', '오류', '에러', '디버깅', '디버그', '디버깅해', '디버그해'
   ];
   const hasOverallAnalysis = flexibleMatch(normalizedQuery, overallAnalysisKeywords);
   
@@ -373,19 +247,43 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   // 변수 추적 관련 키워드가 있으면 traceVar (오타 포함)
   if (flexibleMatch(normalizedQuery, [
     '변수', '추적', '변수추적', '트레이스', 'trace',
+    // 포인터 관련 키워드
+    '포인터', '이중포인터', '이중 포인터', '더블포인터', '더블 포인터', 'pointer', 'double pointer', 'doublepointer',
+    '포인터관계', '포인터 관계', 'pointer relation', 'pointerrelation',
+    '포인터분석', '포인터 분석', 'pointer analysis', 'pointeranalysis',
+    '포인터추적', '포인터 추적', 'pointer trace', 'pointertrace',
+    // 배열 관련 키워드
+    '배열', 'array', 'arr', '배열요소', '배열 요소', 'array element', 'arrayelement',
+    '배열접근', '배열 접근', 'array access', 'arrayaccess', '배열인덱스', '배열 인덱스', 'array index', 'arrayindex',
+    // 구조체 관련 키워드
+    '구조체', 'struct', 'structure', '구조체멤버', '구조체 멤버', 'struct member', 'structmember',
+    '구조체필드', '구조체 필드', 'struct field', 'structfield',
+    // 공용체 관련 키워드
+    '공용체', 'union', '공용체멤버', '공용체 멤버', 'union member', 'unionmember',
+    '공용체필드', '공용체 필드', 'union field', 'unionfield',
+    '공용체메모리', '공용체 메모리', 'union memory', 'unionmemory',
+    // 상수 관련 키워드
+    'const', '상수', 'constant', '상수값', '상수 값', 'constant value', 'constantvalue',
+    // 값 관련 키워드
+    '값', 'value', 'val', '값변화', '값 변화', 'value change', 'valuechange',
+    '초기값', '초기 값', 'initial value', 'initialvalue', '최종값', '최종 값', 'final value', 'finalvalue',
+    // 데이터 관련 키워드
+    '데이터', 'data', '데이터분석', '데이터 분석', 'data analysis', 'dataanalysis',
+    '데이터흐름', '데이터 흐름', 'data flow', 'dataflow', '데이터추적', '데이터 추적', 'data trace', 'datatrace',
+    // 주소 관련 키워드
+    '주소', 'address', 'addr', '주소값', '주소 값', 'address value', 'addressvalue',
+    '메모리주소', '메모리 주소', 'memory address', 'memoryaddress', '포인터주소', '포인터 주소', 'pointer address', 'pointeraddress',
+    // 변수 타입 관련 키워드
+    'int', 'integer', '정수', 'float', '실수', 'double', '문자', 'char', '문자열', 'string',
     // 일반적인 오타들
-    '변', '변주', '츄적', '추적해', 'trase', 'trce'
+    '변', '변주', '츄적', '추적해', 'trase', 'trce',
+    '포인', '포인터', '포인트', 'pointer', 'point', 'poin', 'pointe',
+    '배', '배열', 'array', 'arr', '구조', '구조체', 'struct', '구조체', '구조체',
+    '공용', '공용체', 'union', 'uni', 'unio',
+    '상', '상수', 'const', 'constant', '값', 'value', 'val',
+    '데', '데이터', 'data', 'dat', '주', '주소', 'address', 'addr', 'adr'
   ])) {
     tool = "traceVar";
-  }
-  
-  // 메모리 관련 키워드가 있으면 testBreak (오타 포함)
-  if (flexibleMatch(normalizedQuery, [
-    '메모리', '누수', '메모리누수', 'memory', 'leak',
-    // 일반적인 오타들
-    '메모', '메모이', '누', '누스', 'memori', 'memorry', 'lek'
-  ])) {
-    tool = "testBreak";
   }
   
   // 컴파일 관련 키워드 체크 (afterDebugFromCode는 기본값이지만 명시적으로 확인)
@@ -393,7 +291,10 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   const compileKeywords = [
     '컴파일', '컴파일해', 'compile', 'build', '빌드',
     // 일반적인 오타들
-    '컴패일', '컴파', '컴팔', '컴파일해줘', 'complie', 'complile', 'compil', '빌드해'
+    '컴패일', '컴파', '컴팔', '컴파일해줘', 'complie', 'complile', 'compil', '빌드해',
+    '메모리', '누수', '메모리누수', 'memory', 'leak',
+    // 일반적인 오타들
+    '메모', '메모이', '누', '누스', 'memori', 'memorry', 'lek'
   ];
   if (flexibleMatch(normalizedQuery, compileKeywords)) {
     // 이미 기본값이 afterDebugFromCode이므로 명시적으로 설정할 필요는 없지만 
@@ -410,21 +311,27 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
 This query might contain typos. Please identify the most likely intent:
 1. "loopCheck" - if related to loops, for/while statements, loop analysis
 2. "traceVar" - if related to variable tracking, variable tracing  
-3. "testBreak" - if related to memory leaks, memory issues
-4. "afterDebugFromCode" - if related to compilation, overall analysis, debugging
+3. "afterDebugFromCode" - if related to compilation, overall analysis, debugging, general inspection
+
+IMPORTANT RULES:
+- If the user says "검사해줘", "검사해", "검사", "분석해줘", "분석해", "분석" without specifying loops or variables, use "afterDebugFromCode"
+- If the user mentions specific loops (for, while, do-while), use "loopCheck"
+- If the user mentions variable tracking, tracing, pointers, arrays, structs, constants, values, or data analysis, use "traceVar"
+- If the user mentions memory leaks or memory issues, use "afterDebugFromCode"
+- For general code inspection, compilation, or debugging, use "afterDebugFromCode"
 
 Consider common typos in Korean/English:
 - 컴파일 variations: 컴퓨일, 컴팔일, 컴파, etc.
 - 반복문 variations: 반보문, 반복믄, 반복, etc.
 - 변수 variations: 변, 변주, 변스, etc.
 
-Respond with only one word: loopCheck, traceVar, testBreak, or afterDebugFromCode`;
+Respond with only one word: loopCheck, traceVar, or afterDebugFromCode`;
 
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const result = await model.generateContent(intentPrompt);
       const aiTool = result.response.text().trim();
       
-      if (['loopCheck', 'traceVar', 'testBreak', 'afterDebugFromCode'].includes(aiTool)) {
+      if (['loopCheck', 'traceVar', 'afterDebugFromCode'].includes(aiTool)) {
         tool = aiTool;
       }
     } catch (err) {
@@ -515,6 +422,8 @@ Respond with only one word: loopCheck, traceVar, testBreak, or afterDebugFromCod
     }
   }
   
+
+  
   // 루프 타입 패턴 매칭
   for (const pattern of loopTypePatterns) {
     if (flexibleMatch(normalizedQuery, pattern.keywords)) {
@@ -526,6 +435,22 @@ Respond with only one word: loopCheck, traceVar, testBreak, or afterDebugFromCod
       }
       details.loopType = pattern.loopType;
       break;
+    }
+  }
+  
+  // 검사/분석 관련 키워드가 있으면 loopCheck로 설정 (우선순위 높음)
+  const inspectionKeywords = [
+    '검사', '검사해', '검사해줘', '분석', '분석해', '분석해줘', '체크', '체크해', '체크해줘',
+    '확인', '확인해', '확인해줘', '점검', '점검해', '점검해줘', '리뷰', '리뷰해', '리뷰해줘'
+  ];
+  
+  if (flexibleMatch(normalizedQuery, inspectionKeywords) && tool === "afterDebugFromCode") {
+    // 검사/분석 키워드가 있고 아직 도구가 결정되지 않았다면 loopCheck로 설정
+    if (flexibleMatch(normalizedQuery, [
+      '반복문', '루프', 'loop', 'for문', 'while문', 'do-while', '포문', '와일문', 'dowhile', '두와일',
+      '반복', '반복믄', '루프문', '룹', '포', '와일', '두와일문', 'for', 'while', 'do', 'dowhile', 'do-while'
+    ])) {
+      tool = "loopCheck";
     }
   }
   
@@ -634,11 +559,11 @@ Output JSON only:`;
 
 async function main() {
   try {
-    const [,, filePath, ...queryParts] = process.argv;
+    const [, , filePath, ...queryParts] = process.argv;
     const userQuery = queryParts.join(" ").trim();
 
     if (!filePath || !userQuery) {
-      console.error("Usage: debug <filePath> \"<natural language query>\"");
+      console.error('Usage: debug <filePath> "<natural language query>"');
       process.exit(1);
     }
 
@@ -654,6 +579,9 @@ async function main() {
       console.error(`[Error] 파일을 찾을 수 없습니다: ${absolutePath}`);
       process.exit(1);
     }
+    
+    // 파일명 추출 (확장자 포함)
+    const fileName = path.basename(filePath);
 
     // 파일 읽기
     let code: string;
@@ -668,47 +596,83 @@ async function main() {
       process.exit(1);
     }
 
-  //add or modify your homework function here !! @@@@@@@@@@@@@@@@@@
-  try {
-    const parsedIntents = await parseUserIntent(userQuery);
-    let resultText = "";
+    //add or modify your homework function here !! @@@@@@@@@@@@@@@@@@
+    try {
+      const parsedIntents = await parseUserIntent(userQuery);
+      let resultText = "";
+      let actualTools: string[] = []; // 실제 실행된 도구들을 추적
 
-    if (parsedIntents.intents[0].tool === "loopCheck") {
-      const result = await loopCheck({ 
-        code, 
-        target: parsedIntents.intents[0].target,
-        details: parsedIntents.intents[0].details 
-      });
-      resultText = result.result ?? "";
-    } else if (parsedIntents.intents[0].tool === "afterDebugFromCode") {
-      // runAfterOrBeforeDebug를 사용하여 코드 상태에 따라 beforeDebug 또는 afterDebugFromCode 실행
-      const debugResult = await runAfterOrBeforeDebug(code, userQuery);
-      resultText = debugResult.result;
-      // 실행된 함수 정보를 전역 변수로 저장하여 나중에 사용
-      (global as any).lastExecutedFunction = debugResult.executedFunction;
-    } else if (parsedIntents.intents[0].tool === "testBreak") {
-      const result = await testBreak({ codeSnippet: code });
-      resultText = JSON.stringify(result, null, 2);
-    } else if (parsedIntents.intents[0].tool === "traceVar") {
-      const result = await traceVar({ code, userQuery });
-      resultText = result.variableTrace ?? "";
+      if (parsedIntents.isMultiple) {
+        // 복합 요청인 경우 - 비교 요청인지 확인
+        const isComparison =
+          userQuery.includes("비교") || userQuery.includes("차이");
 
-    }
+        if (
+          isComparison &&
+          parsedIntents.intents.every((intent) => intent.tool === "loopCheck")
+        ) {
+          // 루프 비교 요청인 경우
+          resultText = "루프 비교 기능이 제거되었습니다. 개별 루프 검사를 사용해주세요.";
+          actualTools.push("loopCheck");
+        } else {
+          // 일반적인 복수 요청 처리
+          for (let i = 0; i < parsedIntents.intents.length; i++) {
+            const intent = parsedIntents.intents[i];
+            let sectionResult = "";
 
-    // 실제 실행된 함수 정보를 표시
-    let actualExecutedFunction = parsedIntents.intents[0].tool;
-    if (parsedIntents.intents[0].tool === "afterDebugFromCode") {
-      // runAfterOrBeforeDebug에서 실제로 실행된 함수 정보를 가져옴
-      if ((global as any).lastExecutedFunction) {
-        actualExecutedFunction = (global as any).lastExecutedFunction;
+            if (intent.tool === "loopCheck") {
+              const result = await loopCheck({
+                code,
+                target: intent.target,
+                details: intent.details,
+              });
+              sectionResult = result.result ?? "";
+              actualTools.push("loopCheck");
+            } else if (intent.tool === "afterDebugFromCode") {
+              // afterDebugFromCode 직접 호출
+              resultText = await runAfterDebug(code, userQuery, fileName);
+              actualTools.push("afterDebugFromCode");
+            } else if (intent.tool === "traceVar") {
+              const result = await traceVar({ code, userQuery: userQuery });
+              sectionResult = result.variableTrace ?? "";
+              actualTools.push("traceVar");
+            }
+
+            resultText += `\n=== 요청 ${i + 1}: ${intent.tool} (${intent.target || "all"}) ===\n${sectionResult}\n`;
+          }
+        }
+      } else {
+        // 단일 요청 처리
+        const intent = parsedIntents.intents[0];
+        if (intent.tool === "loopCheck") {
+          const result = await loopCheck({
+            code,
+            target: intent.target,
+            details: intent.details,
+          });
+          resultText = result.result ?? "";
+          actualTools.push("loopCheck");
+        } else if (intent.tool === "afterDebugFromCode") {
+          // afterDebugFromCode 직접 호출
+          resultText = await runAfterDebug(code, userQuery, fileName);
+          actualTools.push("afterDebugFromCode");
+        } else if (intent.tool === "traceVar") {
+          const result = await traceVar({ code, userQuery: userQuery });
+          resultText = result.variableTrace ?? "";
+          actualTools.push("traceVar");
+        }
       }
+
+      const toolNames = parsedIntents.intents
+        .map((intent) => intent.tool)
+        .join(", ");
+      const actualToolNames = actualTools.join(", ");
+      // console.log("\n선택된 함수(테스트용) : ", toolNames);
+      // console.log("실제 실행된 함수(테스트용) : ", actualToolNames);
+      console.log(resultText);
+    } catch (err: any) {
+      console.error("[Error] 처리 중 오류 발생: ", err.message || err);
     }
-    
-    console.log("\n선택된 함수(테스트용) : ", actualExecutedFunction);
-    console.log(resultText);
-  } catch (err: any) {
-    console.error("[Error] 처리 중 오류 발생: ", err.message || err);
-  }
   } catch (err: any) {
     console.error("[Error] 초기화 중 오류 발생: ", err.message || err);
   }
