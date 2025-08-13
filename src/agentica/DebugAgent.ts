@@ -331,6 +331,10 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
     // 구조체 관련 키워드
     '구조체', 'struct', 'structure', '구조체멤버', '구조체 멤버', 'struct member', 'structmember',
     '구조체필드', '구조체 필드', 'struct field', 'structfield',
+    // 공용체 관련 키워드
+    '공용체', 'union', '공용체멤버', '공용체 멤버', 'union member', 'unionmember',
+    '공용체필드', '공용체 필드', 'union field', 'unionfield',
+    '공용체메모리', '공용체 메모리', 'union memory', 'unionmemory',
     // 상수 관련 키워드
     'const', '상수', 'constant', '상수값', '상수 값', 'constant value', 'constantvalue',
     // 값 관련 키워드
@@ -348,6 +352,7 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
     '변', '변주', '츄적', '추적해', 'trase', 'trce',
     '포인', '포인터', '포인트', 'pointer', 'point', 'poin', 'pointe',
     '배', '배열', 'array', 'arr', '구조', '구조체', 'struct', '구조체', '구조체',
+    '공용', '공용체', 'union', 'uni', 'unio',
     '상', '상수', 'const', 'constant', '값', 'value', 'val',
     '데', '데이터', 'data', 'dat', '주', '주소', 'address', 'addr', 'adr'
   ])) {
