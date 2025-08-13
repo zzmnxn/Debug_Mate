@@ -177,6 +177,7 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
   let compileLog = "";
   let markedFilePath = "";
   let executionOutput = ""; // 실행 결과 저장용
+  let compileSuccess = false; // 컴파일 성공 여부 추적
 
   try {
     // 1. 입력 검증
@@ -214,9 +215,10 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
       compileLog += compileResult.stderr;
     }
 
-    // 6. 컴파일 성공 시 실행
-    if (compileResult.status === 0) {
-      compileLog += "\n\n=== Runtime Output ===\n";
+         // 6. 컴파일 성공 시 실행
+     if (compileResult.status === 0) {
+       compileSuccess = true; // 컴파일 성공 표시
+       compileLog += "\n\n=== Runtime Output ===\n";
       
       try {
         const runResult = spawnSync(outputFile, [], { 
@@ -297,9 +299,22 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
     // 13. 에러 마킹 파일 생성
     markedFilePath = markErrors(originalFileName, code, parsed.errors, parsed.warnings, aiAnalysisForMark);
     
-    // 14. 실행 결과가 있으면 포함하여 반환
+         // 14. 프로그램 실행 결과와 AI 분석 결과를 함께 반환
+     // 에러 메시지가 포함된 경우 실행 결과 섹션을 숨김
+     const hasErrorOutput = executionOutput.includes('error') || 
+                           executionOutput.includes('Error') || 
+                           executionOutput.includes('ERROR') ||
+                           executionOutput.includes('AddressSanitizer') ||
+                           executionOutput.includes('SEGV') ||
+                           executionOutput.includes('ABORTING') ||
+                           executionOutput.includes('runtime error');
+     
+     const executionResultSection = compileSuccess && executionOutput.trim() && !hasErrorOutput ? 
+       `[Compile Result]\n${executionOutput.trim()}\n` : '';
+     const fullAnalysis = `${executionResultSection}=== AI Analysis ===\n${analysis}`;
+    
     return { 
-      analysis, 
+      analysis: fullAnalysis, 
       markedFilePath, 
       executionOutput: executionOutput.trim() || undefined 
     };
@@ -307,10 +322,23 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
   } catch (analysisError: any) {
     console.error(' 분석 중 오류:', analysisError);
     
-    const fallbackAnalysis = `[Result] X\n[Reason] 분석 과정에서 오류가 발생했습니다: ${analysisError.message}\n[Suggestion] 코드를 다시 확인하고 시도해주세요.`;
+         const fallbackAnalysis = `[Result] X\n[Reason] 분석 과정에서 오류가 발생했습니다: ${analysisError.message}\n[Suggestion] 코드를 다시 확인하고 시도해주세요.`;
+     
+     // 에러 메시지가 포함된 경우 실행 결과 섹션을 숨김
+     const hasErrorOutput = executionOutput.includes('error') || 
+                           executionOutput.includes('Error') || 
+                           executionOutput.includes('ERROR') ||
+                           executionOutput.includes('AddressSanitizer') ||
+                           executionOutput.includes('SEGV') ||
+                           executionOutput.includes('ABORTING') ||
+                           executionOutput.includes('runtime error');
+     
+     const executionResultSection = compileSuccess && executionOutput.trim() && !hasErrorOutput ? 
+       `[Compile Result]\n${executionOutput.trim()}\n` : '';
+     const fullAnalysis = `${executionResultSection}=== AI Analysis ===\n${fallbackAnalysis}`;
     
     return { 
-      analysis: fallbackAnalysis, 
+      analysis: fullAnalysis, 
       markedFilePath: markErrors(originalFileName, code, [], [], fallbackAnalysis),
       executionOutput: executionOutput.trim() || undefined
     };
