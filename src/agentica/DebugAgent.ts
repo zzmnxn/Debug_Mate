@@ -321,8 +321,14 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   // 변수 추적 관련 키워드가 있으면 traceVar (오타 포함)
   if (flexibleMatch(normalizedQuery, [
     '변수', '추적', '변수추적', '트레이스', 'trace',
+    // 포인터 관련 키워드 추가
+    '포인터', '이중포인터', '이중 포인터', '더블포인터', '더블 포인터', 'pointer', 'double pointer', 'doublepointer',
+    '포인터관계', '포인터 관계', 'pointer relation', 'pointerrelation',
+    '포인터분석', '포인터 분석', 'pointer analysis', 'pointeranalysis',
+    '포인터추적', '포인터 추적', 'pointer trace', 'pointertrace',
     // 일반적인 오타들
-    '변', '변주', '츄적', '추적해', 'trase', 'trce'
+    '변', '변주', '츄적', '추적해', 'trase', 'trce',
+    '포인', '포인터', '포인트', '포인터', 'pointer', 'point', 'poin', 'pointe'
   ])) {
     tool = "traceVar";
   }
@@ -364,7 +370,7 @@ This query might contain typos. Please identify the most likely intent:
 IMPORTANT RULES:
 - If the user says "검사해줘", "검사해", "검사", "분석해줘", "분석해", "분석" without specifying loops or variables, use "afterDebugFromCode"
 - If the user mentions specific loops (for, while, do-while), use "loopCheck"
-- If the user mentions variable tracking or tracing, use "traceVar"
+- If the user mentions variable tracking, tracing, pointers, or pointer analysis, use "traceVar"
 - If the user mentions memory leaks or memory issues, use "testBreak"
 - For general code inspection, compilation, or debugging, use "afterDebugFromCode"
 
