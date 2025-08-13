@@ -915,38 +915,6 @@ export async function traceVar({
   return { variableTrace: result.response.text() };
 }
 
-// jimin's hw
-export async function testBreak({ codeSnippet }: { codeSnippet: string }) {
-  const prompt = buildPrompt(codeSnippet);
-
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-
-  const responseText = result.response.text().trim();
-
-  try {
-    // JSON 추출 시도
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return parsed;
-    } else {
-      // JSON이 없으면 텍스트 형태로 반환
-      return {
-        isBuggy: responseText.includes("buggy") || responseText.includes("error"),
-        reason: responseText,
-        suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요."
-      };
-    }
-  } catch (err) {
-    // 파싱 실패 시 텍스트 형태로 반환
-    return {
-      isBuggy: responseText.includes("buggy") || responseText.includes("error"),
-      reason: responseText,
-      suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요."
-    };
-  }
-}
 
 // moonjeong's hw1   (code: string): Promise<string> {
 export async function beforeDebug({ code }: { code: string }) {

@@ -152,7 +152,6 @@ Understand various expressions, typos, abbreviations, and colloquial language, a
 Available tools:
 - loopCheck: Loop analysis and infinite loop detection
 - traceVar: Variable tracking and flow analysis  
-- testBreak: Memory leak and breakpoint testing
 - afterDebugFromCode: Comprehensive code analysis
 
 Target specification:
@@ -167,7 +166,7 @@ Example conversions (Korean input):
 "3번째 와일문 체크" → {"tool": "loopCheck", "target": "third", "details": {"loopType": "while"}}
 "변수 i 어떻게 변하는지 봐줘" → {"tool": "traceVar", "target": "variable", "details": {"name": "i"}}
 "전체적으로 문제없나 확인" → {"tool": "afterDebugFromCode", "target": "all", "details": {}}
-"메모리 새는거 있나?" → {"tool": "testBreak", "target": "all", "details": {}}
+"메모리 새는거 있나?" → {"tool": "afterDebugFromCode", "target": "all", "details": {}}
 
 ${context ? `Additional context: ${context}` : ""}
 
@@ -184,7 +183,7 @@ Output the analysis result in JSON format only:`;
       const parsed = JSON.parse(jsonMatch[0]);
       
       // 결과 검증 및 정규화
-      if (parsed.tool && ['loopCheck', 'traceVar', 'testBreak', 'afterDebugFromCode'].includes(parsed.tool)) {
+      if (parsed.tool && ['loopCheck', 'traceVar', 'afterDebugFromCode'].includes(parsed.tool)) {
         return {
           tool: parsed.tool,
           target: parsed.target || 'all',
@@ -333,21 +332,15 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
     tool = "traceVar";
   }
   
-  // 메모리 관련 키워드가 있으면 testBreak (오타 포함)
-  if (flexibleMatch(normalizedQuery, [
-    '메모리', '누수', '메모리누수', 'memory', 'leak',
-    // 일반적인 오타들
-    '메모', '메모이', '누', '누스', 'memori', 'memorry', 'lek'
-  ])) {
-    tool = "testBreak";
-  }
-  
   // 컴파일 관련 키워드 체크 (afterDebugFromCode는 기본값이지만 명시적으로 확인)
   // 오타가 있어도 컴파일 의도를 명확히 파악
   const compileKeywords = [
     '컴파일', '컴파일해', 'compile', 'build', '빌드',
     // 일반적인 오타들
-    '컴패일', '컴파', '컴팔', '컴파일해줘', 'complie', 'complile', 'compil', '빌드해'
+    '컴패일', '컴파', '컴팔', '컴파일해줘', 'complie', 'complile', 'compil', '빌드해',
+    '메모리', '누수', '메모리누수', 'memory', 'leak',
+    // 일반적인 오타들
+    '메모', '메모이', '누', '누스', 'memori', 'memorry', 'lek'
   ];
   if (flexibleMatch(normalizedQuery, compileKeywords)) {
     // 이미 기본값이 afterDebugFromCode이므로 명시적으로 설정할 필요는 없지만 
@@ -364,14 +357,13 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
 This query might contain typos. Please identify the most likely intent:
 1. "loopCheck" - if related to loops, for/while statements, loop analysis
 2. "traceVar" - if related to variable tracking, variable tracing  
-3. "testBreak" - if related to memory leaks, memory issues
-4. "afterDebugFromCode" - if related to compilation, overall analysis, debugging, general inspection
+3. "afterDebugFromCode" - if related to compilation, overall analysis, debugging, general inspection
 
 IMPORTANT RULES:
 - If the user says "검사해줘", "검사해", "검사", "분석해줘", "분석해", "분석" without specifying loops or variables, use "afterDebugFromCode"
 - If the user mentions specific loops (for, while, do-while), use "loopCheck"
 - If the user mentions variable tracking, tracing, pointers, or pointer analysis, use "traceVar"
-- If the user mentions memory leaks or memory issues, use "testBreak"
+- If the user mentions memory leaks or memory issues, use "afterDebugFromCode"
 - For general code inspection, compilation, or debugging, use "afterDebugFromCode"
 
 Consider common typos in Korean/English:
@@ -379,13 +371,13 @@ Consider common typos in Korean/English:
 - 반복문 variations: 반보문, 반복믄, 반복, etc.
 - 변수 variations: 변, 변주, 변스, etc.
 
-Respond with only one word: loopCheck, traceVar, testBreak, or afterDebugFromCode`;
+Respond with only one word: loopCheck, traceVar, or afterDebugFromCode`;
 
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const result = await model.generateContent(intentPrompt);
       const aiTool = result.response.text().trim();
       
-      if (['loopCheck', 'traceVar', 'testBreak', 'afterDebugFromCode'].includes(aiTool)) {
+      if (['loopCheck', 'traceVar', 'afterDebugFromCode'].includes(aiTool)) {
         tool = aiTool;
       }
     } catch (err) {
