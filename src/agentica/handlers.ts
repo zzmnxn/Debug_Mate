@@ -546,11 +546,19 @@ ${loopInfos.map((loopInfo, index) => {
 User requested target: "${target}"
 User details: ${JSON.stringify(details)}
 
+**SPECIAL HANDLING FOR POSITION TARGETS:**
+- If target is "first": Return [1] (first loop)
+- If target is "second": Return [2] (second loop)  
+- If target is "third": Return [3] (third loop)
+- If target is "fourth": Return [4] (fourth loop)
+- If target is "fifth": Return [5] (fifth loop)
+- If target is "last": Return [${loopInfos.length}] (last loop)
+
 Please identify which specific loops the user wants to analyze. Consider various Korean expressions like:
-- 첫번째, 첫번쨰, 하나번째, 처음, 1번째, 1st (specific loop by position)
-- 두번째, 둘째, 2번째, 2nd (specific loop by position)
-- 세번째, 셋째, 3번째, 3rd (specific loop by position)
-- 마지막, 끝, last (last loop)
+- 첫번째, 첫번쨰, 하나번째, 처음, 1번째, 1st, 맨 앞, 맨앞, 맨 처음, 맨처음, 가장 앞, 가장앞, 앞쪽, 앞쪽에, 앞에, 앞에 있는, 앞에있는 (first loop)
+- 두번째, 둘째, 2번째, 2nd (second loop)
+- 세번째, 셋째, 3번째, 3rd (third loop)
+- 마지막, 끝, last, 맨 뒤, 맨뒤, 맨 끝, 맨끝, 가장 뒤, 가장뒤, 가장 끝, 가장끝, 뒤쪽, 뒤쪽에, 뒤에, 뒤에 있는, 뒤에있는 (last loop)
 - for문만, for문, for루프 (ALL for loops)
 - while문만, while문, while루프 (ALL while loops)  
 - do-while문만, do-while문, dowhile문, 두와일문, 두와일, do while문 (ALL do-while loops)
@@ -561,7 +569,7 @@ IMPORTANT:
 - If the user wants "for문만" or similar, return ALL for loop indices
 - If the user wants "while문만" or similar, return ALL while loop indices
 - If the user wants "do-while문만", "dowhile문", "두와일문" or similar, return ALL do-while loop indices
-- If the user wants a specific position (첫번째, 2번째), return that specific loop
+- If the user wants a specific position (첫번째, 2번째, 맨 앞, 맨 뒤), return that specific loop
 - If the user wants loops in a specific function (함수명함수), return loops in that function by analyzing the full code context
 - If the user wants loops at a specific line (N번째 줄), return loops at or near that line by checking line numbers
 
@@ -634,8 +642,23 @@ If you cannot determine specific loops, return []`;
         if (selectionTimeoutId) clearTimeout(selectionTimeoutId);
         
         console.log("AI 타겟 선택 실패, 기본 로직 사용:", err);
-        // 폴백: 기본 로직 사용 - 모든 루프 선택
-        targetLoopInfos = loopInfos;
+        // 폴백: 기본 로직 사용 - target에 따른 직접 선택
+        if (target === "first" && loopInfos.length > 0) {
+          targetLoopInfos = [loopInfos[0]];
+        } else if (target === "second" && loopInfos.length > 1) {
+          targetLoopInfos = [loopInfos[1]];
+        } else if (target === "third" && loopInfos.length > 2) {
+          targetLoopInfos = [loopInfos[2]];
+        } else if (target === "fourth" && loopInfos.length > 3) {
+          targetLoopInfos = [loopInfos[3]];
+        } else if (target === "fifth" && loopInfos.length > 4) {
+          targetLoopInfos = [loopInfos[4]];
+        } else if (target === "last" && loopInfos.length > 0) {
+          targetLoopInfos = [loopInfos[loopInfos.length - 1]];
+        } else {
+          // 기본값: 모든 루프 선택
+          targetLoopInfos = loopInfos;
+        }
       }
   }
   
@@ -691,7 +714,10 @@ If you cannot determine specific loops, return []`;
     };
   });
   
-  const batchPrompt = `Analyze these loops for termination issues. 
+  const batchPrompt = `Analyze ONLY the provided loops for termination issues. 
+
+IMPORTANT: You are analyzing ${targetLoopInfos.length} loop(s) only. Do NOT analyze any other loops.
+
 For problems, format your response with proper line breaks and tabs for readability.
 For no issues, use "문제가 없습니다." in Korean. 
 Respond in Korean only.
@@ -704,9 +730,16 @@ Expected output format:
 
 Do NOT include any instruction text in your response. Only provide the analysis results.
 
-${loopAnalysisData.map(item => `=== Loop ${item.number} ===\n${item.code}`).join('\n\n')}
+CRITICAL REQUIREMENTS:
+1. Analyze loops in EXACTLY the order they are provided below
+2. Each loop should appear ONLY ONCE in your response
+3. Use the exact loop numbers as shown below
+4. Do NOT skip any loops or analyze loops not in the list
 
-Start each analysis with "- 반복문 X" in Korean. Only analyze provided loops.`;
+Loops to analyze (in order):
+${loopAnalysisData.map((item, index) => `${index + 1}. Loop ${item.number}:\n${item.code}`).join('\n\n')}
+
+Analyze each loop in the exact order shown above. Do NOT mention any other loops.`;
 
 
 //모델 파라미터 추가 완료  

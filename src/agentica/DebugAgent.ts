@@ -233,7 +233,19 @@ async function robustParseSingleIntent(query: string): Promise<ParsedIntent> {
       { pattern: /처음/i, target: "first" },
       { pattern: /시작/i, target: "first" },
       { pattern: /끝/i, target: "last" },
-      { pattern: /마지막/i, target: "last" }
+      { pattern: /마지막/i, target: "last" },
+      // 위치 기반 표현 추가
+      { pattern: /맨\s*앞/i, target: "first" },
+      { pattern: /맨\s*처음/i, target: "first" },
+      { pattern: /가장\s*앞/i, target: "first" },
+      { pattern: /앞쪽/i, target: "first" },
+      { pattern: /앞에\s*있는/i, target: "first" },
+      { pattern: /맨\s*뒤/i, target: "last" },
+      { pattern: /맨\s*끝/i, target: "last" },
+      { pattern: /가장\s*뒤/i, target: "last" },
+      { pattern: /가장\s*끝/i, target: "last" },
+      { pattern: /뒤쪽/i, target: "last" },
+      { pattern: /뒤에\s*있는/i, target: "last" }
     ];
     
     for (const pattern of hiddenNumberPatterns) {
@@ -261,19 +273,19 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   
   // 더 유연한 패턴 매칭
   const orderPatterns = [
-    { keywords: ['첫', '첫번째', '첫 번째', '1번째', '하나번째', '처음'], target: "first" },
+    { keywords: ['첫', '첫번째', '첫 번째', '1번째', '하나번째', '처음', '맨 앞', '맨앞', '맨 처음', '맨처음', '가장 앞', '가장앞', '앞쪽', '앞쪽에', '앞에', '앞에 있는', '앞에있는'], target: "first" },
     { keywords: ['두', '둘', '두번째', '두 번째', '2번째', '둘째', '이번째'], target: "second" },
     { keywords: ['세', '셋', '세번째', '세 번째', '3번째', '셋째', '삼번째'], target: "third" },
     { keywords: ['네', '넷', '네번째', '네 번째', '4번째', '넷째', '사번째'], target: "fourth" },
     { keywords: ['다섯', '다섯번째', '다섯 번째', '5번째', '오번째'], target: "fifth" },
-    { keywords: ['마지막', '마지막번째', '끝', '마지막거', '라스트'], target: "last" },
+    { keywords: ['마지막', '마지막번째', '끝', '마지막거', '라스트', '맨 뒤', '맨뒤', '맨 끝', '맨끝', '가장 뒤', '가장뒤', '가장 끝', '가장끝', '뒤쪽', '뒤쪽에', '뒤에', '뒤에 있는', '뒤에있는'], target: "last" },
   ];
   
   const loopTypePatterns = [
-    { keywords: ['for문', 'for루프', 'for반복문', '포문', 'for'], loopType: "for" },
+    { keywords: ['for문', 'for루프', 'for반복문', '포문', 'for', 'for검사', 'for분석', 'for체크', 'for확인', 'for점검', 'for리뷰'], loopType: "for" },
     // do-while을 while보다 먼저 매칭 (더 구체적이므로)
-    { keywords: ['do while문', 'dowhile문', 'do-while문', 'do-while', 'do while루프', 'do while반복문', '두와일문', '두와일', 'dowhile', 'do while'], loopType: "do-while" },
-    { keywords: ['while문', 'while루프', 'while반복문', '와일문', 'while'], loopType: "while" },
+    { keywords: ['do while문', 'dowhile문', 'do-while문', 'do-while', 'do while루프', 'do while반복문', '두와일문', '두와일', 'dowhile', 'do while', 'do-while검사', 'do-while분석', 'do-while체크', 'do-while확인', 'do-while점검', 'do-while리뷰', 'dowhile검사', 'dowhile분석', 'dowhile체크', 'dowhile확인', 'dowhile점검', 'dowhile리뷰'], loopType: "do-while" },
+    { keywords: ['while문', 'while루프', 'while반복문', '와일문', 'while', 'while검사', 'while분석', 'while체크', 'while확인', 'while점검', 'while리뷰'], loopType: "while" },
   ];
   
   // 도구 결정 - 더 유연한 키워드 매칭 (우선순위 고려)
@@ -451,6 +463,8 @@ Respond with only one word: loopCheck, traceVar, testBreak, or afterDebugFromCod
     }
   }
   
+
+  
   // 루프 타입 패턴 매칭
   for (const pattern of loopTypePatterns) {
     if (flexibleMatch(normalizedQuery, pattern.keywords)) {
@@ -462,6 +476,22 @@ Respond with only one word: loopCheck, traceVar, testBreak, or afterDebugFromCod
       }
       details.loopType = pattern.loopType;
       break;
+    }
+  }
+  
+  // 검사/분석 관련 키워드가 있으면 loopCheck로 설정 (우선순위 높음)
+  const inspectionKeywords = [
+    '검사', '검사해', '검사해줘', '분석', '분석해', '분석해줘', '체크', '체크해', '체크해줘',
+    '확인', '확인해', '확인해줘', '점검', '점검해', '점검해줘', '리뷰', '리뷰해', '리뷰해줘'
+  ];
+  
+  if (flexibleMatch(normalizedQuery, inspectionKeywords) && tool === "afterDebugFromCode") {
+    // 검사/분석 키워드가 있고 아직 도구가 결정되지 않았다면 loopCheck로 설정
+    if (flexibleMatch(normalizedQuery, [
+      '반복문', '루프', 'loop', 'for문', 'while문', 'do-while', '포문', '와일문', 'dowhile', '두와일',
+      '반복', '반복믄', '루프문', '룹', '포', '와일', '두와일문', 'for', 'while', 'do', 'dowhile', 'do-while'
+    ])) {
+      tool = "loopCheck";
     }
   }
   
