@@ -112,7 +112,7 @@ export async function afterDebug(logSummary: string, errors: CompilerError[], wa
 
     // 5. API 호출 (타임아웃 포함)
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('API request timed out after 30 seconds')), 30000);
+      setTimeout(() => reject(new Error('API request timed out after 1 seconds')), 10000);
     });
 
     const apiPromise = model.generateContent(prompt);
@@ -204,7 +204,7 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
       tmpFile, "-o", outputFile
     ], {
       encoding: "utf-8",
-      timeout: 30000 // 30초 타임아웃
+      timeout: 10000 // 10초 타임아웃
     });
 
     // 5. 컴파일 로그 수집
@@ -223,7 +223,7 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
       try {
         const runResult = spawnSync(outputFile, [], { 
           encoding: "utf-8", 
-          timeout: 5000 // 5초로 증가
+          timeout: 3000 // 3초
         });
 
         if (runResult.stdout) {
