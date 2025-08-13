@@ -299,9 +299,9 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
     // 13. 에러 마킹 파일 생성
     markedFilePath = markErrors(originalFileName, code, parsed.errors, parsed.warnings, aiAnalysisForMark);
     
-         // 14. 컴파일 로그와 AI 분석 결과를 함께 반환
-     const compileResultSection = compileSuccess ? `[Compile Result]\n${compileLog}\n` : '';
-     const fullAnalysis = `${compileResultSection}\n${analysis}`;
+         // 14. 프로그램 실행 결과와 AI 분석 결과를 함께 반환
+     const executionResultSection = compileSuccess && executionOutput.trim() ? `[Compile Result]\n${executionOutput.trim()}\n` : '';
+     const fullAnalysis = `${executionResultSection}\n${analysis}`;
     
     return { 
       analysis: fullAnalysis, 
@@ -314,8 +314,8 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
     
          const fallbackAnalysis = `[Result] X\n[Reason] 분석 과정에서 오류가 발생했습니다: ${analysisError.message}\n[Suggestion] 코드를 다시 확인하고 시도해주세요.`;
      
-     const compileResultSection = compileSuccess ? `[Compile Result]\n${compileLog}\n` : '';
-     const fullAnalysis = `${compileResultSection}\n${fallbackAnalysis}`;
+     const executionResultSection = compileSuccess && executionOutput.trim() ? `[Compile Result]\n${executionOutput.trim()}\n` : '';
+     const fullAnalysis = `${executionResultSection}\n${fallbackAnalysis}`;
     
     return { 
       analysis: fullAnalysis, 
