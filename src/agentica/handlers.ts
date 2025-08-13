@@ -1036,6 +1036,7 @@ Based on this information, please analyze in the following format (respond in Ko
 }
 
 // moonjeong's hw2
+/*
 export async function inProgressDebug(code: string) {
   let compileLog = "";
 
@@ -1092,6 +1093,7 @@ ${code}
   const result = await model.generateContent(prompt);
   return result.response.text().trim();
 }
+*/
 
 function buildPrompt(codeSnippet: string): string {
   return `

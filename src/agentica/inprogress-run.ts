@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { spawnSync } from "child_process";
 import * as path from "path";
 import * as readline from "readline";
-import { inProgressDebug } from "./handlers";
+import { beforeDebug } from "./handlers";
 
 async function main() {
   const targetFile = process.argv[2];
@@ -11,11 +11,11 @@ async function main() {
   const absPath = path.resolve(targetFile);
   const code = readFileSync(absPath, "utf8");
 
-  // InProgressDebug 실행 및 결과 출력
-  const result = await inProgressDebug(code);
+  // beforeDebug 실행 및 결과 출력
+  const result = await beforeDebug({ code });
 
   console.log("\n================================");
-  console.log("  *   InProgressDebug 결과   *  ");
+  console.log("  *   beforeDebug 결과   *  ");
   console.log("================================\n");
   console.log(result);
   console.log("\n================================\n");
