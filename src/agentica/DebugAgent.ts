@@ -65,11 +65,12 @@ function similarity(str1: string, str2: string): number {
 // afterDebugFromCode를 직접 호출하는 함수
 async function runAfterDebug(
   code: string,
-  userQuery: string
+  userQuery: string,
+  fileName: string
 ): Promise<string> {
   const { analysis, markedFilePath } = await afterDebugFromCode(
     code,
-    "main.c"
+    fileName
   );
   return (
     analysis +
@@ -578,6 +579,9 @@ async function main() {
       console.error(`[Error] 파일을 찾을 수 없습니다: ${absolutePath}`);
       process.exit(1);
     }
+    
+    // 파일명 추출 (확장자 포함)
+    const fileName = path.basename(filePath);
 
     // 파일 읽기
     let code: string;
@@ -626,7 +630,7 @@ async function main() {
               actualTools.push("loopCheck");
             } else if (intent.tool === "afterDebugFromCode") {
               // afterDebugFromCode 직접 호출
-              resultText = await runAfterDebug(code, userQuery);
+              resultText = await runAfterDebug(code, userQuery, fileName);
               actualTools.push("afterDebugFromCode");
             } else if (intent.tool === "traceVar") {
               const result = await traceVar({ code, userQuery: userQuery });
@@ -650,7 +654,7 @@ async function main() {
           actualTools.push("loopCheck");
         } else if (intent.tool === "afterDebugFromCode") {
           // afterDebugFromCode 직접 호출
-          resultText = await runAfterDebug(code, userQuery);
+          resultText = await runAfterDebug(code, userQuery, fileName);
           actualTools.push("afterDebugFromCode");
         } else if (intent.tool === "traceVar") {
           const result = await traceVar({ code, userQuery: userQuery });
