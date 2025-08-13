@@ -10,8 +10,9 @@ const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
 
 
 //jm hw - 개선된 버전
+//jm hw - 개선된 버전
 export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[], executionOutput?: string): string {
-  const MAX_ITEMS = 5; // 더 많은 항목을 보여주도록 증가
+  // MAX_ITEMS 제한을 제거하여 모든 에러와 경고를 표시
 
   const formatError = (e: CompilerError, i: number) => {
     const location = e.file ? ` at ${e.file}:${e.line || '?'}:${e.column || '?'}` : '';
@@ -31,10 +32,9 @@ export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[
     if (a.severity !== 'fatal' && b.severity === 'fatal') return 1;
     return 0;
   });
-
-  const errorText = sortedErrors.slice(0, MAX_ITEMS).map(formatError).join('\n');
-  const warningText = warnings.slice(0, MAX_ITEMS).map(formatWarning).join('\n');
-
+// 모든 에러와 경고를 포함 (제한 없음)
+  const errorText = sortedErrors.map(formatError).join('\n');
+  const warningText = warnings.map(formatWarning).join('\n');
   return `
 You are a senior compiler engineer and static analysis expert with 15+ years of experience in C/C++ development and debugging.
 Your task is to analyze the compiler output and runtime log from a C/C++ program and determine whether the code has any critical problems that need to be addressed before deployment.

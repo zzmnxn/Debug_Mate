@@ -1,4 +1,4 @@
-import { loopCheck, afterDebugFromCode, traceVar, beforeDebug } from "./handlers";
+import { loopCheck, afterDebugFromCode, traceVar } from "./handlers";
 import * as fs from "fs";
 import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -58,90 +58,23 @@ function similarity(str1: string, str2: string): number {
   return intersection.size / union.size;
 }
 
-// 실행 전/리뷰 뉘앙스 키워드 판별 함수
-export function wantsPreReview(userQuery: string): boolean {
-  const q = userQuery.toLowerCase();
-  const keywords = [
-    "실행 전",
-    "실행전에",
-    "실행 전에",
-    "실행하기 전에",
-    "실행 전에 한번",
-    "실행 전에 한 번",
-    "실행 전에 점검",
-    "실행 전에 검사",
-    "실행 전에 리뷰",
-    "run before",
-    "before run",
-    "before execution",
-    "pre-run",
-    "prerun",
-  ];
-  return keywords.some((k) => q.includes(k));
-}
 
-// beforeDebug, afterDebug 미완성 코드 판별하는 함수
-export function isIncompleteCode(code: string): boolean {
-  // 괄호 균형 (중괄호/소괄호/대괄호)
-  let braces = 0,
-    parens = 0,
-    brackets = 0;
-  for (const ch of code) {
-    if (ch === "{") braces++;
-    else if (ch === "}") braces--;
-    else if (ch === "(") parens++;
-    else if (ch === ")") parens--;
-    else if (ch === "[") brackets++;
-    else if (ch === "]") brackets--;
-  }
-  if (braces !== 0 || parens !== 0 || brackets !== 0) return true;
 
-  // 블록 주석 미종결
-  const opens = (code.match(/\/\*/g) || []).length;
-  const closes = (code.match(/\*\//g) || []).length;
-  if (opens !== closes) return true;
 
-  // 문자열/문자 리터럴 미종결
-  // 큰따옴표/작은따옴표 개수의 짝이 맞지 않는지 대략 체크
-  const dqCount = (code.match(/"/g) || []).length;
-  const sqCount = (code.match(/'/g) || []).length;
-  if (dqCount % 2 !== 0 || sqCount % 2 !== 0) return true;
 
-  // 말미 블록/제어문을 막 연 상태로 끝나는지
-  const tail = code.trimEnd();
-  if (!tail) return false;
-  if (/{\s*$/.test(tail)) return true;
-  if (/^\s*do\s*$/m.test(tail)) return true; // do 다음 while 미존재
-  if (/\b(if|for|while|switch)\s*\([^)]*$/.test(tail)) return true; // 괄호 닫힘 누락
-
-  return false;
-}
-
-// afterDebug 호출을 감싸 조건부로 beforeDebug 실행
-async function runAfterOrBeforeDebug(
+// afterDebugFromCode를 직접 호출하는 함수
+async function runAfterDebug(
   code: string,
   userQuery: string
 ): Promise<string> {
-  if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
-    if (isIncompleteCode(code)) {
-      console.log("** 코드가 미완성으로 판단되어 beforeDebug를 실행합니다.");
-    } else {
-      console.log(
-        "** 사용자가 '실행 전/리뷰' 요청을 명시하여 beforeDebug를 실행합니다."
-      );
-    }
-    const analysis = await beforeDebug({ code }); // handlers.ts의 beforeDebug는 string 반환 가정
-    return analysis;
-  } else {
-    const { analysis, markedFilePath } = await afterDebugFromCode(
-      code,
-      "main.c"
-    );
-    return (
-      analysis +
-      (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "")
-    );
-  }
+  const { analysis, markedFilePath } = await afterDebugFromCode(
+    code,
+    "main.c"
+  );
+  return (
+    analysis +
+    (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "")
+  );
 }
 
 // AI 파싱 강화를 위한 헬퍼 함수
@@ -261,14 +194,7 @@ async function robustParseSingleIntent(query: string): Promise<ParsedIntent> {
 async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   const normalizedQuery = normalizeText(query);
   
-  // 우선순위 1: 실행 전/리뷰 요청 체크 (가장 높은 우선순위)
-  if (wantsPreReview(query)) {
-    return {
-      tool: "afterDebugFromCode", // afterDebugFromCode로 파싱되지만 runAfterOrBeforeDebug에서 beforeDebug 실행
-      target: "all",
-      details: {}
-    };
-  }
+
   
   // 더 유연한 패턴 매칭
   const orderPatterns = [
@@ -699,14 +625,9 @@ async function main() {
               sectionResult = result.result ?? "";
               actualTools.push("loopCheck");
             } else if (intent.tool === "afterDebugFromCode") {
-              // afterDebug 호출을 beforeDebug 조건으로 감싸기
-              sectionResult = await runAfterOrBeforeDebug(code, userQuery);
-              // runAfterOrBeforeDebug에서 실제로 실행된 도구를 확인
-              if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
-                actualTools.push("beforeDebug");
-              } else {
-                actualTools.push("afterDebugFromCode");
-              }
+              // afterDebugFromCode 직접 호출
+              resultText = await runAfterDebug(code, userQuery);
+              actualTools.push("afterDebugFromCode");
             } else if (intent.tool === "traceVar") {
               const result = await traceVar({ code, userQuery: userQuery });
               sectionResult = result.variableTrace ?? "";
@@ -728,14 +649,9 @@ async function main() {
           resultText = result.result ?? "";
           actualTools.push("loopCheck");
         } else if (intent.tool === "afterDebugFromCode") {
-          // afterDebug 호출을 beforeDebug 조건으로 감싸기
-          resultText = await runAfterOrBeforeDebug(code, userQuery);
-          // runAfterOrBeforeDebug에서 실제로 실행된 도구를 확인
-          if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
-            actualTools.push("beforeDebug");
-          } else {
-            actualTools.push("afterDebugFromCode");
-          }
+          // afterDebugFromCode 직접 호출
+          resultText = await runAfterDebug(code, userQuery);
+          actualTools.push("afterDebugFromCode");
         } else if (intent.tool === "traceVar") {
           const result = await traceVar({ code, userQuery: userQuery });
           resultText = result.variableTrace ?? "";
