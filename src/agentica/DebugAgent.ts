@@ -124,10 +124,10 @@ async function runAfterOrBeforeDebug(
 ): Promise<string> {
   if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
     if (isIncompleteCode(code)) {
-      console.log("ℹ️ 코드가 미완성으로 판단되어 beforeDebug를 실행합니다.");
+      console.log("** 코드가 미완성으로 판단되어 beforeDebug를 실행합니다.");
     } else {
       console.log(
-        "ℹ️ 사용자가 '실행 전/리뷰' 요청을 명시하여 beforeDebug를 실행합니다."
+        "** 사용자가 '실행 전/리뷰' 요청을 명시하여 beforeDebug를 실행합니다."
       );
     }
     const analysis = await beforeDebug({ code }); // handlers.ts의 beforeDebug는 string 반환 가정
@@ -262,7 +262,7 @@ async function robustParseSingleIntent(query: string): Promise<ParsedIntent> {
 async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   const normalizedQuery = normalizeText(query);
   
-  // 🚨 우선순위 1: 실행 전/리뷰 요청 체크 (가장 높은 우선순위)
+  // 우선순위 1: 실행 전/리뷰 요청 체크 (가장 높은 우선순위)
   if (wantsPreReview(query)) {
     return {
       tool: "afterDebugFromCode", // afterDebugFromCode로 파싱되지만 runAfterOrBeforeDebug에서 beforeDebug 실행
@@ -359,7 +359,14 @@ This query might contain typos. Please identify the most likely intent:
 1. "loopCheck" - if related to loops, for/while statements, loop analysis
 2. "traceVar" - if related to variable tracking, variable tracing  
 3. "testBreak" - if related to memory leaks, memory issues
-4. "afterDebugFromCode" - if related to compilation, overall analysis, debugging
+4. "afterDebugFromCode" - if related to compilation, overall analysis, debugging, general inspection
+
+IMPORTANT RULES:
+- If the user says "검사해줘", "검사해", "검사", "분석해줘", "분석해", "분석" without specifying loops or variables, use "afterDebugFromCode"
+- If the user mentions specific loops (for, while, do-while), use "loopCheck"
+- If the user mentions variable tracking or tracing, use "traceVar"
+- If the user mentions memory leaks or memory issues, use "testBreak"
+- For general code inspection, compilation, or debugging, use "afterDebugFromCode"
 
 Consider common typos in Korean/English:
 - 컴파일 variations: 컴퓨일, 컴팔일, 컴파, etc.
@@ -715,8 +722,8 @@ async function main() {
         .map((intent) => intent.tool)
         .join(", ");
       const actualToolNames = actualTools.join(", ");
-      console.log("\n선택된 함수(테스트용) : ", toolNames);
-      console.log("실제 실행된 함수 : ", actualToolNames);
+      // console.log("\n선택된 함수(테스트용) : ", toolNames);
+      // console.log("실제 실행된 함수(테스트용) : ", actualToolNames);
       console.log(resultText);
     } catch (err: any) {
       console.error("[Error] 처리 중 오류 발생: ", err.message || err);
