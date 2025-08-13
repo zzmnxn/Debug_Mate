@@ -300,8 +300,18 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
     markedFilePath = markErrors(originalFileName, code, parsed.errors, parsed.warnings, aiAnalysisForMark);
     
          // 14. 프로그램 실행 결과와 AI 분석 결과를 함께 반환
-     const executionResultSection = compileSuccess && executionOutput.trim() ? `[Compile Result]\n${executionOutput.trim()}\n` : '';
-     const fullAnalysis = `${executionResultSection}\n${analysis}`;
+     // 에러 메시지가 포함된 경우 실행 결과 섹션을 숨김
+     const hasErrorOutput = executionOutput.includes('error') || 
+                           executionOutput.includes('Error') || 
+                           executionOutput.includes('ERROR') ||
+                           executionOutput.includes('AddressSanitizer') ||
+                           executionOutput.includes('SEGV') ||
+                           executionOutput.includes('ABORTING') ||
+                           executionOutput.includes('runtime error');
+     
+     const executionResultSection = compileSuccess && executionOutput.trim() && !hasErrorOutput ? 
+       `[Compile Result]\n${executionOutput.trim()}\n` : '';
+     const fullAnalysis = `${executionResultSection}=== AI Analysis ===\n${analysis}`;
     
     return { 
       analysis: fullAnalysis, 
@@ -314,8 +324,18 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
     
          const fallbackAnalysis = `[Result] X\n[Reason] 분석 과정에서 오류가 발생했습니다: ${analysisError.message}\n[Suggestion] 코드를 다시 확인하고 시도해주세요.`;
      
-     const executionResultSection = compileSuccess && executionOutput.trim() ? `[Compile Result]\n${executionOutput.trim()}\n` : '';
-     const fullAnalysis = `${executionResultSection}\n${fallbackAnalysis}`;
+     // 에러 메시지가 포함된 경우 실행 결과 섹션을 숨김
+     const hasErrorOutput = executionOutput.includes('error') || 
+                           executionOutput.includes('Error') || 
+                           executionOutput.includes('ERROR') ||
+                           executionOutput.includes('AddressSanitizer') ||
+                           executionOutput.includes('SEGV') ||
+                           executionOutput.includes('ABORTING') ||
+                           executionOutput.includes('runtime error');
+     
+     const executionResultSection = compileSuccess && executionOutput.trim() && !hasErrorOutput ? 
+       `[Compile Result]\n${executionOutput.trim()}\n` : '';
+     const fullAnalysis = `${executionResultSection}=== AI Analysis ===\n${fallbackAnalysis}`;
     
     return { 
       analysis: fullAnalysis, 
