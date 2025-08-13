@@ -896,7 +896,7 @@ export async function beforeDebug({ code }: { code: string }) {
   const outputFile = path.join(tmpDir, `a.out`);
 
   try {
-    // 코드 저장
+    // 임시파일에 코드 저장
     fs.writeFileSync(tmpFile, code);
 
     // GCC 컴파일 수행
@@ -939,7 +939,7 @@ Based on this information, please analyze in the following format (respond in Ko
 [Suggestion] Core fix suggestion (1-2 lines)
 
 `.trim();
-
+    // 모델 호출
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const result = await model.generateContent(prompt);
     return result.response.text().trim();
@@ -947,7 +947,7 @@ Based on this information, please analyze in the following format (respond in Ko
   } catch (e: any) {
     return `[Result] 분석 실패\n[Reason] ${e.message || e.toString()}\n[Suggestion] 로그 확인 필요`;
   } finally {
-    // 정리
+    // 리소스 정리
     [tmpFile, outputFile].forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
   }
 }
@@ -973,12 +973,13 @@ export async function inProgressDebug(code: string) {
     compileLog += compileResult.stderr || "";
 
   } catch (err) {
-    compileLog += `GCC Error: ${(err as Error).message}`;
+    compileLog += `GCC Error: ${(err as Error).message}`; // 예외 처리
   }
-
+  //컴파일 로그 파싱 및 오약 생성
   const parsed = CompilerResultParser.parseCompilerOutput(compileLog);
   const summary = CompilerResultParser.generateSummary(parsed);
 
+  // 모델 프롬프츠 구성
   const prompt = `
 You are an experienced C debugging assistant.
 The user is writing C code that is not yet complete.

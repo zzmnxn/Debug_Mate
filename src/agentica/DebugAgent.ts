@@ -59,7 +59,7 @@ function similarity(str1: string, str2: string): number {
 }
 
 // 실행 전/리뷰 뉘앙스 키워드 판별 함수
-function wantsPreReview(userQuery: string): boolean {
+export function wantsPreReview(userQuery: string): boolean {
   const q = userQuery.toLowerCase();
   const keywords = [
     "실행 전",
@@ -81,7 +81,7 @@ function wantsPreReview(userQuery: string): boolean {
 }
 
 // beforeDebug, afterDebug 미완성 코드 판별하는 함수
-function isIncompleteCode(code: string): boolean {
+export function isIncompleteCode(code: string): boolean {
   // 괄호 균형 (중괄호/소괄호/대괄호)
   let braces = 0,
     parens = 0,
