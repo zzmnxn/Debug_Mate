@@ -320,14 +320,36 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   // 변수 추적 관련 키워드가 있으면 traceVar (오타 포함)
   if (flexibleMatch(normalizedQuery, [
     '변수', '추적', '변수추적', '트레이스', 'trace',
-    // 포인터 관련 키워드 추가
+    // 포인터 관련 키워드
     '포인터', '이중포인터', '이중 포인터', '더블포인터', '더블 포인터', 'pointer', 'double pointer', 'doublepointer',
     '포인터관계', '포인터 관계', 'pointer relation', 'pointerrelation',
     '포인터분석', '포인터 분석', 'pointer analysis', 'pointeranalysis',
     '포인터추적', '포인터 추적', 'pointer trace', 'pointertrace',
+    // 배열 관련 키워드
+    '배열', 'array', 'arr', '배열요소', '배열 요소', 'array element', 'arrayelement',
+    '배열접근', '배열 접근', 'array access', 'arrayaccess', '배열인덱스', '배열 인덱스', 'array index', 'arrayindex',
+    // 구조체 관련 키워드
+    '구조체', 'struct', 'structure', '구조체멤버', '구조체 멤버', 'struct member', 'structmember',
+    '구조체필드', '구조체 필드', 'struct field', 'structfield',
+    // 상수 관련 키워드
+    'const', '상수', 'constant', '상수값', '상수 값', 'constant value', 'constantvalue',
+    // 값 관련 키워드
+    '값', 'value', 'val', '값변화', '값 변화', 'value change', 'valuechange',
+    '초기값', '초기 값', 'initial value', 'initialvalue', '최종값', '최종 값', 'final value', 'finalvalue',
+    // 데이터 관련 키워드
+    '데이터', 'data', '데이터분석', '데이터 분석', 'data analysis', 'dataanalysis',
+    '데이터흐름', '데이터 흐름', 'data flow', 'dataflow', '데이터추적', '데이터 추적', 'data trace', 'datatrace',
+    // 주소 관련 키워드
+    '주소', 'address', 'addr', '주소값', '주소 값', 'address value', 'addressvalue',
+    '메모리주소', '메모리 주소', 'memory address', 'memoryaddress', '포인터주소', '포인터 주소', 'pointer address', 'pointeraddress',
+    // 변수 타입 관련 키워드
+    'int', 'integer', '정수', 'float', '실수', 'double', '문자', 'char', '문자열', 'string',
     // 일반적인 오타들
     '변', '변주', '츄적', '추적해', 'trase', 'trce',
-    '포인', '포인터', '포인트', '포인터', 'pointer', 'point', 'poin', 'pointe'
+    '포인', '포인터', '포인트', 'pointer', 'point', 'poin', 'pointe',
+    '배', '배열', 'array', 'arr', '구조', '구조체', 'struct', '구조체', '구조체',
+    '상', '상수', 'const', 'constant', '값', 'value', 'val',
+    '데', '데이터', 'data', 'dat', '주', '주소', 'address', 'addr', 'adr'
   ])) {
     tool = "traceVar";
   }
@@ -362,7 +384,7 @@ This query might contain typos. Please identify the most likely intent:
 IMPORTANT RULES:
 - If the user says "검사해줘", "검사해", "검사", "분석해줘", "분석해", "분석" without specifying loops or variables, use "afterDebugFromCode"
 - If the user mentions specific loops (for, while, do-while), use "loopCheck"
-- If the user mentions variable tracking, tracing, pointers, or pointer analysis, use "traceVar"
+- If the user mentions variable tracking, tracing, pointers, arrays, structs, constants, values, or data analysis, use "traceVar"
 - If the user mentions memory leaks or memory issues, use "afterDebugFromCode"
 - For general code inspection, compilation, or debugging, use "afterDebugFromCode"
 
