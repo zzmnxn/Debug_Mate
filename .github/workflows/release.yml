@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use Node 20 (NPM registry & always-auth)
+      - name: Use Node 20
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -30,21 +30,17 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      # 모노레포 → cli 패키지로 필요한 소스/문서 복사
+      # --- 모노레포에서 cli 패키지로 필요한 소스/문서 복사 ---
       - name: Copy source files
         run: |
           mkdir -p src
           cp -r ../src/* src/
           cp ../tsconfig.json .
-          cp ../watch-and-debug.sh .
-          cp ../debug-mate-tmux.sh .
+          cp ../debug-mate-cli.js .
           cp ../generate-test.sh .
-          # package.json: files 배열에 포함된 문서도 같이 복사 (있을 때만)
-          [ -f ../README.md ] && cp ../README.md .
-          [ -f ../LICENSE ] && cp ../LICENSE .
 
       - name: Make scripts executable
-        run: chmod +x watch-and-debug.sh debug-mate-tmux.sh generate-test.sh || true
+        run: chmod +x generate-test.sh
 
       # 태그와 package.json 버전 일치 검증 (예: v1.1.0 ↔ package.json: 1.1.0)
       - name: Verify tag matches package version
@@ -65,7 +61,8 @@ jobs:
       - name: Verify build artifacts
         run: |
           test -d dist || (echo "::error::dist/ not found" && exit 1)
-          test -f watch-and-debug.sh || (echo "::error::watch-and-debug.sh missing" && exit 1)
+          test -f debug-mate-cli.js || (echo "::error::debug-mate-cli.js missing" && exit 1)
+          test -f generate-test.sh || (echo "::error::generate-test.sh missing" && exit 1)
 
       # NPM에 실제로 무엇이 올라갈지 사전 확인
       - name: Pack dry-run (inspect files)

@@ -63,7 +63,7 @@ debug-mate test.c
 
 * 환경 변수 사용:
 
-  ```bash
+```bash
   export GEMINI_API_KEY="your_api_key_here"
   ```
 * 무료 키를 주기적으로 교체해야 할 경우, 새 키로 위 변수를 갱신한 뒤 **다시 실행**하면 됩니다.
@@ -256,7 +256,7 @@ fi
 
 if [ -z "$GEMINI_API_KEY" ]; then
   echo "GEMINI_API_KEY 를 export 하세요."
-  exit 1
+    exit 1
 fi
 
 cat > demo.c <<'EOF'

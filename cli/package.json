@@ -3,14 +3,11 @@
   "version": "1.1.0",
   "description": "C/C++ 대화형 디버깅 CLI (Linux only, no server)",
   "bin": { 
-    "debug-mate": "watch-and-debug.sh",
-    "debug-mate-tmux": "debug-mate-tmux.sh",
-    "debug-mate-generate": "generate-test.sh"
+    "debug-mate": "debug-mate-cli.js"
   },
   "type": "module",
   "files": [
-    "watch-and-debug.sh",
-    "debug-mate-tmux.sh",
+    "debug-mate-cli.js",
     "generate-test.sh",
     "dist/",
     "README.md",
@@ -19,8 +16,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "prepublishOnly": "npm run build && chmod +x watch-and-debug.sh debug-mate-tmux.sh generate-test.sh",
-    "postinstall": "chmod +x watch-and-debug.sh debug-mate-tmux.sh generate-test.sh",
+    "prepublishOnly": "npm run build && chmod +x generate-test.sh",
+    "postinstall": "chmod +x generate-test.sh",
     "dev": "ts-node src/agentica/inprogress-run.ts"
   },
   "keywords": ["debug", "c", "cpp", "analysis", "cli", "linux", "inotify", "tmux"],
@@ -34,6 +31,8 @@
   "homepage": "https://github.com/zzmnxn/Debug_Mate#readme",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "chalk": "^5.3.0",
+    "commander": "^11.1.0",
     "tree-sitter": "^0.22.4",
     "tree-sitter-c": "^0.24.1",
     "zod": "^3.25.76"
