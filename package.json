@@ -7,19 +7,23 @@
     "build": "rimraf lib && tsc",
     "prepare": "ts-patch install && ts-node build/env.ts",
     "start": "node lib",
-    "start:http": "ts-node src/http-server.ts",
-    "start:http:js": "node http-server.js",
-    "test:http": "ts-node http-test.ts",
     "debug": "ts-node src/agentica/DebugAgent.ts",
-    "test:afterdebug": "ts-node test_afterDebug_improved.ts",
-    "test:markerrors": "ts-node test_markErrors_improved.ts",
-    "test:execution": "ts-node test_execution_output.ts"
+    "cli:build": "cd cli && npm run build",
+    "cli:dev": "cd cli && npm run dev",
+    "cli:install": "cd cli && npm install",
+    "debug-mate": "./watch-and-debug.sh",
+    "debug-mate-tmux": "./cli/debug-mate-tmux.sh",
+    "debug-mate-generate": "./cli/generate-test.sh"
   },
   "keywords": [
     "agentica",
     "template",
     "nodejs",
-    "websocket"
+    "websocket",
+    "debug",
+    "c",
+    "cpp",
+    "cli"
   ],
   "author": "Wrtn Technologies",
   "license": "ISC",

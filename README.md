@@ -1,223 +1,219 @@
 # DebugMate
 
-C/C++ 코드 분석을 위한 AI 기반 대화형 디버깅 도구입니다. `inprogress-run.ts`를 기반으로 한 서버 중심 배포 구조를 제공합니다.
+C/C++ 코드 분석을 위한 AI 기반 대화형 디버깅 도구입니다. Linux 환경에서 파일 저장을 감지하여 자동으로 디버깅을 수행합니다.
 
 ## 🚀 주요 기능
 
-- **대화형 분석**: `inprogress-run.ts`와 동일한 사용자 경험
-- **자연어 처리**: 한국어로 코드 분석 요청 가능
-- **실시간 피드백**: InProgressDebug → 사용자 입력 → DebugAgent 순차 실행
-- **서버 중심**: 모든 로직이 서버에서 처리되어 사용자 환경 의존성 최소화
+- **파일 감시**: `inotifywait`를 사용한 자동 파일 감지
+- **대화형 분석**: `inprogress-run.ts` 기반의 자연어 디버깅
+- **tmux 분할 화면**: 편집과 디버깅을 동시에 볼 수 있는 분할 화면
+- **테스트 코드 생성**: 다양한 테스트 케이스 자동 생성
+- **실시간 피드백**: 파일 저장 시 즉시 디버깅 실행
 
 ## 📋 사용 방법
 
-### 1. 서버 실행
+### 1. 기본 디버깅
 
 ```bash
-# 의존성 설치
-npm install
-
 # API 키 설정
 export GEMINI_API_KEY=your_api_key_here
 
-# HTTP 서버 실행
-npm run start:http
+# 파일 감시 및 디버깅 시작
+./watch-and-debug.sh test.c
 ```
 
-### 2. CLI 설치 및 사용
+### 2. tmux 분할 화면 모드
 
 ```bash
-# CLI 빌드
-cd cli
-npm install
-npm run build
-
-# 전역 설치
-npm install -g .
-
-# 대화형 분석 실행 (inprogress-run.ts와 동일)
-debug-mate run main.c
+# tmux를 사용한 자동 분할 화면
+# 왼쪽: 파일 편집, 오른쪽: 디버깅 결과
+./debug-mate-tmux.sh test.c
 ```
 
-### 3. 실행 과정
+### 3. 테스트 코드 자동 생성
 
-1. **파일 업로드**: C/C++ 파일을 서버로 전송
-2. **InProgressDebug**: 코드의 기본 분석 수행
-3. **결과 출력**: 분석 결과를 사용자에게 표시
-4. **사용자 입력**: 자연어로 추가 분석 요청
-5. **DebugAgent**: 사용자 입력을 처리하여 결과 제공
+```bash
+# 다양한 테스트 케이스 자동 생성
+./generate-test.sh
 
-## 🔧 API 엔드포인트
-
-| 엔드포인트 | 설명 | 사용법 |
-|-----------|------|--------|
-| `POST /api/inprogress-debug` | InProgressDebug 실행 | 파일 업로드 |
-| `POST /api/debug-agent` | DebugAgent 실행 | 코드 + 자연어 쿼리 |
-| `POST /api/inprogress-run` | 전체 플로우 실행 | 파일 + 선택적 쿼리 |
-| `GET /healthz` | 서버 상태 확인 | 헬스체크 |
-| `GET /api/info` | 서버 정보 | 버전, 환경 정보 |
+# 또는 특정 이름으로 생성
+./generate-test.sh my_test
+```
 
 ## 🛠️ 개발 환경
 
 ### 요구사항
 
-- Node.js 18+
-- GCC (C/C++ 컴파일러)
-- Gemini API 키
+- **OS**: Linux (Ubuntu 등)
+- **Node.js**: 20.x 이상 (23.x 미만)
+- **시스템 패키지**: `inotify-tools`, `gcc/g++`, `build-essential`, `tmux`
+- **빌드 도구**: `python3`, `make` (tree-sitter 네이티브 모듈용)
 
 ### 설치
 
 ```bash
+# 시스템 패키지 설치
+sudo apt update
+sudo apt install -y inotify-tools gcc g++ build-essential tmux python3 make
+
+# Node.js 20+ 설치
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
 # 저장소 클론
-git clone <repository-url>
-cd agentica-test
+git clone https://github.com/zzmnxn/Debug_Mate.git
+cd Debug_Mate
 
 # 의존성 설치
 npm install
 
-# 개발 서버 실행
-npm run start:http
+# 개발용 빌드
+npm run build
 ```
 
-### GitHub Codespaces
+## 📦 CLI 패키지 배포
 
-`.devcontainer/devcontainer.json` 파일을 통해 GitHub Codespaces에서 즉시 개발 환경을 구성할 수 있습니다.
+### CLI 빌드 및 배포
+
+```bash
+# CLI 패키지 빌드
+npm run cli:build
+
+# CLI 패키지 설치
+npm run cli:install
+
+# 전역 설치
+cd cli
+npm install -g .
+```
+
+### 사용자 설치
+
+```bash
+# 전역 설치
+npm install -g @debugmate/cli
+
+# 사용
+debug-mate test.c
+debug-mate-tmux test.c
+debug-mate-generate
+```
+
+## 🔧 사용 예시
+
+### 빠른 시작
+
+```bash
+# 1. 테스트 코드 생성
+./generate-test.sh
+
+# 2. tmux 모드로 디버깅 시작
+./debug-mate-tmux.sh test.c
+
+# 3. 파일 편집 후 저장하면 자동 디버깅!
+```
+
+### 워크플로우
+
+```bash
+# 1. API 키 설정
+export GEMINI_API_KEY="your_key_here"
+
+# 2. 테스트 코드 생성 (선택사항)
+./generate-test.sh complex_test
+
+# 3. tmux 모드 시작
+./debug-mate-tmux.sh complex_test.c
+
+# 4. 왼쪽 패널에서 코드 편집
+# 5. 저장하면 오른쪽에서 자동 디버깅
+# 6. 자연어로 추가 질문 가능
+```
+
+## 🧪 생성 가능한 테스트 케이스
+
+1. **기본 Hello World** - 간단한 시작
+2. **루프 테스트** - for 루프 연습
+3. **조건문 테스트** - if-else 문법
+4. **배열 테스트** - 배열과 반복문
+5. **함수 테스트** - 함수 정의와 호출
+6. **포인터 테스트** - 포인터 기본 개념
+7. **컴파일 에러** - 의도적인 문법 오류
+8. **런타임 에러** - 실행 시 발생하는 오류
+9. **복합 테스트** - 구조체, 함수, 루프 조합
+
+## 🔧 npm 스크립트
+
+```bash
+# 기본 디버깅
+npm run debug-mate test.c
+
+# tmux 분할 화면
+npm run debug-mate-tmux test.c
+
+# 테스트 코드 생성
+npm run debug-mate-generate
+
+# CLI 패키지 빌드
+npm run cli:build
+
+# CLI 개발 모드
+npm run cli:dev
+```
+
+## ❗ 트러블슈팅
+
+### tree-sitter 설치 실패
+```bash
+# 빌드 도구 확인
+sudo apt install -y python3 make gcc g++
+
+# 캐시 정리 후 재설치
+npm cache clean --force
+npm install
+```
+
+### inotifywait 없음
+```bash
+sudo apt install -y inotify-tools
+```
+
+### tmux 없음
+```bash
+sudo apt install -y tmux
+```
+
+### tmux 세션 종료
+```bash
+# 현재 세션 종료
+tmux kill-session
+
+# 특정 세션 종료
+tmux kill-session -t debug-mate-test
+```
 
 ## 📦 배포
 
-### Docker 배포
+### GitHub Actions 자동 배포
+
+태그를 푸시하면 자동으로 CLI 패키지가 배포됩니다:
 
 ```bash
-# Docker 이미지 빌드
-docker build -t debugmate .
-
-# 컨테이너 실행
-docker run -p 3000:3000 -e GEMINI_API_KEY=your_key debugmate
+git tag v1.1.0
+git push --tags
 ```
 
-### Docker Compose
+### 수동 배포
 
 ```bash
-# 환경변수 설정
-export GEMINI_API_KEY=your_api_key_here
-
-# 서비스 실행
-docker-compose up -d
+cd cli
+npm version patch
+npm publish --access public
 ```
-
-## 🔑 API 키 관리
-
-### 환경변수 설정
-
-```bash
-# Linux/macOS
-export GEMINI_API_KEY=your_api_key_here
-
-# Windows
-set GEMINI_API_KEY=your_api_key_here
-
-# .env 파일
-echo "GEMINI_API_KEY=your_api_key_here" > .env
-```
-
-### 자동 갱신 (향후 구현)
-
-```bash
-curl -X POST http://localhost:3000/api/admin/update-key \
-  -H "Authorization: Bearer your_admin_token" \
-  -H "Content-Type: application/json" \
-  -d '{"newApiKey": "your_new_api_key"}'
-```
-
-## 🧪 테스트
-
-### CLI 테스트
-
-```bash
-# 서버 상태 확인
-debug-mate status
-
-# 대화형 분석 테스트
-debug-mate run test.c
-
-# 직접 분석 테스트
-debug-mate analyze test.c "루프 검사"
-```
-
-### API 테스트
-
-```bash
-# 헬스체크
-curl http://localhost:3000/healthz
-
-# InProgressDebug 테스트
-curl -X POST http://localhost:3000/api/inprogress-debug \
-  -F "file=@test.c"
-
-# DebugAgent 테스트
-curl -X POST http://localhost:3000/api/debug-agent \
-  -H "Content-Type: application/json" \
-  -d '{
-    "code": "#include <stdio.h>\nint main() { return 0; }",
-    "userQuery": "루프 검사",
-    "filename": "test.c"
-  }'
-```
-
-## 📁 프로젝트 구조
-
-```
-agentica-test/
-├── src/
-│   ├── agentica/
-│   │   ├── DebugAgent.ts      # 메인 디버깅 로직
-│   │   ├── handlers.ts        # 핸들러 함수들
-│   │   ├── inprogress-run.ts  # 원본 대화형 진입점
-│   │   └── server.ts          # WebSocket 서버
-│   ├── http-server.ts         # HTTP API 서버
-│   └── parsing/               # 코드 파싱 모듈
-├── cli/
-│   ├── src/
-│   │   └── cli.ts            # CLI 인터페이스
-│   └── package.json
-├── docker-compose.yml         # Docker 설정
-└── DEPLOYMENT.md             # 상세 배포 가이드
-```
-
-## 🐛 트러블슈팅
-
-### 일반적인 문제
-
-1. **서버 연결 실패**
-   ```bash
-   # 서버 상태 확인
-   debug-mate status
-   
-   # 서버 재시작
-   npm run start:http
-   ```
-
-2. **API 키 오류**
-   ```bash
-   # 환경변수 확인
-   echo $GEMINI_API_KEY
-   
-   # 새 키 설정
-   export GEMINI_API_KEY=new_key_here
-   ```
-
-3. **GCC 없음**
-   ```bash
-   # Ubuntu/Debian
-   sudo apt-get install gcc
-   
-   # macOS
-   xcode-select --install
-   ```
 
 ## 📄 라이선스
 
-ISC License
+MIT License
 
 ## 🤝 기여
 
@@ -226,15 +222,5 @@ ISC License
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
-
-## 📞 지원
-
-- **문서**: [DEPLOYMENT.md](./DEPLOYMENT.md)
-- **이슈**: GitHub Issues
-- **배포**: GitHub Codespaces 지원
-
----
-
-**DebugMate** - C/C++ 코드 분석을 위한 AI 기반 대화형 디버깅 도구
 
 

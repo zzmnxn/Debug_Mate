@@ -1,421 +1,289 @@
-# DebugMate 서버 중심 배포 가이드
+
+# DebugMate 배포 가이드 (Linux 전용 • 서버 없음)
 
 ## 개요
 
-DebugMate는 C/C++ 코드 분석을 위한 AI 기반 대화형 디버깅 도구입니다. 서버 중심 배포 방식을 채택하여 사용자가 모든 파일을 설치할 필요 없이 CLI만으로 모든 기능을 사용할 수 있습니다.
+DebugMate는 **리눅스 환경 전용** C/C++ 대화형 디버깅 CLI입니다.
+**서버가 필요 없습니다.** 파일 저장을 감지하여 InProgress 디버깅 → 사용자 입력 → DebugAgent 실행까지 **로컬에서** 수행합니다.
 
-## 🚀 빠른 시작
+* 지원 OS: Linux (Ubuntu 등)
+* 필요 조건: Node.js ≥ 20, `inotify-tools`, `gcc/g++`
+* API 키: 환경 변수 `GEMINI_API_KEY`(무료 Gemini 키 수동 교체)
 
-### 1. 서버 배포 (GitHub Codespaces)
+---
 
-```bash
-# 1. 의존성 설치
-npm install
-
-# 2. API 키 설정
-export GEMINI_API_KEY=your_api_key_here
-
-# 3. HTTP 서버 실행
-npm run start:http
-```
-
-### 2. CLI 설치 및 사용
+## 🚀 빠른 시작 (사용자용)
 
 ```bash
-# CLI 설치
-npm install -g @debugmate/cli
+# 0) 필수 패키지
+sudo apt update
+sudo apt install -y inotify-tools gcc g++ build-essential
 
-# 설정
-mkdir -p ~/.debugmate
-cat > ~/.debugmate/config.json << EOF
-{
-  "serverUrl": "http://localhost:3000",
-  "timeout": 30000
-}
-EOF
-
-# 사용
-debug-mate run test.c
-```
-
-## 📋 상세 배포 방법
-
-### 방법 1: GitHub Codespaces 배포 (추천)
-
-#### 1.1 Codespaces 설정
-
-GitHub Codespaces에서 프로젝트를 열면 자동으로 개발 환경이 구성됩니다.
-
-#### 1.2 서버 실행
-
-```bash
-# 의존성 설치
-npm install
-
-# API 키 설정
-export GEMINI_API_KEY=your_gemini_api_key_here
-
-# HTTP 서버 실행
-npm run start:http
-```
-
-#### 1.3 포트 포워딩
-
-- Codespaces에서 포트 3000을 자동으로 포워딩
-- 외부에서 접근 가능한 URL 제공 (예: `https://username-codespace-3000.preview.app.github.dev`)
-
-#### 1.4 CLI 설정
-
-```bash
-# Codespaces URL로 설정
-cat > ~/.debugmate/config.json << EOF
-{
-  "serverUrl": "https://your-codespace-url-3000.preview.app.github.dev",
-  "timeout": 30000
-}
-EOF
-```
-
-### 방법 2: 로컬 서버 배포
-
-#### 2.1 로컬 환경 설정
-
-```bash
-# Node.js 설치 (v18 이상)
+# 1) Node.js 20+
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
+sudo apt install -y nodejs
 
-# GCC 설치
-sudo apt-get install -y gcc g++ build-essential
+# 2) CLI 설치
+npm i -g @debugmate/cli
 
-# 프로젝트 클론
-git clone <repository-url>
-cd agentica-test
+# 3) Gemini API 키
+export GEMINI_API_KEY="your_api_key_here"
 
-# 의존성 설치
-npm install
+# 4) 실행 (파일 저장 감지 후 자동 디버깅)
+debug-mate test.c
 ```
 
-#### 2.2 서버 실행
+> `debug-mate` 명령은 내부적으로 **파일 저장 이벤트를 감시**하고, 저장될 때마다 InProgress 디버깅 → 사용자 질의 입력 → DebugAgent 실행을 순차적으로 진행합니다.
+> (표준입력은 TTY로 연결되어 있어 터미널에서 자연어 요청을 바로 입력할 수 있습니다.)
 
-```bash
-# API 키 설정
-export GEMINI_API_KEY=your_api_key_here
+---
 
-# 서버 실행
-npm run start:http
-```
+## 🔧 명령 안내
 
-## 📦 CLI 패키지 배포
+* `debug-mate <파일>`: `<파일>`의 저장을 감시합니다. 저장될 때마다 다음을 수행합니다.
 
-### 1. CLI 빌드
+  1. InProgress 디버깅 실행 → 결과 터미널 출력
+  2. 사용자 질의 Prompt 표시(빈 입력 시 종료)
+  3. DebugAgent 실행 결과 출력 후 종료 코드 반영
 
-```bash
-# CLI 디렉토리로 이동
-cd cli
+* 중단: `Ctrl+C`
 
-# 의존성 설치
-npm install
+---
 
-# TypeScript 빌드
-npm run build
-```
+## 🧩 내부 동작 개요 (참고)
 
-### 2. npm 배포
+* 파일 감시: `inotifywait`(inotify-tools)
+* 실행 흐름: `watch-and-debug.sh` → `inprogress-run.ts` → `DebugAgent.ts`
+  (현재 구현은 런타임에 `ts-node`로 TypeScript 엔트리를 기동합니다.)
+* 표준입력 TTY 연결로 터미널 대화형 상호작용 지원
 
-```bash
-# 버전 업데이트
-npm version patch
+---
 
-# npm에 배포
-npm publish --access public
-```
+## 🔐 API 키 관리
 
-### 3. 사용자 설치
+* 환경 변수 사용:
 
-```bash
-# 전역 설치
-npm install -g @debugmate/cli
+  ```bash
+  export GEMINI_API_KEY="your_api_key_here"
+  ```
+* 무료 키를 주기적으로 교체해야 할 경우, 새 키로 위 변수를 갱신한 뒤 **다시 실행**하면 됩니다.
+* (차기 버전 계획) 로컬 키 로테이터/보안 저장(keytar) 옵션은 추후 릴리스에 포함 예정.
 
-# 사용
-debug-mate run test.c
-```
-
-## 🔧 사용 방법
-
-### 1. 대화형 분석 (inprogress-run.ts 기반)
-
-```bash
-# 파일을 업로드하고 InProgressDebug 실행 후 사용자 입력 받기
-debug-mate run test.c
-```
-
-**실행 과정:**
-1. 파일 업로드 → InProgressDebug 실행
-2. InProgressDebug 결과 출력
-3. 사용자 입력 대기
-4. DebugAgent로 자연어 처리
-5. 결과 출력
-
-### 2. 직접 분석
-
-```bash
-# 파일과 쿼리를 한번에 전송
-debug-mate analyze test.c "루프 검사"
-```
-
-### 3. 서버 상태 확인
-
-```bash
-debug-mate status
-```
-
-## 📡 API 엔드포인트
-
-### 주요 엔드포인트
-
-| 엔드포인트 | 설명 | 사용법 |
-|-----------|------|--------|
-| `POST /api/inprogress-debug` | InProgressDebug 실행 | 파일 업로드 |
-| `POST /api/debug-agent` | DebugAgent 실행 | 코드 + 자연어 쿼리 |
-| `POST /api/inprogress-run` | 전체 플로우 실행 | 파일 + 선택적 쿼리 |
-| `POST /api/analyze` | 코드 분석 (기존) | 파일 + 쿼리 |
-| `GET /healthz` | 헬스체크 | 서버 상태 확인 |
-| `GET /api/info` | 서버 정보 | 버전, 환경 정보 |
-
-### 사용 예시
-
-```bash
-# InProgressDebug 실행
-curl -X POST http://localhost:3000/api/inprogress-debug \
-  -F "file=@test.c"
-
-# DebugAgent 실행
-curl -X POST http://localhost:3000/api/debug-agent \
-  -H "Content-Type: application/json" \
-  -d '{
-    "code": "#include <stdio.h>\nint main() { return 0; }",
-    "userQuery": "루프 검사",
-    "filename": "test.c"
-  }'
-```
-
-## 🔑 API 키 관리
-
-### 환경변수 설정
-
-```bash
-# Linux/macOS
-export GEMINI_API_KEY=your_api_key_here
-
-# Windows
-set GEMINI_API_KEY=your_api_key_here
-
-# .env 파일
-echo "GEMINI_API_KEY=your_api_key_here" > .env
-```
-
-### API 키 갱신
-
-무료 Gemini API 키는 사용량 제한이 있으므로 주기적으로 갱신이 필요합니다:
-
-```bash
-# 새 API 키 발급 후 환경변수 업데이트
-export GEMINI_API_KEY=new_api_key_here
-
-# 서버 재시작
-npm run start:http
-```
-
-## 💰 비용 최적화
-
-### 무료 티어 활용
-
-1. **GitHub Codespaces**: 월 60시간 무료
-2. **Gemini API**: 무료 티어 (월 사용량 제한)
-3. **npm**: 무료 패키지 배포
-
-### 비용 절약 전략
-
-1. **API 키 로테이션**: 여러 API 키를 순환 사용
-2. **사용량 모니터링**: API 호출 횟수 추적
-3. **캐싱**: 동일한 분석 결과 재사용
+---
 
 ## 🐧 리눅스 환경 최적화
-
-### 시스템 요구사항
 
 ```bash
 # 필수 패키지
 sudo apt-get install -y \
-  gcc \
-  g++ \
-  build-essential \
-  curl \
-  git
+  gcc g++ build-essential \
+  inotify-tools curl git
 
-# Node.js (v18 이상)
+# Node.js (v20 이상 권장)
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
 
-### 성능 최적화
+성능 팁:
 
 ```bash
-# 메모리 제한 설정
+# Node 힙 제한 조정(환경에 맞게)
 export NODE_OPTIONS="--max-old-space-size=512"
-
-# CPU 제한 (선택사항)
-# taskset -c 0-1 npm start
 ```
 
-## 🔧 트러블슈팅
+---
 
-### 일반적인 문제
+## ❗ 트러블슈팅
 
-1. **서버 연결 실패**
-   ```bash
-   # 서버 상태 확인
-   debug-mate status
-   
-   # 서버 재시작
-   npm run start:http
-   ```
+* `debug-mate: command not found`
+  → `npm i -g @debugmate/cli` 재설치, 또는 `$PATH`에 npm global bin 경로 추가.
 
-2. **API 키 오류**
-   ```bash
-   # 환경변수 확인
-   echo $GEMINI_API_KEY
-   
-   # 새 키 설정
-   export GEMINI_API_KEY=new_key_here
-   ```
+* `inotifywait: not found`
+  → `sudo apt install -y inotify-tools` 설치.
 
-3. **GCC 없음**
-   ```bash
-   sudo apt-get install gcc
-   ```
+* `GEMINI_API_KEY` 오류/미설정
+  → `echo $GEMINI_API_KEY`로 확인 후 다시 `export` 설정.
 
-4. **메모리 부족**
-   ```bash
-   export NODE_OPTIONS="--max-old-space-size=256"
-   ```
+* `ts-node` 관련 에러
+  → 전역이 아니라 **패키지 동봉** 의존성을 사용합니다. `@debugmate/cli`를 재설치해 보세요.
 
-### 로그 확인
+---
 
-```bash
-# 서버 로그
-tail -f server.log
+## 📦 패키징(프로젝트 관점)
 
-# 시스템 리소스
-htop
-free -h
+### CLI 패키지 구조
+
+`cli/package.json` (수정 필요)
+
+```json
+{
+  "name": "@debugmate/cli",
+  "version": "1.1.0",
+  "description": "C/C++ 대화형 디버깅 CLI (Linux only, no server)",
+  "bin": {
+    "debug-mate": "watch-and-debug.sh"
+  },
+  "files": [
+    "watch-and-debug.sh",
+    "src/agentica/",
+    "src/config/",
+    "src/parsing/",
+    "package.json",
+    "tsconfig.json",
+    "README.md"
+  ],
+  "scripts": {
+    "prepublishOnly": "chmod +x watch-and-debug.sh && npm run build",
+    "build": "tsc",
+    "postinstall": "chmod +x watch-and-debug.sh"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "tree-sitter": "^0.22.4",
+    "tree-sitter-c": "^0.24.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4",
+    "zod": "^3.25.76"
+  },
+  "engines": { "node": ">=20" }
+}
 ```
 
-## 📦 패키지 배포
+### 필요한 파일 포함
 
-### CLI 패키지 배포
+배포 시 다음 파일들이 CLI 패키지에 포함되어야 합니다:
 
-```bash
-cd cli
-
-# 버전 업데이트
-npm version patch
-
-# 빌드
-npm run build
-
-# 배포
-npm publish --access public
+```
+cli/
+├── watch-and-debug.sh          # 메인 실행 스크립트
+├── src/
+│   ├── agentica/
+│   │   ├── inprogress-run.ts   # 대화형 실행 엔트리
+│   │   ├── DebugAgent.ts       # AI 디버깅 로직
+│   │   ├── handlers.ts         # 핸들러 함수들
+│   │   └── server.ts           # (참고용)
+│   ├── config/
+│   │   └── SGlobal.ts          # 환경 설정
+│   └── parsing/
+│       ├── codeParser.ts       # 코드 파싱
+│       ├── compilerResultParser.ts
+│       └── loopExtractor.ts
+├── package.json
+└── tsconfig.json
 ```
 
-### 사용자 설치
+> 배포 시 **소스 실행에 필요한 TS 엔트리**를 함께 포함해야 합니다.
+> (기존 문서의 서버 실행/포트 포워딩/REST API 호출 안내는 더 이상 필요하지 않습니다. 해당 부분은 제거 권장입니다.)
 
-```bash
-# 전역 설치
-npm install -g @debugmate/cli
+---
 
-# 사용
-debug-mate run test.c
+## 🤖 GitHub Actions: NPM 자동 배포
+
+`.github/workflows/release.yml`
+
+```yaml
+name: Release (NPM)
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Copy source files
+        run: |
+          mkdir -p src
+          cp -r ../src/* src/
+          cp ../tsconfig.json .
+          cp ../watch-and-debug.sh .
+
+      - name: Make script executable
+        run: chmod +x watch-and-debug.sh
+
+      # (선택) Git 태그 버전을 package.json에 동기화하고 싶다면 주석 해제
+      # - name: Sync version from tag
+      #   run: |
+      #     VER="${GITHUB_REF_NAME#v}"
+      #     jq ".version=\"${VER}\"" package.json > package.tmp && mv package.tmp package.json
+
+      - name: Publish to NPM
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
-## 🚀 데모 준비
+**배포 절차**
 
-### 데모용 스크립트
+1. GitHub Secrets에 `NPM_TOKEN` 등록
+2. 리포지토리 태그 푸시: `git tag v1.1.0 && git push --tags`
+3. Actions가 자동으로 `@debugmate/cli`를 배포
+
+---
+
+## 🧪 데모 스크립트 (옵션)
 
 ```bash
-#!/bin/bash
-# demo.sh
+#!/usr/bin/env bash
+set -e
 
-echo "DebugMate 데모 시작"
-echo "=================="
-
-# API 키 확인
-if [ -z "$GEMINI_API_KEY" ]; then
-    echo "GEMINI_API_KEY를 설정해주세요"
-    exit 1
+if ! command -v debug-mate >/dev/null; then
+  echo "debug-mate가 없습니다. npm i -g @debugmate/cli 로 설치하세요."
+  exit 1
 fi
 
-# 서버 시작
-echo "서버 시작 중..."
-npm run start:http &
-SERVER_PID=$!
+if [ -z "$GEMINI_API_KEY" ]; then
+  echo "GEMINI_API_KEY 를 export 하세요."
+  exit 1
+fi
 
-# 서버 시작 대기
-sleep 5
-
-# 테스트 파일 생성
-cat > demo.c << 'EOF'
+cat > demo.c <<'EOF'
 #include <stdio.h>
-
 int main() {
     int i;
-    for(i = 0; i < 10; i++) {
-        printf("%d\n", i);
-    }
+    for (i = 0; i < 3; i++) printf("%d\n", i);
     return 0;
 }
 EOF
 
-# CLI 테스트
-echo "CLI 테스트 중..."
-debug-mate analyze demo.c "루프 검사"
-
-# 서버 종료
-kill $SERVER_PID
-
-echo "데모 완료!"
+echo "demo.c 저장을 감시합니다. 파일을 편집 후 저장해 보세요."
+debug-mate demo.c
 ```
 
-## 📝 제출 준비 체크리스트
+---
 
-- [ ] 서버 중심 배포 구조 완성
-- [ ] inprogress-run.ts 기능 API화 완료
-- [ ] CLI 대화형 인터페이스 구현
-- [ ] GitHub Codespaces 최적화
-- [ ] 에러 처리 및 로깅 완성
-- [ ] 문서 작성 완료
-- [ ] README 업데이트
+## 📝 제출 체크리스트 (이 문서 기준)
 
-## 🎯 최종 권장사항
+* [ ] **서버 관련 섹션 전부 삭제**(Codespaces 포트 포워딩/HTTP 엔드포인트/`start:http` 등)   
+* [ ] `Linux only` 명시 및 필수 패키지/Node 20 설치 안내
+* [ ] `npm i -g @debugmate/cli` 설치 후 `debug-mate <file>` 사용 예시
+* [ ] `GEMINI_API_KEY` 설정 방법 안내
+* [ ] GitHub Actions `release.yml` 추가 및 `NPM_TOKEN` 준비
+* [ ] CLI 패키지 구조 수정 (필요한 소스 파일 포함)
+* [ ] `watch-and-debug.sh` 실행 권한 설정
 
-1. **우선순위**: 서버 실행 → CLI 배포 → API 키 자동화
-2. **API 키**: 자동 로테이션 시스템 구축
-3. **비용**: GitHub Codespaces 무료 티어 활용
-4. **안정성**: 헬스체크 및 에러 처리 강화
-5. **사용성**: inprogress-run.ts와 동일한 사용자 경험 제공
+---
 
-## 🔄 업데이트 로그
 
-### v1.0.0 (현재)
-- ✅ 서버 중심 배포 구조 구현
-- ✅ inprogress-run.ts 기능 API화
-- ✅ 대화형 CLI 인터페이스 구현
-- ✅ 파일 업로드 및 분석 API
-- ✅ GitHub Codespaces 지원
-
-## 📞 지원
-
-- **문서**: [README.md](./README.md)
-- **이슈**: GitHub Issues
-- **배포**: GitHub Codespaces 지원

@@ -1,34 +1,50 @@
 {
   "name": "@debugmate/cli",
-  "version": "1.0.0",
-  "description": "DebugMate CLI tool for C/C++ code analysis",
-  "main": "dist/index.js",
-  "bin": {
-    "debug-mate": "dist/cli.js"
+  "version": "1.1.0",
+  "description": "C/C++ 대화형 디버깅 CLI (Linux only, no server)",
+  "bin": { 
+    "debug-mate": "watch-and-debug.sh",
+    "debug-mate-tmux": "debug-mate-tmux.sh",
+    "debug-mate-generate": "generate-test.sh"
   },
-  "scripts": {
-    "build": "tsc",
-    "dev": "ts-node src/cli.ts",
-    "start": "node dist/cli.js"
-  },
-  "keywords": [
-    "debug",
-    "c",
-    "cpp",
-    "analysis",
-    "cli"
+  "type": "module",
+  "files": [
+    "watch-and-debug.sh",
+    "debug-mate-tmux.sh",
+    "generate-test.sh",
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "package.json"
   ],
-  "author": "Your Name",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build && chmod +x watch-and-debug.sh debug-mate-tmux.sh generate-test.sh",
+    "postinstall": "chmod +x watch-and-debug.sh debug-mate-tmux.sh generate-test.sh",
+    "dev": "ts-node src/agentica/inprogress-run.ts"
+  },
+  "keywords": ["debug", "c", "cpp", "analysis", "cli", "linux", "inotify", "tmux"],
+  "author": "DebugMate Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zzmnxn/Debug_Mate.git"
+  },
+  "bugs": { "url": "https://github.com/zzmnxn/Debug_Mate/issues" },
+  "homepage": "https://github.com/zzmnxn/Debug_Mate#readme",
   "dependencies": {
-    "axios": "^1.6.0",
-    "commander": "^11.1.0",
-    "form-data": "^4.0.0",
-    "chalk": "^5.3.0"
+    "@google/generative-ai": "^0.24.1",
+    "tree-sitter": "^0.22.4",
+    "tree-sitter-c": "^0.24.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0",
-    "ts-node": "^10.9.0"
-  }
+    "typescript": "^5.5.4",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.0.0"
+  },
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=20 <23" },
+  "os": ["linux"],
+  "cpu": ["x64", "arm64"]
 }

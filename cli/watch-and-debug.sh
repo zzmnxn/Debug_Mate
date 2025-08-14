@@ -9,7 +9,7 @@ command -v node >/dev/null 2>&1 || { echo "Node.js가 필요합니다. Node 20.x
 # --- 인자 확인 ---
 if [ -z "$TARGET_FILE" ]; then
   echo "감시할 .c 파일명을 인자로 주세요."
-  echo "예: ./watch-and-debug.sh test.c"
+  echo "예: debug-mate test.c"
   exit 1
 fi
 
@@ -18,23 +18,18 @@ if [ ! -f "$TARGET_FILE" ]; then
   exit 1
 fi
 
-echo "👀 ${TARGET_FILE} 저장 감시 시작 (Ctrl+C로 중단)"
+echo " ${TARGET_FILE} 저장 감시 시작 (Ctrl+C로 중단)"
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+DIST_ENTRY="dist/agentica/inprogress-run.js"
 
-# 개발 환경에서는 ts-node 사용, 프로덕션에서는 컴파일된 JS 사용
-if [ -f "$SCRIPT_DIR/lib/agentica/inprogress-run.js" ]; then
-  # 프로덕션 빌드된 파일 사용
-  DIST_ENTRY="lib/agentica/inprogress-run.js"
-elif [ -f "$SCRIPT_DIR/dist/agentica/inprogress-run.js" ]; then
-  # CLI 패키지 빌드된 파일 사용
-  DIST_ENTRY="dist/agentica/inprogress-run.js"
-else
-  # 개발 환경에서는 ts-node 사용
-  DIST_ENTRY="ts-node src/agentica/inprogress-run.ts"
+if [ ! -f "$SCRIPT_DIR/$DIST_ENTRY" ]; then
+  echo "실행 파일이 없습니다: $SCRIPT_DIR/$DIST_ENTRY"
+  echo "패키지 빌드가 누락된 것 같습니다. (개발 환경이면 'npm run build' 필요)"
+  exit 1
 fi
 
-# 저장 이벤트 감시
+# 저장 이벤트 감시 (rename/move 대응까지 원하면 -e close_write,move,create)
 inotifywait -m -e close_write --format '%w%f' "$TARGET_FILE" | while IFS= read -r FULLPATH; do
   echo " 저장됨: $FULLPATH → BeforeDebug 실행 중..."
 
@@ -42,18 +37,10 @@ inotifywait -m -e close_write --format '%w%f' "$TARGET_FILE" | while IFS= read -
     cd "$SCRIPT_DIR"
 
     # 현재 대상 파일 인자를 포함한 프로세스만 종료 (과도 종료 방지)
-    if [[ "$DIST_ENTRY" == *"ts-node"* ]]; then
-      pkill -f "ts-node .*inprogress-run.ts ${FULLPATH}" >/dev/null 2>&1
-    else
-      pkill -f "node .*${DIST_ENTRY} ${FULLPATH}" >/dev/null 2>&1
-    fi
+    pkill -f "node .*${DIST_ENTRY} ${FULLPATH}" >/dev/null 2>&1
 
     # 실행 (표준입력은 터미널에서 받기)
-    if [[ "$DIST_ENTRY" == *"ts-node"* ]]; then
-      npx $DIST_ENTRY "$FULLPATH" < /dev/tty
-    else
-      node "$DIST_ENTRY" "$FULLPATH" < /dev/tty
-    fi
+    node "$DIST_ENTRY" "$FULLPATH" < /dev/tty
   )
 
   STATUS=$?
