@@ -121,7 +121,7 @@ export function isIncompleteCode(code: string): boolean {
 async function runAfterOrBeforeDebug(
   code: string,
   userQuery: string
-): Promise<string> {
+): Promise<{ analysis: string; markedFilePath?: string }> {
   if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
     if (isIncompleteCode(code)) {
       console.log("** 코드가 미완성으로 판단되어 beforeDebug를 실행합니다.");
@@ -131,16 +131,16 @@ async function runAfterOrBeforeDebug(
       );
     }
     const analysis = await beforeDebug({ code }); // handlers.ts의 beforeDebug는 string 반환 가정
-    return analysis;
+    return { analysis };
   } else {
     const { analysis, markedFilePath } = await afterDebugFromCode(
       code,
       "main.c"
     );
-    return (
-      analysis +
-      (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "")
-    );
+    return {
+      analysis: analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : ""),
+      markedFilePath
+    };
   }
 }
 
@@ -611,6 +611,120 @@ Output JSON only:`;
   };
 }
 
+// DebugAgent 클래스 정의
+export class DebugAgent {
+  constructor() {
+    // API 키 검증
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY 환경변수가 설정되지 않았습니다.");
+    }
+  }
+
+  // HTTP API에서 사용할 메서드
+  async processUserQuery(code: string, userQuery: string, filename: string): Promise<any> {
+    try {
+      if (!code || !userQuery) {
+        throw new Error('코드와 사용자 쿼리가 필요합니다.');
+      }
+
+      if (!code.trim()) {
+        throw new Error('코드가 비어있습니다.');
+      }
+
+      const parsedIntents = await parseUserIntent(userQuery);
+      let resultText = "";
+      let actualTools: string[] = []; // 실제 실행된 도구들을 추적
+      let markedFilePath: string | null = null;
+
+      if (parsedIntents.isMultiple) {
+        // 복합 요청인 경우 - 비교 요청인지 확인
+        const isComparison =
+          userQuery.includes("비교") || userQuery.includes("차이");
+
+        if (
+          isComparison &&
+          parsedIntents.intents.every((intent) => intent.tool === "loopCheck")
+        ) {
+          // 루프 비교 요청인 경우
+          resultText = "루프 비교 기능이 제거되었습니다. 개별 루프 검사를 사용해주세요.";
+          actualTools.push("loopCheck");
+        } else {
+          // 일반적인 복수 요청 처리
+          for (let i = 0; i < parsedIntents.intents.length; i++) {
+            const intent = parsedIntents.intents[i];
+            let sectionResult = "";
+
+            if (intent.tool === "loopCheck") {
+              const result = await loopCheck({
+                code,
+                target: intent.target,
+                details: intent.details,
+              });
+              sectionResult = result.result ?? "";
+              actualTools.push("loopCheck");
+            } else if (intent.tool === "afterDebugFromCode") {
+              // afterDebug 호출을 beforeDebug 조건으로 감싸기
+              const result = await runAfterOrBeforeDebug(code, userQuery);
+              sectionResult = result.analysis;
+              markedFilePath = result.markedFilePath || null;
+              // runAfterOrBeforeDebug에서 실제로 실행된 도구를 확인
+              if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
+                actualTools.push("beforeDebug");
+              } else {
+                actualTools.push("afterDebugFromCode");
+              }
+            } else if (intent.tool === "traceVar") {
+              const result = await traceVar({ code, userQuery: userQuery });
+              sectionResult = result.variableTrace ?? "";
+              actualTools.push("traceVar");
+            }
+
+            resultText += `\n=== 요청 ${i + 1}: ${intent.tool} (${intent.target || "all"}) ===\n${sectionResult}\n`;
+          }
+        }
+      } else {
+        // 단일 요청 처리
+        const intent = parsedIntents.intents[0];
+        if (intent.tool === "loopCheck") {
+          const result = await loopCheck({
+            code,
+            target: intent.target,
+            details: intent.details,
+          });
+          resultText = result.result ?? "";
+          actualTools.push("loopCheck");
+        } else if (intent.tool === "afterDebugFromCode") {
+          // afterDebug 호출을 beforeDebug 조건으로 감싸기
+          const result = await runAfterOrBeforeDebug(code, userQuery);
+          resultText = result.analysis;
+          markedFilePath = result.markedFilePath || null;
+          // runAfterOrBeforeDebug에서 실제로 실행된 도구를 확인
+          if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
+            actualTools.push("beforeDebug");
+          } else {
+            actualTools.push("afterDebugFromCode");
+          }
+        } else if (intent.tool === "traceVar") {
+          const result = await traceVar({ code, userQuery: userQuery });
+          resultText = result.variableTrace ?? "";
+          actualTools.push("traceVar");
+        }
+      }
+
+      return {
+        analysis: resultText,
+        markedFilePath: markedFilePath,
+        tools: actualTools,
+        filename: filename,
+        userQuery: userQuery
+      };
+
+    } catch (err: any) {
+      throw new Error(`처리 중 오류 발생: ${err.message || err}`);
+    }
+  }
+}
+
 async function main() {
   try {
     const [, , filePath, ...queryParts] = process.argv;
@@ -647,95 +761,14 @@ async function main() {
       process.exit(1);
     }
 
-    //add or modify your homework function here !! @@@@@@@@@@@@@@@@@@
-    try {
-      const parsedIntents = await parseUserIntent(userQuery);
-      let resultText = "";
-      let actualTools: string[] = []; // 실제 실행된 도구들을 추적
+    // DebugAgent 인스턴스 생성 및 실행
+    const debugAgent = new DebugAgent();
+    const result = await debugAgent.processUserQuery(code, userQuery, path.basename(filePath));
+    console.log(result.analysis);
 
-      if (parsedIntents.isMultiple) {
-        // 복합 요청인 경우 - 비교 요청인지 확인
-        const isComparison =
-          userQuery.includes("비교") || userQuery.includes("차이");
-
-        if (
-          isComparison &&
-          parsedIntents.intents.every((intent) => intent.tool === "loopCheck")
-        ) {
-          // 루프 비교 요청인 경우
-          resultText = "루프 비교 기능이 제거되었습니다. 개별 루프 검사를 사용해주세요.";
-          actualTools.push("loopCheck");
-        } else {
-          // 일반적인 복수 요청 처리
-          for (let i = 0; i < parsedIntents.intents.length; i++) {
-            const intent = parsedIntents.intents[i];
-            let sectionResult = "";
-
-            if (intent.tool === "loopCheck") {
-              const result = await loopCheck({
-                code,
-                target: intent.target,
-                details: intent.details,
-              });
-              sectionResult = result.result ?? "";
-              actualTools.push("loopCheck");
-            } else if (intent.tool === "afterDebugFromCode") {
-              // afterDebug 호출을 beforeDebug 조건으로 감싸기
-              sectionResult = await runAfterOrBeforeDebug(code, userQuery);
-              // runAfterOrBeforeDebug에서 실제로 실행된 도구를 확인
-              if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
-                actualTools.push("beforeDebug");
-              } else {
-                actualTools.push("afterDebugFromCode");
-              }
-            } else if (intent.tool === "traceVar") {
-              const result = await traceVar({ code, userQuery: userQuery });
-              sectionResult = result.variableTrace ?? "";
-              actualTools.push("traceVar");
-            }
-
-            resultText += `\n=== 요청 ${i + 1}: ${intent.tool} (${intent.target || "all"}) ===\n${sectionResult}\n`;
-          }
-        }
-      } else {
-        // 단일 요청 처리
-        const intent = parsedIntents.intents[0];
-        if (intent.tool === "loopCheck") {
-          const result = await loopCheck({
-            code,
-            target: intent.target,
-            details: intent.details,
-          });
-          resultText = result.result ?? "";
-          actualTools.push("loopCheck");
-        } else if (intent.tool === "afterDebugFromCode") {
-          // afterDebug 호출을 beforeDebug 조건으로 감싸기
-          resultText = await runAfterOrBeforeDebug(code, userQuery);
-          // runAfterOrBeforeDebug에서 실제로 실행된 도구를 확인
-          if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
-            actualTools.push("beforeDebug");
-          } else {
-            actualTools.push("afterDebugFromCode");
-          }
-        } else if (intent.tool === "traceVar") {
-          const result = await traceVar({ code, userQuery: userQuery });
-          resultText = result.variableTrace ?? "";
-          actualTools.push("traceVar");
-        }
-      }
-
-      const toolNames = parsedIntents.intents
-        .map((intent) => intent.tool)
-        .join(", ");
-      const actualToolNames = actualTools.join(", ");
-      // console.log("\n선택된 함수(테스트용) : ", toolNames);
-      // console.log("실제 실행된 함수(테스트용) : ", actualToolNames);
-      console.log(resultText);
-    } catch (err: any) {
-      console.error("[Error] 처리 중 오류 발생: ", err.message || err);
-    }
   } catch (err: any) {
     console.error("[Error] 초기화 중 오류 발생: ", err.message || err);
+    process.exit(1);
   }
 }
 

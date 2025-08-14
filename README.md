@@ -1,92 +1,240 @@
-# Debug Mate - C 코드 디버깅 도구
+# DebugMate
 
-## 🚀 개선된 afterDebug 함수
+C/C++ 코드 분석을 위한 AI 기반 대화형 디버깅 도구입니다. `inprogress-run.ts`를 기반으로 한 서버 중심 배포 구조를 제공합니다.
 
-### 주요 개선 사항:
-- **강화된 에러 처리**: API 키 검증, 네트워크 오류, 타임아웃 처리
-- **입력 검증**: 빈 문자열, 잘못된 타입 입력에 대한 방어 코드
-- **Windows 호환성**: `/tmp` 경로 대신 크로스 플랫폼 임시 디렉토리 사용
-- **메모리 정리**: 임시 파일 자동 삭제로 메모리 누수 방지
-- **응답 검증**: AI 응답 형식 검증 및 fallback 처리
-- **상세한 에러 메시지**: 사용자 친화적인 한국어 에러 메시지
-- **타임아웃 설정**: API 호출 30초, 실행 5초 타임아웃
-- **에러 우선순위**: fatal → runtime → memory → syntax → semantic → warning 순서
+## 🚀 주요 기능
 
-### 에러 처리 개선:
-- API 키 누락 시 명확한 안내
-- 네트워크 오류 시 재시도 안내
-- 할당량 초과 시 대기 안내
-- GCC 미설치 시 설치 안내
-- 파일 권한 오류 시 권한 확인 안내
+- **대화형 분석**: `inprogress-run.ts`와 동일한 사용자 경험
+- **자연어 처리**: 한국어로 코드 분석 요청 가능
+- **실시간 피드백**: InProgressDebug → 사용자 입력 → DebugAgent 순차 실행
+- **서버 중심**: 모든 로직이 서버에서 처리되어 사용자 환경 의존성 최소화
 
-### 실행 결과 표시 기능:
-- **성공 실행**: 프로그램 출력 결과를 터미널에 표시
-- **런타임 에러**: 에러 메시지와 함께 실행 결과 표시
-- **컴파일 에러**: 컴파일 에러 분석 결과 표시
-- **AI 분석**: 실행 결과를 고려한 종합적인 분석 제공
+## 📋 사용 방법
 
-## 실행 방법
+### 1. 서버 실행
 
-### 1. 환경 설정
-먼저 `.env` 파일을 생성하고 Gemini API 키를 설정하세요:
-```
-GEMINI_API_KEY=your_gemini_api_key_here
-PORT=3000
-```
-
-### 2. 메인 워크플로우 실행
 ```bash
-npm run debug:main
+# 의존성 설치
+npm install
+
+# API 키 설정
+export GEMINI_API_KEY=your_api_key_here
+
+# HTTP 서버 실행
+npm run start:http
 ```
 
-이 명령어는 다음 워크플로우를 실행합니다:
-1. 현재 디렉토리의 .c 파일을 자동으로 찾아서 분석
-2. `beforeDebug()` - 빠른 사전 분석 실행
-3. 터미널에 분석 결과 출력
-4. "요청 사항을 입력하시오 : " 메시지 표시
-5. 사용자 입력에 따라 다음 중 하나 실행:
-   - "컴파일 실행 결과 알려줘" → `afterDebug()`
-   - "루프 검사해줘" → `loopCheck()`
-   - "변수 추적해줘" → `traceVar()`
+### 2. CLI 설치 및 사용
 
-### 3. afterDebug 함수 테스트
 ```bash
-npm run test:afterdebug
+# CLI 빌드
+cd cli
+npm install
+npm run build
+
+# 전역 설치
+npm install -g .
+
+# 대화형 분석 실행 (inprogress-run.ts와 동일)
+debug-mate run main.c
 ```
 
-### 4. markErrors 함수 테스트
+### 3. 실행 과정
+
+1. **파일 업로드**: C/C++ 파일을 서버로 전송
+2. **InProgressDebug**: 코드의 기본 분석 수행
+3. **결과 출력**: 분석 결과를 사용자에게 표시
+4. **사용자 입력**: 자연어로 추가 분석 요청
+5. **DebugAgent**: 사용자 입력을 처리하여 결과 제공
+
+## 🔧 API 엔드포인트
+
+| 엔드포인트 | 설명 | 사용법 |
+|-----------|------|--------|
+| `POST /api/inprogress-debug` | InProgressDebug 실행 | 파일 업로드 |
+| `POST /api/debug-agent` | DebugAgent 실행 | 코드 + 자연어 쿼리 |
+| `POST /api/inprogress-run` | 전체 플로우 실행 | 파일 + 선택적 쿼리 |
+| `GET /healthz` | 서버 상태 확인 | 헬스체크 |
+| `GET /api/info` | 서버 정보 | 버전, 환경 정보 |
+
+## 🛠️ 개발 환경
+
+### 요구사항
+
+- Node.js 18+
+- GCC (C/C++ 컴파일러)
+- Gemini API 키
+
+### 설치
+
 ```bash
-npm run test:markerrors
+# 저장소 클론
+git clone <repository-url>
+cd agentica-test
+
+# 의존성 설치
+npm install
+
+# 개발 서버 실행
+npm run start:http
 ```
 
-### 5. 실행 결과 표시 기능 테스트
+### GitHub Codespaces
+
+`.devcontainer/devcontainer.json` 파일을 통해 GitHub Codespaces에서 즉시 개발 환경을 구성할 수 있습니다.
+
+## 📦 배포
+
+### Docker 배포
+
 ```bash
-npm run test:execution
+# Docker 이미지 빌드
+docker build -t debugmate .
+
+# 컨테이너 실행
+docker run -p 3000:3000 -e GEMINI_API_KEY=your_key debugmate
 ```
 
-### 6. 기존 테스트 실행
+### Docker Compose
+
 ```bash
-npx ts-node test_driver.ts test.c
-npx ts-node src/testcode/test_afterDebugFromCode.ts
+# 환경변수 설정
+export GEMINI_API_KEY=your_api_key_here
+
+# 서비스 실행
+docker-compose up -d
 ```
 
---- Git 협업 가이드 ---
-원격 저장소 삭제 확인
- git remote -v 
+## 🔑 API 키 관리
 
-원격 저장소 추가
- git remote add origin https://github.com/zzmnxn/Debug_Mate
+### 환경변수 설정
 
- 최신 main으로 이동 후 동기화
-git checkout main
-git pull origin main
+```bash
+# Linux/macOS
+export GEMINI_API_KEY=your_api_key_here
 
-브랜치 생성 및 이동
- git checkout -b jimin
+# Windows
+set GEMINI_API_KEY=your_api_key_here
 
-작업 후 커밋 & 푸시
-git add .
-git commit -m "소희: 일기 작성 기능"
-git push origin sohee/feature-diary
+# .env 파일
+echo "GEMINI_API_KEY=your_api_key_here" > .env
+```
+
+### 자동 갱신 (향후 구현)
+
+```bash
+curl -X POST http://localhost:3000/api/admin/update-key \
+  -H "Authorization: Bearer your_admin_token" \
+  -H "Content-Type: application/json" \
+  -d '{"newApiKey": "your_new_api_key"}'
+```
+
+## 🧪 테스트
+
+### CLI 테스트
+
+```bash
+# 서버 상태 확인
+debug-mate status
+
+# 대화형 분석 테스트
+debug-mate run test.c
+
+# 직접 분석 테스트
+debug-mate analyze test.c "루프 검사"
+```
+
+### API 테스트
+
+```bash
+# 헬스체크
+curl http://localhost:3000/healthz
+
+# InProgressDebug 테스트
+curl -X POST http://localhost:3000/api/inprogress-debug \
+  -F "file=@test.c"
+
+# DebugAgent 테스트
+curl -X POST http://localhost:3000/api/debug-agent \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "#include <stdio.h>\nint main() { return 0; }",
+    "userQuery": "루프 검사",
+    "filename": "test.c"
+  }'
+```
+
+## 📁 프로젝트 구조
+
+```
+agentica-test/
+├── src/
+│   ├── agentica/
+│   │   ├── DebugAgent.ts      # 메인 디버깅 로직
+│   │   ├── handlers.ts        # 핸들러 함수들
+│   │   ├── inprogress-run.ts  # 원본 대화형 진입점
+│   │   └── server.ts          # WebSocket 서버
+│   ├── http-server.ts         # HTTP API 서버
+│   └── parsing/               # 코드 파싱 모듈
+├── cli/
+│   ├── src/
+│   │   └── cli.ts            # CLI 인터페이스
+│   └── package.json
+├── docker-compose.yml         # Docker 설정
+└── DEPLOYMENT.md             # 상세 배포 가이드
+```
+
+## 🐛 트러블슈팅
+
+### 일반적인 문제
+
+1. **서버 연결 실패**
+   ```bash
+   # 서버 상태 확인
+   debug-mate status
+   
+   # 서버 재시작
+   npm run start:http
+   ```
+
+2. **API 키 오류**
+   ```bash
+   # 환경변수 확인
+   echo $GEMINI_API_KEY
+   
+   # 새 키 설정
+   export GEMINI_API_KEY=new_key_here
+   ```
+
+3. **GCC 없음**
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install gcc
+   
+   # macOS
+   xcode-select --install
+   ```
+
+## 📄 라이선스
+
+ISC License
+
+## 🤝 기여
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📞 지원
+
+- **문서**: [DEPLOYMENT.md](./DEPLOYMENT.md)
+- **이슈**: GitHub Issues
+- **배포**: GitHub Codespaces 지원
+
+---
+
+**DebugMate** - C/C++ 코드 분석을 위한 AI 기반 대화형 디버깅 도구
 
 

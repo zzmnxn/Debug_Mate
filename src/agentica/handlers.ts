@@ -11,7 +11,7 @@ const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
 
 //jm hw - 개선된 버전
 export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[], executionOutput?: string): string {
-  const MAX_ITEMS = 5; // 더 많은 항목을 보여주도록 증가
+  // MAX_ITEMS 제한을 제거하여 모든 에러와 경고를 표시
 
   const formatError = (e: CompilerError, i: number) => {
     const location = e.file ? ` at ${e.file}:${e.line || '?'}:${e.column || '?'}` : '';
@@ -31,10 +31,9 @@ export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[
     if (a.severity !== 'fatal' && b.severity === 'fatal') return 1;
     return 0;
   });
-
-  const errorText = sortedErrors.slice(0, MAX_ITEMS).map(formatError).join('\n');
-  const warningText = warnings.slice(0, MAX_ITEMS).map(formatWarning).join('\n');
-
+// 모든 에러와 경고를 포함 (제한 없음)
+  const errorText = sortedErrors.map(formatError).join('\n');
+  const warningText = warnings.map(formatWarning).join('\n');
   return `
 You are a senior compiler engineer and static analysis expert with 15+ years of experience in C/C++ development and debugging.
 Your task is to analyze the compiler output and runtime log from a C/C++ program and determine whether the code has any critical problems that need to be addressed before deployment.
@@ -806,7 +805,10 @@ Analyze each loop in the exact order shown above. Do NOT mention any other loops
   return { result: formattedResult };
   } catch (aiError: any) {
     // 에러 시에도 타임아웃 정리
-    if (timeoutId) clearTimeout(timeoutId);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = undefined;
+    }
     
     console.error(`AI 분석 실패: ${aiError.message}`);
     
@@ -915,38 +917,6 @@ export async function traceVar({
   return { variableTrace: result.response.text() };
 }
 
-// jimin's hw
-export async function testBreak({ codeSnippet }: { codeSnippet: string }) {
-  const prompt = buildPrompt(codeSnippet);
-
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-
-  const responseText = result.response.text().trim();
-
-  try {
-    // JSON 추출 시도
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return parsed;
-    } else {
-      // JSON이 없으면 텍스트 형태로 반환
-      return {
-        isBuggy: responseText.includes("buggy") || responseText.includes("error"),
-        reason: responseText,
-        suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요."
-      };
-    }
-  } catch (err) {
-    // 파싱 실패 시 텍스트 형태로 반환
-    return {
-      isBuggy: responseText.includes("buggy") || responseText.includes("error"),
-      reason: responseText,
-      suggestion: "JSON 파싱 실패로 인해 상세 분석을 확인해주세요."
-    };
-  }
-}
 
 // moonjeong's hw1   (code: string): Promise<string> {
 export async function beforeDebug({ code }: { code: string }) {
@@ -972,7 +942,7 @@ export async function beforeDebug({ code }: { code: string }) {
     // 로그 수집
     let log = (compileResult.stdout || "") + (compileResult.stderr || "");
     if (compileResult.status === 0) {
-      const runResult = spawnSync(outputFile, [], { encoding: "utf-8", timeout: 1000 });
+      const runResult = spawnSync(outputFile, [], { encoding: "utf-8", timeout: 2000 });
       log += "\n\n=== Runtime Output ===\n";
       log += runResult.stdout || "";
       log += runResult.stderr || "";
@@ -1000,10 +970,33 @@ Based on this information, please analyze in the following format (respond in Ko
 [Suggestion] Core fix suggestion (1-2 lines)
 
 `.trim();
-    // 모델 호출
+    // 모델 호출 (타임아웃 포함)
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-    return result.response.text().trim();
+    
+    let timeoutId: NodeJS.Timeout | undefined;
+    try {
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('API request timed out after 15 seconds')), 15000);
+      });
+
+      const apiPromise = model.generateContent(prompt);
+      const result = await Promise.race([apiPromise, timeoutPromise]) as any;
+      
+      // 성공 시 타임아웃 정리
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
+      }
+      
+      return result.response.text().trim();
+    } catch (error: any) {
+      // 에러 시에도 타임아웃 정리
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
+      }
+      throw error;
+    }
 
   } catch (e: any) {
     return `[Result] 분석 실패\n[Reason] ${e.message || e.toString()}\n[Suggestion] 로그 확인 필요`;

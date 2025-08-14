@@ -4,21 +4,28 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
-import { WebSocket } from 'ws';
-import { spawn } from 'child_process';
+import axios from 'axios';
+import FormData from 'form-data';
+import * as readline from 'readline';
 
 interface Config {
   serverUrl: string;
-  apiKey?: string;
-  fallbackToLocal: boolean;
+  timeout: number;
 }
 
 class DebugMateCLI {
   private config: Config;
-  private ws: WebSocket | null = null;
+  private axiosInstance: axios.AxiosInstance;
 
   constructor() {
     this.config = this.loadConfig();
+    this.axiosInstance = axios.create({
+      baseURL: this.config.serverUrl,
+      timeout: this.config.timeout,
+      headers: {
+        'User-Agent': 'DebugMate-CLI/1.0.0'
+      }
+    });
   }
 
   private loadConfig(): Config {
@@ -29,247 +36,254 @@ class DebugMateCLI {
         return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       }
     } catch (error) {
-      console.error(chalk.red('Error loading config:'), error);
+      console.error(chalk.red('설정 파일 로드 오류:'), error);
     }
 
-    // Default config
+    // 기본 설정
     return {
-      serverUrl: 'ws://localhost:3000',
-      fallbackToLocal: true
+      serverUrl: process.env.DEBUGMATE_SERVER_URL || 'http://localhost:3000',
+      timeout: 30000
     };
   }
 
-  private async connectToServer(): Promise<WebSocket | null> {
-    return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        console.log(chalk.yellow('Server connection timeout, falling back to local mode'));
-        resolve(null);
-      }, 5000); // 5초 타임아웃
-
-      this.ws = new WebSocket(this.config.serverUrl);
-      
-      this.ws.on('open', () => {
-        clearTimeout(timeout);
-        console.log(chalk.green('Connected to DebugMate server'));
-        resolve(this.ws!);
-      });
-
-      this.ws.on('error', (error) => {
-        clearTimeout(timeout);
-        console.log(chalk.yellow('Server connection failed, falling back to local mode'));
-        resolve(null);
-      });
-
-      this.ws.on('close', () => {
-        console.log(chalk.yellow('Disconnected from server'));
-      });
-    });
-  }
-
-  private async callServerFunction(functionName: string, args: any): Promise<any> {
-    if (!this.ws) {
-      this.ws = await this.connectToServer();
-    }
-
-    if (!this.ws) {
-      throw new Error('Server unavailable, use local mode');
-    }
-
-    return new Promise((resolve, reject) => {
-      const requestId = Date.now().toString();
-      
-      const message = {
-        id: requestId,
-        method: functionName,
-        params: args
-      };
-
-      const timeout = setTimeout(() => {
-        reject(new Error('Request timeout'));
-      }, 30000);
-
-      this.ws!.send(JSON.stringify(message));
-
-      this.ws!.once('message', (data) => {
-        clearTimeout(timeout);
-        try {
-          const response = JSON.parse(data.toString());
-          if (response.error) {
-            reject(new Error(response.error));
-          } else {
-            resolve(response.result);
-          }
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
-  }
-
-  private async runLocalMode(filePath: string, query: string): Promise<void> {
-    console.log(chalk.blue('Running in local mode...'));
-    console.log(chalk.yellow('Note: You need to set GEMINI_API_KEY environment variable'));
-    
-    // Check if GEMINI_API_KEY is set
-    if (!process.env.GEMINI_API_KEY) {
-      console.error(chalk.red('GEMINI_API_KEY environment variable is not set'));
-      console.log(chalk.blue('Please set it with: export GEMINI_API_KEY=your_api_key'));
-      process.exit(1);
-    }
-
-    // Check if gcc is available
+  private async checkServerHealth(): Promise<boolean> {
     try {
-      spawn('gcc', ['--version'], { stdio: 'ignore' });
+      const response = await this.axiosInstance.get('/healthz');
+      return response.status === 200;
     } catch (error) {
-      console.error(chalk.red('gcc is not installed or not in PATH'));
-      console.log(chalk.blue('Please install gcc: sudo apt-get install gcc'));
-      process.exit(1);
+      return false;
     }
+  }
 
-    // Run the local debug agent
-    const debugAgentPath = path.join(__dirname, '../../src/agentica/DebugAgent.ts');
-    const tsNodePath = path.join(__dirname, '../../node_modules/.bin/ts-node');
-    
-    if (!fs.existsSync(tsNodePath)) {
-      console.error(chalk.red('ts-node not found. Please run: npm install'));
-      process.exit(1);
-    }
+  private async uploadFileAndAnalyze(filePath: string, query: string): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', fs.createReadStream(filePath));
+    formData.append('query', query);
 
-    const child = spawn(tsNodePath, [debugAgentPath, filePath, query], {
-      stdio: 'inherit',
-      cwd: path.join(__dirname, '../..')
+    const response = await this.axiosInstance.post('/api/analyze', formData, {
+      headers: {
+        ...formData.getHeaders(),
+      },
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
     });
 
-    child.on('close', (code) => {
-      if (code !== 0) {
-        console.error(chalk.red(`Local execution failed with code ${code}`));
-        process.exit(code || 1);
+    return response.data;
+  }
+
+  private async runInProgressDebug(filePath: string): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', fs.createReadStream(filePath));
+
+    const response = await this.axiosInstance.post('/api/inprogress-debug', formData, {
+      headers: {
+        ...formData.getHeaders(),
+      },
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    });
+
+    return response.data;
+  }
+
+  private async runDebugAgent(code: string, userQuery: string, filename: string): Promise<any> {
+    const response = await this.axiosInstance.post('/api/debug-agent', {
+      code: code,
+      userQuery: userQuery,
+      filename: filename
+    });
+
+    return response.data;
+  }
+
+  private async getUserInput(prompt: string): Promise<string> {
+    return new Promise((resolve) => {
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+
+      rl.question(prompt, (answer) => {
+        rl.close();
+        resolve(answer.trim());
+      });
+    });
+  }
+
+  // inprogress-run.ts의 기능을 재현하는 메서드
+  async inProgressRun(filePath: string) {
+    try {
+      console.log(chalk.blue(`📁 분석 파일: ${filePath}`));
+      console.log(chalk.gray('─'.repeat(50)));
+
+      // 서버 상태 확인
+      const isHealthy = await this.checkServerHealth();
+      if (!isHealthy) {
+        throw new Error('서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.');
       }
-    });
+
+      console.log(chalk.yellow('🔄 InProgressDebug 실행 중...'));
+
+      // 1단계: InProgressDebug 실행
+      const inProgressResult = await this.runInProgressDebug(filePath);
+      
+      if (!inProgressResult.success) {
+        throw new Error(inProgressResult.error || 'InProgressDebug 실행 실패');
+      }
+
+      console.log(chalk.green('\n✅ InProgressDebug 완료!'));
+      console.log(chalk.cyan('\n📊 InProgressDebug 결과:'));
+      console.log(inProgressResult.inProgressResult);
+      console.log(chalk.gray('\n─'.repeat(50)));
+
+      // 입력받을 수 없는 환경이면 즉시 종료
+      if (!process.stdin.isTTY) {
+        console.log(chalk.yellow('\n⚠️ 대화형 모드가 불가능한 환경입니다.'));
+        process.exit(0);
+      }
+
+      // 2단계: 사용자 요청 받기
+      const userQuery = await this.getUserInput('\n🔍 요청 사항을 입력하시오: ');
+      
+      // 빈 입력이면 안내 후 종료
+      if (!userQuery) {
+        console.log(chalk.yellow('\n(빈 입력 감지) 추가 디버깅 없이 종료합니다.\n'));
+        process.exit(0);
+      }
+
+      console.log(chalk.yellow('\n🔄 DebugAgent 실행 중...'));
+
+      // 3단계: DebugAgent 실행
+      const code = fs.readFileSync(filePath, 'utf-8');
+      const debugResult = await this.runDebugAgent(code, userQuery, path.basename(filePath));
+      
+      if (!debugResult.success) {
+        throw new Error(debugResult.error || 'DebugAgent 실행 실패');
+      }
+
+      console.log(chalk.green('\n✅ DebugAgent 완료!'));
+      console.log(chalk.cyan('\n🔍 DebugAgent 결과:'));
+      console.log(debugResult.debugResult.analysis);
+      
+      if (debugResult.debugResult.markedFilePath) {
+        console.log(chalk.blue(`\n📝 표시된 파일: ${debugResult.debugResult.markedFilePath}`));
+      }
+
+      console.log(chalk.gray('\n─'.repeat(50)));
+      console.log(chalk.green('🎉 분석이 완료되었습니다!\n'));
+
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNREFUSED') {
+          console.error(chalk.red('❌ 서버에 연결할 수 없습니다.'));
+          console.log(chalk.yellow('💡 해결 방법:'));
+          console.log('   1. 서버가 실행 중인지 확인: npm run start:http');
+          console.log('   2. 포트가 올바른지 확인: http://localhost:3000');
+          console.log('   3. 방화벽 설정 확인');
+        } else if (error.response?.status === 413) {
+          console.error(chalk.red('❌ 파일이 너무 큽니다. (5MB 제한)'));
+        } else {
+          console.error(chalk.red('❌ 서버 오류:'), error.response?.data?.error || error.message);
+        }
+      } else {
+        console.error(chalk.red('❌ 실행 실패:'), error instanceof Error ? error.message : error);
+      }
+      process.exit(1);
+    }
   }
 
   async analyzeFile(filePath: string, query: string) {
     try {
-      console.log(chalk.blue(`Analyzing: ${filePath}`));
-      console.log(chalk.blue(`Query: ${query}`));
+      console.log(chalk.blue(`📁 분석 파일: ${filePath}`));
+      console.log(chalk.blue(`🔍 쿼리: ${query}`));
       console.log(chalk.gray('─'.repeat(50)));
 
-      // Try server first
-      try {
-        const result = await this.callServerFunction('afterDebugFromCode', [fs.readFileSync(filePath, 'utf-8'), path.basename(filePath)]);
-        
-        console.log(chalk.green('\n[Analysis Result]'));
+      // 서버 상태 확인
+      const isHealthy = await this.checkServerHealth();
+      if (!isHealthy) {
+        throw new Error('서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.');
+      }
+
+      console.log(chalk.yellow('🔄 서버에 분석 요청 중...'));
+
+      // 파일 업로드 및 분석
+      const result = await this.uploadFileAndAnalyze(filePath, query);
+      
+      if (result.success) {
+        console.log(chalk.green('\n✅ 분석 완료!'));
+        console.log(chalk.cyan('\n📊 분석 결과:'));
         console.log(result.analysis);
         
         if (result.markedFilePath) {
-          console.log(chalk.blue(`\n[Marked file]: ${result.markedFilePath}`));
+          console.log(chalk.blue(`\n📝 표시된 파일: ${result.markedFilePath}`));
         }
-      } catch (serverError) {
-        console.log(chalk.yellow('Server mode failed, switching to local mode...'));
-        await this.runLocalMode(filePath, query);
+      } else {
+        throw new Error(result.error || '알 수 없는 오류');
       }
 
     } catch (error) {
-      console.error(chalk.red('Analysis failed:'), error);
-      process.exit(1);
-    } finally {
-      if (this.ws) {
-        this.ws.close();
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNREFUSED') {
+          console.error(chalk.red('❌ 서버에 연결할 수 없습니다.'));
+          console.log(chalk.yellow('💡 해결 방법:'));
+          console.log('   1. 서버가 실행 중인지 확인: npm run start:http');
+          console.log('   2. 포트가 올바른지 확인: http://localhost:3000');
+          console.log('   3. 방화벽 설정 확인');
+        } else if (error.response?.status === 413) {
+          console.error(chalk.red('❌ 파일이 너무 큽니다. (5MB 제한)'));
+        } else {
+          console.error(chalk.red('❌ 서버 오류:'), error.response?.data?.error || error.message);
+        }
+      } else {
+        console.error(chalk.red('❌ 분석 실패:'), error instanceof Error ? error.message : error);
       }
+      process.exit(1);
     }
   }
 
-  async loopCheck(filePath: string, target?: string) {
+  async serverStatus() {
     try {
-      console.log(chalk.blue(`Loop analysis: ${filePath}`));
-      if (target) {
-        console.log(chalk.blue(`Target: ${target}`));
-      }
-      console.log(chalk.gray('─'.repeat(50)));
-
-      // Try server first
-      try {
-        const result = await this.callServerFunction('loopCheck', [{
-          code: fs.readFileSync(filePath, 'utf-8'),
-          target: target || 'all'
-        }]);
-
-        console.log(chalk.green('\n[Loop Analysis Result]'));
-        console.log(result.result || result);
-      } catch (serverError) {
-        console.log(chalk.yellow('Server mode failed, switching to local mode...'));
-        await this.runLocalMode(filePath, `루프 ${target || '전체'} 검사`);
-      }
-
+      const response = await this.axiosInstance.get('/api/info');
+      console.log(chalk.green('✅ 서버 상태: 정상'));
+      console.log(chalk.cyan('📊 서버 정보:'));
+      console.log(`   이름: ${response.data.name}`);
+      console.log(`   버전: ${response.data.version}`);
+      console.log(`   환경: ${response.data.environment}`);
+      console.log(`   시간: ${response.data.timestamp}`);
     } catch (error) {
-      console.error(chalk.red('Loop analysis failed:'), error);
-      process.exit(1);
-    } finally {
-      if (this.ws) {
-        this.ws.close();
-      }
-    }
-  }
-
-  async traceVariable(filePath: string, query: string) {
-    try {
-      console.log(chalk.blue(`Variable tracing: ${filePath}`));
-      console.log(chalk.blue(`Query: ${query}`));
-      console.log(chalk.gray('─'.repeat(50)));
-
-      // Try server first
-      try {
-        const result = await this.callServerFunction('traceVar', [{
-          code: fs.readFileSync(filePath, 'utf-8'),
-          userQuery: query
-        }]);
-
-        console.log(chalk.green('\n[Variable Trace Result]'));
-        console.log(result.variableTrace || result);
-      } catch (serverError) {
-        console.log(chalk.yellow('Server mode failed, switching to local mode...'));
-        await this.runLocalMode(filePath, query);
-      }
-
-    } catch (error) {
-      console.error(chalk.red('Variable tracing failed:'), error);
-      process.exit(1);
-    } finally {
-      if (this.ws) {
-        this.ws.close();
-      }
+      console.error(chalk.red('❌ 서버 상태 확인 실패:'), error instanceof Error ? error.message : error);
     }
   }
 }
 
-// CLI setup
+// CLI 설정
 const program = new Command();
 const cli = new DebugMateCLI();
 
 program
   .name('debug-mate')
-  .description('C/C++ code analysis and debugging tool')
+  .description('C/C++ 코드 분석 및 디버깅 도구 (inprogress-run.ts 기반)')
   .version('1.0.0');
 
 program
+  .command('run <file>')
+  .description('inprogress-run.ts와 동일한 대화형 분석 실행')
+  .action(async (file) => {
+    await cli.inProgressRun(file);
+  });
+
+program
   .command('analyze <file> <query>')
-  .description('Analyze C/C++ code with natural language query')
+  .description('자연어 쿼리로 C/C++ 코드 분석')
   .action(async (file, query) => {
     await cli.analyzeFile(file, query);
   });
 
 program
-  .command('loop <file> [target]')
-  .description('Analyze loops in C/C++ code')
-  .action(async (file, target) => {
-    await cli.loopCheck(file, target);
-  });
-
-program
-  .command('trace <file> <query>')
-  .description('Trace variables in C/C++ code')
-  .action(async (file, query) => {
-    await cli.traceVariable(file, query);
+  .command('status')
+  .description('서버 상태 확인')
+  .action(async () => {
+    await cli.serverStatus();
   });
 
 program.parse();
