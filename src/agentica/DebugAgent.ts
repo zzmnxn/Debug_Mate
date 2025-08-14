@@ -1,4 +1,4 @@
-import { loopCheck, afterDebugFromCode, traceVar, beforeDebug } from "./handlers";
+import { loopCheck, afterDebugFromCode, traceVar } from "./handlers";
 import * as fs from "fs";
 import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -58,90 +58,24 @@ function similarity(str1: string, str2: string): number {
   return intersection.size / union.size;
 }
 
-// 실행 전/리뷰 뉘앙스 키워드 판별 함수
-export function wantsPreReview(userQuery: string): boolean {
-  const q = userQuery.toLowerCase();
-  const keywords = [
-    "실행 전",
-    "실행전에",
-    "실행 전에",
-    "실행하기 전에",
-    "실행 전에 한번",
-    "실행 전에 한 번",
-    "실행 전에 점검",
-    "실행 전에 검사",
-    "실행 전에 리뷰",
-    "run before",
-    "before run",
-    "before execution",
-    "pre-run",
-    "prerun",
-  ];
-  return keywords.some((k) => q.includes(k));
-}
 
-// beforeDebug, afterDebug 미완성 코드 판별하는 함수
-export function isIncompleteCode(code: string): boolean {
-  // 괄호 균형 (중괄호/소괄호/대괄호)
-  let braces = 0,
-    parens = 0,
-    brackets = 0;
-  for (const ch of code) {
-    if (ch === "{") braces++;
-    else if (ch === "}") braces--;
-    else if (ch === "(") parens++;
-    else if (ch === ")") parens--;
-    else if (ch === "[") brackets++;
-    else if (ch === "]") brackets--;
-  }
-  if (braces !== 0 || parens !== 0 || brackets !== 0) return true;
 
-  // 블록 주석 미종결
-  const opens = (code.match(/\/\*/g) || []).length;
-  const closes = (code.match(/\*\//g) || []).length;
-  if (opens !== closes) return true;
 
-  // 문자열/문자 리터럴 미종결
-  // 큰따옴표/작은따옴표 개수의 짝이 맞지 않는지 대략 체크
-  const dqCount = (code.match(/"/g) || []).length;
-  const sqCount = (code.match(/'/g) || []).length;
-  if (dqCount % 2 !== 0 || sqCount % 2 !== 0) return true;
 
-  // 말미 블록/제어문을 막 연 상태로 끝나는지
-  const tail = code.trimEnd();
-  if (!tail) return false;
-  if (/{\s*$/.test(tail)) return true;
-  if (/^\s*do\s*$/m.test(tail)) return true; // do 다음 while 미존재
-  if (/\b(if|for|while|switch)\s*\([^)]*$/.test(tail)) return true; // 괄호 닫힘 누락
-
-  return false;
-}
-
-// afterDebug 호출을 감싸 조건부로 beforeDebug 실행
-async function runAfterOrBeforeDebug(
+// afterDebugFromCode를 직접 호출하는 함수
+async function runAfterDebug(
   code: string,
-  userQuery: string
-): Promise<{ analysis: string; markedFilePath?: string }> {
-  if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
-    if (isIncompleteCode(code)) {
-      console.log("** 코드가 미완성으로 판단되어 beforeDebug를 실행합니다.");
-    } else {
-      console.log(
-        "** 사용자가 '실행 전/리뷰' 요청을 명시하여 beforeDebug를 실행합니다."
-      );
-    }
-    const analysis = await beforeDebug({ code }); // handlers.ts의 beforeDebug는 string 반환 가정
-    return { analysis };
-  } else {
-    const { analysis, markedFilePath } = await afterDebugFromCode(
-      code,
-      "main.c"
-    );
-    return {
-      analysis: analysis + (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : ""),
-      markedFilePath
-    };
-  }
+  userQuery: string,
+  fileName: string
+): Promise<string> {
+  const { analysis, markedFilePath } = await afterDebugFromCode(
+    code,
+    fileName
+  );
+  return (
+    analysis +
+    (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "")
+  );
 }
 
 // AI 파싱 강화를 위한 헬퍼 함수
@@ -152,7 +86,6 @@ Understand various expressions, typos, abbreviations, and colloquial language, a
 Available tools:
 - loopCheck: Loop analysis and infinite loop detection
 - traceVar: Variable tracking and flow analysis  
-- testBreak: Memory leak and breakpoint testing
 - afterDebugFromCode: Comprehensive code analysis
 
 Target specification:
@@ -167,7 +100,7 @@ Example conversions (Korean input):
 "3번째 와일문 체크" → {"tool": "loopCheck", "target": "third", "details": {"loopType": "while"}}
 "변수 i 어떻게 변하는지 봐줘" → {"tool": "traceVar", "target": "variable", "details": {"name": "i"}}
 "전체적으로 문제없나 확인" → {"tool": "afterDebugFromCode", "target": "all", "details": {}}
-"메모리 새는거 있나?" → {"tool": "testBreak", "target": "all", "details": {}}
+"메모리 새는거 있나?" → {"tool": "afterDebugFromCode", "target": "all", "details": {}}
 
 ${context ? `Additional context: ${context}` : ""}
 
@@ -184,7 +117,7 @@ Output the analysis result in JSON format only:`;
       const parsed = JSON.parse(jsonMatch[0]);
       
       // 결과 검증 및 정규화
-      if (parsed.tool && ['loopCheck', 'traceVar', 'testBreak', 'afterDebugFromCode'].includes(parsed.tool)) {
+      if (parsed.tool && ['loopCheck', 'traceVar', 'afterDebugFromCode'].includes(parsed.tool)) {
         return {
           tool: parsed.tool,
           target: parsed.target || 'all',
@@ -262,14 +195,7 @@ async function robustParseSingleIntent(query: string): Promise<ParsedIntent> {
 async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   const normalizedQuery = normalizeText(query);
   
-  // 우선순위 1: 실행 전/리뷰 요청 체크 (가장 높은 우선순위)
-  if (wantsPreReview(query)) {
-    return {
-      tool: "afterDebugFromCode", // afterDebugFromCode로 파싱되지만 runAfterOrBeforeDebug에서 beforeDebug 실행
-      target: "all",
-      details: {}
-    };
-  }
+
   
   // 더 유연한 패턴 매칭
   const orderPatterns = [
@@ -321,25 +247,43 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   // 변수 추적 관련 키워드가 있으면 traceVar (오타 포함)
   if (flexibleMatch(normalizedQuery, [
     '변수', '추적', '변수추적', '트레이스', 'trace',
-    // 포인터 관련 키워드 추가
+    // 포인터 관련 키워드
     '포인터', '이중포인터', '이중 포인터', '더블포인터', '더블 포인터', 'pointer', 'double pointer', 'doublepointer',
     '포인터관계', '포인터 관계', 'pointer relation', 'pointerrelation',
     '포인터분석', '포인터 분석', 'pointer analysis', 'pointeranalysis',
     '포인터추적', '포인터 추적', 'pointer trace', 'pointertrace',
+    // 배열 관련 키워드
+    '배열', 'array', 'arr', '배열요소', '배열 요소', 'array element', 'arrayelement',
+    '배열접근', '배열 접근', 'array access', 'arrayaccess', '배열인덱스', '배열 인덱스', 'array index', 'arrayindex',
+    // 구조체 관련 키워드
+    '구조체', 'struct', 'structure', '구조체멤버', '구조체 멤버', 'struct member', 'structmember',
+    '구조체필드', '구조체 필드', 'struct field', 'structfield',
+    // 공용체 관련 키워드
+    '공용체', 'union', '공용체멤버', '공용체 멤버', 'union member', 'unionmember',
+    '공용체필드', '공용체 필드', 'union field', 'unionfield',
+    '공용체메모리', '공용체 메모리', 'union memory', 'unionmemory',
+    // 상수 관련 키워드
+    'const', '상수', 'constant', '상수값', '상수 값', 'constant value', 'constantvalue',
+    // 값 관련 키워드
+    '값', 'value', 'val', '값변화', '값 변화', 'value change', 'valuechange',
+    '초기값', '초기 값', 'initial value', 'initialvalue', '최종값', '최종 값', 'final value', 'finalvalue',
+    // 데이터 관련 키워드
+    '데이터', 'data', '데이터분석', '데이터 분석', 'data analysis', 'dataanalysis',
+    '데이터흐름', '데이터 흐름', 'data flow', 'dataflow', '데이터추적', '데이터 추적', 'data trace', 'datatrace',
+    // 주소 관련 키워드
+    '주소', 'address', 'addr', '주소값', '주소 값', 'address value', 'addressvalue',
+    '메모리주소', '메모리 주소', 'memory address', 'memoryaddress', '포인터주소', '포인터 주소', 'pointer address', 'pointeraddress',
+    // 변수 타입 관련 키워드
+    'int', 'integer', '정수', 'float', '실수', 'double', '문자', 'char', '문자열', 'string',
     // 일반적인 오타들
     '변', '변주', '츄적', '추적해', 'trase', 'trce',
-    '포인', '포인터', '포인트', '포인터', 'pointer', 'point', 'poin', 'pointe'
+    '포인', '포인터', '포인트', 'pointer', 'point', 'poin', 'pointe',
+    '배', '배열', 'array', 'arr', '구조', '구조체', 'struct', '구조체', '구조체',
+    '공용', '공용체', 'union', 'uni', 'unio',
+    '상', '상수', 'const', 'constant', '값', 'value', 'val',
+    '데', '데이터', 'data', 'dat', '주', '주소', 'address', 'addr', 'adr'
   ])) {
     tool = "traceVar";
-  }
-  
-  // 메모리 관련 키워드가 있으면 testBreak (오타 포함)
-  if (flexibleMatch(normalizedQuery, [
-    '메모리', '누수', '메모리누수', 'memory', 'leak',
-    // 일반적인 오타들
-    '메모', '메모이', '누', '누스', 'memori', 'memorry', 'lek'
-  ])) {
-    tool = "testBreak";
   }
   
   // 컴파일 관련 키워드 체크 (afterDebugFromCode는 기본값이지만 명시적으로 확인)
@@ -347,7 +291,10 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   const compileKeywords = [
     '컴파일', '컴파일해', 'compile', 'build', '빌드',
     // 일반적인 오타들
-    '컴패일', '컴파', '컴팔', '컴파일해줘', 'complie', 'complile', 'compil', '빌드해'
+    '컴패일', '컴파', '컴팔', '컴파일해줘', 'complie', 'complile', 'compil', '빌드해',
+    '메모리', '누수', '메모리누수', 'memory', 'leak',
+    // 일반적인 오타들
+    '메모', '메모이', '누', '누스', 'memori', 'memorry', 'lek'
   ];
   if (flexibleMatch(normalizedQuery, compileKeywords)) {
     // 이미 기본값이 afterDebugFromCode이므로 명시적으로 설정할 필요는 없지만 
@@ -364,14 +311,13 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
 This query might contain typos. Please identify the most likely intent:
 1. "loopCheck" - if related to loops, for/while statements, loop analysis
 2. "traceVar" - if related to variable tracking, variable tracing  
-3. "testBreak" - if related to memory leaks, memory issues
-4. "afterDebugFromCode" - if related to compilation, overall analysis, debugging, general inspection
+3. "afterDebugFromCode" - if related to compilation, overall analysis, debugging, general inspection
 
 IMPORTANT RULES:
 - If the user says "검사해줘", "검사해", "검사", "분석해줘", "분석해", "분석" without specifying loops or variables, use "afterDebugFromCode"
 - If the user mentions specific loops (for, while, do-while), use "loopCheck"
-- If the user mentions variable tracking, tracing, pointers, or pointer analysis, use "traceVar"
-- If the user mentions memory leaks or memory issues, use "testBreak"
+- If the user mentions variable tracking, tracing, pointers, arrays, structs, constants, values, or data analysis, use "traceVar"
+- If the user mentions memory leaks or memory issues, use "afterDebugFromCode"
 - For general code inspection, compilation, or debugging, use "afterDebugFromCode"
 
 Consider common typos in Korean/English:
@@ -379,13 +325,13 @@ Consider common typos in Korean/English:
 - 반복문 variations: 반보문, 반복믄, 반복, etc.
 - 변수 variations: 변, 변주, 변스, etc.
 
-Respond with only one word: loopCheck, traceVar, testBreak, or afterDebugFromCode`;
+Respond with only one word: loopCheck, traceVar, or afterDebugFromCode`;
 
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const result = await model.generateContent(intentPrompt);
       const aiTool = result.response.text().trim();
       
-      if (['loopCheck', 'traceVar', 'testBreak', 'afterDebugFromCode'].includes(aiTool)) {
+      if (['loopCheck', 'traceVar', 'afterDebugFromCode'].includes(aiTool)) {
         tool = aiTool;
       }
     } catch (err) {
@@ -616,21 +562,35 @@ export class DebugAgent {
   constructor() {
     // API 키 검증
     if (!process.env.GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY 환경변수가 설정되지 않았습니다.");
+      console.error("[Error] GEMINI_API_KEY 환경변수가 설정되지 않았습니다.");
+      process.exit(1);
     }
-  }
 
-  // HTTP API에서 사용할 메서드
-  async processUserQuery(code: string, userQuery: string, filename: string): Promise<any> {
+    // 파일 경로 검증
+    const absolutePath = path.resolve(filePath);
+    if (!fs.existsSync(absolutePath)) {
+      console.error(`[Error] 파일을 찾을 수 없습니다: ${absolutePath}`);
+      process.exit(1);
+    }
+    
+    // 파일명 추출 (확장자 포함)
+    const fileName = path.basename(filePath);
+
+    // 파일 읽기
+    let code: string;
     try {
-      if (!code || !userQuery) {
-        throw new Error('코드와 사용자 쿼리가 필요합니다.');
+      code = fs.readFileSync(absolutePath, "utf-8");
+      if (!code || code.trim().length === 0) {
+        console.error("[Error] 파일이 비어있습니다.");
+        process.exit(1);
       }
+    } catch (readError: any) {
+      console.error(`[Error] 파일 읽기 실패: ${readError.message}`);
+      process.exit(1);
+    }
 
-      if (!code.trim()) {
-        throw new Error('코드가 비어있습니다.');
-      }
-
+    //add or modify your homework function here !! @@@@@@@@@@@@@@@@@@
+    try {
       const parsedIntents = await parseUserIntent(userQuery);
       let resultText = "";
       let actualTools: string[] = []; // 실제 실행된 도구들을 추적
@@ -663,16 +623,9 @@ export class DebugAgent {
               sectionResult = result.result ?? "";
               actualTools.push("loopCheck");
             } else if (intent.tool === "afterDebugFromCode") {
-              // afterDebug 호출을 beforeDebug 조건으로 감싸기
-              const result = await runAfterOrBeforeDebug(code, userQuery);
-              sectionResult = result.analysis;
-              markedFilePath = result.markedFilePath || null;
-              // runAfterOrBeforeDebug에서 실제로 실행된 도구를 확인
-              if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
-                actualTools.push("beforeDebug");
-              } else {
-                actualTools.push("afterDebugFromCode");
-              }
+              // afterDebugFromCode 직접 호출
+              resultText = await runAfterDebug(code, userQuery, fileName);
+              actualTools.push("afterDebugFromCode");
             } else if (intent.tool === "traceVar") {
               const result = await traceVar({ code, userQuery: userQuery });
               sectionResult = result.variableTrace ?? "";
@@ -694,16 +647,9 @@ export class DebugAgent {
           resultText = result.result ?? "";
           actualTools.push("loopCheck");
         } else if (intent.tool === "afterDebugFromCode") {
-          // afterDebug 호출을 beforeDebug 조건으로 감싸기
-          const result = await runAfterOrBeforeDebug(code, userQuery);
-          resultText = result.analysis;
-          markedFilePath = result.markedFilePath || null;
-          // runAfterOrBeforeDebug에서 실제로 실행된 도구를 확인
-          if (wantsPreReview(userQuery) || isIncompleteCode(code)) {
-            actualTools.push("beforeDebug");
-          } else {
-            actualTools.push("afterDebugFromCode");
-          }
+          // afterDebugFromCode 직접 호출
+          resultText = await runAfterDebug(code, userQuery, fileName);
+          actualTools.push("afterDebugFromCode");
         } else if (intent.tool === "traceVar") {
           const result = await traceVar({ code, userQuery: userQuery });
           resultText = result.variableTrace ?? "";
