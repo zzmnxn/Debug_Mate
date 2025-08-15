@@ -44,7 +44,7 @@ async function main() {
     // DebugAgent 동기 실행 → 종료 코드 반영하여 즉시 종료
     const r = spawnSync(
       "npx",
-      ["ts-node", "--esm", "src/agentica/DebugAgent.ts", targetFile, req],
+      ["tsx", "cli/src/agentica/DebugAgent.ts", targetFile, req],
       { stdio: "inherit" }
     );
 
