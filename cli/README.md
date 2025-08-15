@@ -21,9 +21,30 @@ npm install -g @debugmate/cli
 
 ### 2. API 키 설정
 
+#### 방법 1: 환경 변수로 설정 (임시)
 ```bash
 export GEMINI_API_KEY="your_api_key_here"
+export GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
 ```
+
+#### 방법 2: .env 파일로 설정 (권장)
+```bash
+# 프로젝트 루트에 .env 파일 생성
+cat > .env << EOF
+GEMINI_API_KEY=your_api_key_here
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent
+EOF
+```
+
+#### 방법 3: 시스템 전역 설정 (영구)
+```bash
+# ~/.bashrc 또는 ~/.zshrc에 추가
+echo 'export GEMINI_API_KEY="your_api_key_here"' >> ~/.bashrc
+echo 'export GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+> **API 키 발급 방법**: [Google AI Studio](https://makersuite.google.com/app/apikey)에서 무료로 발급받을 수 있습니다.
 
 ### 3. 사용하기
 
@@ -98,6 +119,17 @@ Esc        # 명령 모드
 :q          # 종료
 :wq         # 저장 후 종료
 :q!         # 저장하지 않고 종료
+```
+
+### 환경변수 설정 문제
+```bash
+# 환경변수가 제대로 설정되었는지 확인
+echo $GEMINI_API_KEY
+echo $GEMINI_BASE_URL
+
+# 설정되지 않았다면 다시 설정
+export GEMINI_API_KEY="your_api_key_here"
+export GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
 ```
 
 ### Windows/macOS 사용자
