@@ -21,7 +21,7 @@ while IFS= read -r FULLPATH; do
     pkill -f "ts-node src/agentica/InProgressInteractive.ts" >/dev/null 2>&1
 
     # 표준입력을 /dev/tty에 붙여야 readline이 동작함
-    npx ts-node src/agentica/inprogress-run.ts "$FULLPATH" < /dev/tty
+    npx ts-node cli/src/agentica/inprogress-run.ts "$FULLPATH" < /dev/tty
   )
   echo " 실행 완료"
 done
