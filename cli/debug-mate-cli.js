@@ -39,6 +39,20 @@ program
   .option('-d, --debug', chalk.gray('디버그 모드 활성화'))
   .option('-q, --quiet', chalk.gray('조용한 모드 (최소 출력)'));
 
+// 플랫폼 체크 함수
+function checkPlatform() {
+  if (process.platform !== 'linux') {
+    console.error(chalk.red('❌ 이 CLI는 Linux 환경에서만 실행할 수 있습니다.'));
+    console.log(chalk.yellow('💡 현재 플랫폼: ' + process.platform));
+    console.log(chalk.blue('📋 해결 방법:'));
+    console.log(chalk.cyan('   1. WSL2 (Windows Subsystem for Linux) 사용'));
+    console.log(chalk.cyan('   2. Linux 가상머신 사용'));
+    console.log(chalk.cyan('   3. GitHub Codespaces 사용'));
+    console.log(chalk.gray('   자세한 내용: https://github.com/zzmnxn/Debug_Mate#readme'));
+    process.exit(1);
+  }
+}
+
 // tmux 분할 화면 함수 (기본 디버깅 모드)
 async function tmuxDebug(file, options = {}) {
   const { session, leftSize = 60 } = options;
@@ -46,6 +60,18 @@ async function tmuxDebug(file, options = {}) {
   console.log(chalk.blue(`🖥️  tmux 분할 화면 모드 시작...`));
   console.log(chalk.gray('📝 왼쪽: 파일 편집, 오른쪽: 디버깅 결과'));
   console.log(chalk.gray('🛑 종료하려면 tmux 세션을 종료하세요.\n'));
+
+  // tmux 설치 확인
+  try {
+    execSync('tmux --version', { stdio: 'ignore' });
+  } catch (error) {
+    console.error(chalk.red('❌ tmux가 설치되지 않았습니다.'));
+    console.log(chalk.yellow('💡 설치 명령어: sudo apt install tmux'));
+    console.log(chalk.blue('📋 전체 시스템 요구사항:'));
+    console.log(chalk.cyan('   sudo apt update'));
+    console.log(chalk.cyan('   sudo apt install -y tmux inotify-tools gcc g++ build-essential python3 make'));
+    process.exit(1);
+  }
 
   // tmux 세션 이름
   const sessionName = session || `debug-mate-${file.replace('.c', '')}`;
@@ -153,6 +179,7 @@ program
   .option('-t, --timeout <ms>', chalk.gray('타임아웃 설정 (기본: 30000ms)'), '30000')
   .action(async (file, options) => {
     console.log(LOGO);
+    checkPlatform();
     
     if (!existsSync(file)) {
       console.error(chalk.red(`❌ 파일을 찾을 수 없습니다: ${file}`));
@@ -171,6 +198,7 @@ program
   .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 (기본: 60%)'), '60')
   .action(async (file, options) => {
     console.log(LOGO);
+    checkPlatform();
     
     if (!existsSync(file)) {
       console.error(chalk.red(`❌ 파일을 찾을 수 없습니다: ${file}`));
@@ -189,6 +217,7 @@ program
   .option('-l, --list', chalk.gray('사용 가능한 테스트 타입 목록'))
   .action(async (name = 'test', options) => {
     console.log(LOGO);
+    checkPlatform();
 
     if (options.list) {
       console.log(chalk.blue('📋 사용 가능한 테스트 타입:'));
@@ -266,6 +295,15 @@ program
     
     console.log(chalk.blue('🔍 시스템 상태 확인 중...\n'));
 
+    // 플랫폼 확인
+    if (process.platform !== 'linux') {
+      console.log(chalk.red(`❌ 플랫폼: ${process.platform} (Linux가 필요합니다)`));
+      console.log(chalk.yellow('💡 이 CLI는 Linux 환경에서만 실행할 수 있습니다.'));
+      return;
+    } else {
+      console.log(chalk.green(`✅ 플랫폼: ${process.platform}`));
+    }
+
     // 필수 도구 확인
     const tools = [
       { name: 'Node.js', command: 'node', version: process.version },
@@ -284,6 +322,13 @@ program
         }
       } catch (error) {
         console.log(chalk.red(`❌ ${tool.name}: 설치되지 않음`));
+        if (tool.command === 'tmux') {
+          console.log(chalk.yellow('   💡 설치: sudo apt install tmux'));
+        } else if (tool.command === 'inotifywait') {
+          console.log(chalk.yellow('   💡 설치: sudo apt install inotify-tools'));
+        } else if (tool.command === 'gcc') {
+          console.log(chalk.yellow('   💡 설치: sudo apt install build-essential'));
+        }
       }
     }
 
@@ -330,6 +375,7 @@ program
     }
 
     console.log(LOGO);
+    checkPlatform();
     await tmuxDebug(file);
   });
 

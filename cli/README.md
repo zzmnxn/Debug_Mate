@@ -2,22 +2,35 @@
 
 C/C++ 대화형 디버깅 CLI (Linux 전용)
 
-## 설치
+## ⚠️ 중요: Linux 전용 도구
 
-### 필수 요구사항
+이 CLI는 **Linux 환경에서만** 작동합니다. Windows나 macOS에서는 실행할 수 없습니다.
+
+### 필수 시스템 요구사항
+
+다음 도구들이 **반드시 설치**되어 있어야 합니다:
 
 ```bash
-# 시스템 패키지
+# 필수 시스템 패키지 설치
 sudo apt update
-sudo apt install -y inotify-tools gcc g++ build-essential tmux
+sudo apt install -y tmux inotify-tools gcc g++ build-essential python3 make
 
-# Node.js 20+
+# Node.js 20+ 설치
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
-
-# 빌드 도구 (tree-sitter 네이티브 모듈용)
-sudo apt install -y python3 make
 ```
+
+### 설치 확인
+
+```bash
+# 설치 확인
+tmux --version
+inotifywait --version
+gcc --version
+node --version
+```
+
+## 설치
 
 ### CLI 설치
 
@@ -182,10 +195,14 @@ debug-mate --quiet debug test.c
 
 ## 요구사항
 
-- **OS**: Linux (Ubuntu 등)
+- **OS**: Linux (Ubuntu, Debian 등)
 - **Node.js**: 20.x 이상 (23.x 미만)
-- **시스템 패키지**: `inotify-tools`, `gcc/g++`, `build-essential`, `tmux`
-- **빌드 도구**: `python3`, `make` (tree-sitter 네이티브 모듈용)
+- **시스템 패키지**: 
+  - `tmux` (sudo apt install tmux)
+  - `inotify-tools` (sudo apt install inotify-tools)
+  - `gcc/g++` (sudo apt install build-essential)
+  - `python3` (sudo apt install python3)
+  - `make` (sudo apt install make)
 
 ## 기능
 
@@ -205,19 +222,30 @@ debug-mate --quiet debug test.c
 ### 빠른 시작
 
 ```bash
-# 1. API 키 설정
+# 1. 시스템 요구사항 설치
+sudo apt update
+sudo apt install -y tmux inotify-tools gcc g++ build-essential python3 make
+
+# 2. Node.js 설치
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# 3. CLI 설치
+npm install -g @debugmate/cli
+
+# 4. API 키 설정
 export GEMINI_API_KEY="your_key_here"
 
-# 2. 시스템 상태 확인
+# 5. 시스템 상태 확인
 debug-mate status
 
-# 3. 테스트 코드 생성
+# 6. 테스트 코드 생성
 debug-mate generate
 
-# 4. 디버깅 시작 (tmux 분할 화면 자동 시작)
+# 7. 디버깅 시작 (tmux 분할 화면 자동 시작)
 debug-mate debug test.c
 
-# 5. 파일 편집 후 저장하면 자동 디버깅!
+# 8. 파일 편집 후 저장하면 자동 디버깅!
 ```
 
 ### 워크플로우
@@ -239,6 +267,17 @@ debug-mate debug complex_test.c
 
 ## 트러블슈팅
 
+### tmux 설치 실패
+```bash
+sudo apt update
+sudo apt install -y tmux
+```
+
+### inotify-tools 설치 실패
+```bash
+sudo apt install -y inotify-tools
+```
+
 ### tree-sitter 설치 실패
 ```bash
 # 빌드 도구 확인
@@ -249,16 +288,6 @@ npm cache clean --force
 npm install -g @debugmate/cli
 ```
 
-### inotifywait 없음
-```bash
-sudo apt install -y inotify-tools
-```
-
-### tmux 없음
-```bash
-sudo apt install -y tmux
-```
-
 ### tmux 세션 종료
 ```bash
 # 현재 세션 종료
@@ -267,6 +296,14 @@ tmux kill-session
 # 특정 세션 종료
 tmux kill-session -t debug-mate-test
 ```
+
+### Windows/macOS에서 실행 시
+이 CLI는 **Linux 전용**입니다. Windows나 macOS에서는 실행할 수 없습니다.
+
+**대안:**
+- WSL2 (Windows Subsystem for Linux) 사용
+- Linux 가상머신 사용
+- GitHub Codespaces 사용
 
 ## 라이선스
 
