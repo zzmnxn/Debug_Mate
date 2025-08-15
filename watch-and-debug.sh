@@ -8,7 +8,7 @@ if [ -z "$TARGET_FILE" ]; then
   exit 1
 fi
 
-echo "👀 ${TARGET_FILE} 저장 감시 시작 (Ctrl+C로 중단)"
+echo " <${TARGET_FILE}> 저장 감시 시작 (Ctrl+C로 중단)"
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 
