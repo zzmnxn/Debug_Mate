@@ -18,7 +18,9 @@
     "build": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run build && chmod +x generate-test.sh",
     "postinstall": "chmod +x cli/generate-test.sh && chmod +x watch-and-debug.sh",
-    "dev": "ts-node src/agentica/inprogress-run.ts"
+    "dev": "ts-node src/agentica/inprogress-run.ts",
+    "start": "node dist/agentica/inprogress-run.js",
+    "debug": "node dist/agentica/inprogress-run.js"
   },
   "keywords": ["debug", "c", "cpp", "analysis", "cli", "linux", "inotify", "tmux"],
   "author": "DebugMate Team",
