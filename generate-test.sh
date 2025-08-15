@@ -6,7 +6,7 @@
 TEST_NAME=${1:-"test"}
 TARGET_FILE="${TEST_NAME}.c"
 
-echo "🧪 테스트 코드 생성기"
+echo " 테스트 코드 생성기"
 echo "생성할 파일: $TARGET_FILE"
 echo ""
 
@@ -35,7 +35,7 @@ int main() {
     return 0;
 }
 EOF
-        echo "✅ 기본 Hello World 코드 생성 완료"
+        echo " 기본 Hello World 코드 생성 완료"
         ;;
     2)
         cat > "$TARGET_FILE" << 'EOF'
@@ -53,7 +53,7 @@ int main() {
     return 0;
 }
 EOF
-        echo "✅ 루프 테스트 코드 생성 완료"
+        echo " 루프 테스트 코드 생성 완료"
         ;;
     3)
         cat > "$TARGET_FILE" << 'EOF'
@@ -78,7 +78,7 @@ int main() {
     return 0;
 }
 EOF
-        echo "✅ 조건문 테스트 코드 생성 완료"
+        echo " 조건문 테스트 코드 생성 완료"
         ;;
     4)
         cat > "$TARGET_FILE" << 'EOF'
@@ -99,7 +99,7 @@ int main() {
     return 0;
 }
 EOF
-        echo "✅ 배열 테스트 코드 생성 완료"
+        echo " 배열 테스트 코드 생성 완료"
         ;;
     5)
         cat > "$TARGET_FILE" << 'EOF'
@@ -124,7 +124,7 @@ int main() {
     return 0;
 }
 EOF
-        echo "✅ 함수 테스트 코드 생성 완료"
+        echo " 함수 테스트 코드 생성 완료"
         ;;
     6)
         cat > "$TARGET_FILE" << 'EOF'
@@ -146,7 +146,7 @@ int main() {
     return 0;
 }
 EOF
-        echo "✅ 포인터 테스트 코드 생성 완료"
+        echo " 포인터 테스트 코드 생성 완료"
         ;;
     7)
         cat > "$TARGET_FILE" << 'EOF'
@@ -169,7 +169,7 @@ int main() {
     return 0;
 }
 EOF
-        echo "✅ 컴파일 에러 코드 생성 완료"
+        echo " 컴파일 에러 코드 생성 완료"
         ;;
     8)
         cat > "$TARGET_FILE" << 'EOF'
@@ -191,7 +191,7 @@ int main() {
     return 0;
 }
 EOF
-        echo "✅ 런타임 에러 코드 생성 완료"
+        echo " 런타임 에러 코드 생성 완료"
         ;;
     9)
         cat > "$TARGET_FILE" << 'EOF'
@@ -250,16 +250,16 @@ int calculateGrade(float score) {
     else return 'D';
 }
 EOF
-        echo "✅ 복합 테스트 코드 생성 완료"
+        echo " 복합 테스트 코드 생성 완료"
         ;;
     *)
-        echo "❌ 잘못된 선택입니다."
+        echo " 잘못된 선택입니다."
         exit 1
         ;;
 esac
 
 echo ""
-echo "📁 생성된 파일: $TARGET_FILE"
-echo "🚀 디버깅 시작: debug-mate $TARGET_FILE"
-echo "🖥️  tmux 모드: debug-mate-tmux $TARGET_FILE"
+echo " 생성된 파일: $TARGET_FILE"
+echo " 디버깅 시작: debug-mate $TARGET_FILE"
+echo "  tmux 모드: debug-mate-tmux $TARGET_FILE"
 echo ""

@@ -1,310 +1,96 @@
-# @debugmate/cli
+# DebugMate CLI
 
-C/C++ 대화형 디버깅 CLI (Linux 전용)
+C/C++ 코드를 AI로 분석하고 디버깅하는 Linux 전용 CLI 도구
 
-## ⚠️ 중요: Linux 전용 도구
+## 🚀 빠른 시작
 
-이 CLI는 **Linux 환경에서만** 작동합니다. Windows나 macOS에서는 실행할 수 없습니다.
-
-### 필수 시스템 요구사항
-
-다음 도구들이 **반드시 설치**되어 있어야 합니다:
+### 1. 설치
 
 ```bash
-# 필수 시스템 패키지 설치
+# 시스템 요구사항 설치
 sudo apt update
 sudo apt install -y tmux inotify-tools gcc g++ build-essential python3 make
 
 # Node.js 20+ 설치
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
-```
 
-### 설치 확인
-
-```bash
-# 설치 확인
-tmux --version
-inotifywait --version
-gcc --version
-node --version
-```
-
-## 설치
-
-### CLI 설치
-
-```bash
+# CLI 설치
 npm install -g @debugmate/cli
 ```
 
-## 사용법
-
-### 기본 사용법
+### 2. API 키 설정
 
 ```bash
-# Gemini API 키 설정
 export GEMINI_API_KEY="your_api_key_here"
+```
 
-# 기본 디버깅 (tmux 분할 화면 자동 시작)
-debug-mate test.c
+### 3. 사용하기
 
-# 또는 명시적으로 debug 명령어 사용
+```bash
+# 테스트 코드 생성
+debug-mate generate
+
+# tmux 분할 화면으로 디버깅 시작
 debug-mate debug test.c
 ```
 
-### 명령어 목록
+## 📋 주요 명령어
+
+| 명령어 | 설명 | 예시 |
+|--------|------|------|
+| `debug <file>` | tmux 분할 화면으로 파일 감시 및 자동 디버깅 | `debug-mate debug test.c` |
+| `generate [name]` | 테스트 코드 자동 생성 | `debug-mate generate my_test` |
+| `status` | 시스템 상태 확인 | `debug-mate status` |
+| `--help` | 도움말 표시 | `debug-mate --help` |
+
+## 🎯 주요 기능
+
+- **tmux 분할 화면**: 왼쪽에서 코드 편집, 오른쪽에서 실시간 디버깅 결과
+- **자동 파일 감시**: 파일 저장 시 자동으로 디버깅 실행
+- **AI 기반 분석**: 자연어로 코드 분석 및 디버깅
+- **테스트 코드 생성**: 9가지 타입의 테스트 코드 자동 생성
+
+## ⚠️ 요구사항
+
+- **OS**: Linux (Ubuntu, Debian 등)
+- **Node.js**: 20.x 이상
+- **시스템 패키지**: tmux, inotify-tools, gcc/g++, python3, make
+
+## 🔧 트러블슈팅
+
+### tmux가 감지되지 않는 경우
+```bash
+sudo apt install -y tmux
+```
+
+### inotify-tools 오류
+```bash
+sudo apt install -y inotify-tools
+```
+
+### Windows/macOS 사용자
+- WSL2 (Windows Subsystem for Linux) 사용
+- Linux 가상머신 사용
+- GitHub Codespaces 사용
+
+## 📖 자세한 사용법
 
 ```bash
 # 도움말
 debug-mate --help
 
-# 버전 확인
-debug-mate --version
-
-# 기본 디버깅 (tmux 분할 화면)
-debug-mate debug <file>     # 또는 debug-mate d <file>
-
-# tmux 분할 화면 (debug와 동일)
-debug-mate tmux <file>      # 또는 debug-mate t <file>
-
-# 테스트 코드 생성
-debug-mate generate [name]  # 또는 debug-mate g [name]
-
-# 설정 관리
-debug-mate config          # 또는 debug-mate c
-
-# 시스템 상태 확인
-debug-mate status          # 또는 debug-mate s
-
-# 프로그램 정보
-debug-mate info            # 또는 debug-mate i
+# 특정 명령어 도움말
+debug-mate debug --help
+debug-mate generate --help
 ```
 
-## 상세 명령어
+## 🔗 링크
 
-### 1. 기본 디버깅 (tmux 분할 화면)
+- [GitHub](https://github.com/zzmnxn/Debug_Mate)
+- [Issues](https://github.com/zzmnxn/Debug_Mate/issues)
+- [NPM](https://www.npmjs.com/package/@debugmate/cli)
 
-```bash
-# 기본 사용 (tmux 분할 화면 자동 시작)
-debug-mate debug test.c
-
-# 옵션과 함께
-debug-mate debug test.c --session my-session --left 70 --timeout 60000
-debug-mate debug test.c -s my-session -l 70 -t 60000
-```
-
-**옵션:**
-- `-s, --session <name>`: tmux 세션 이름 지정
-- `-l, --left <percent>`: 왼쪽 패널 크기 (기본: 60%)
-- `-t, --timeout <ms>`: 타임아웃 설정 (기본: 30000ms)
-
-### 2. tmux 분할 화면 (debug와 동일)
-
-```bash
-# debug 명령어와 동일한 기능
-debug-mate tmux test.c
-
-# 옵션과 함께
-debug-mate tmux test.c --session my-session --left 70
-debug-mate tmux test.c -s my-session -l 70
-```
-
-**옵션:**
-- `-s, --session <name>`: tmux 세션 이름 지정
-- `-l, --left <percent>`: 왼쪽 패널 크기 (기본: 60%)
-
-### 3. 테스트 코드 생성
-
-```bash
-# 기본 테스트 생성
-debug-mate generate
-
-# 특정 이름으로 생성
-debug-mate generate my_test
-
-# 테스트 타입 목록 보기
-debug-mate generate --list
-
-# 특정 타입으로 생성
-debug-mate generate my_test --type 3
-```
-
-**생성 가능한 테스트 타입:**
-1. 기본 Hello World
-2. 루프 테스트 (for)
-3. 조건문 테스트 (if-else)
-4. 배열 테스트
-5. 함수 테스트
-6. 포인터 테스트
-7. 에러가 있는 코드 (컴파일 에러)
-8. 런타임 에러 코드
-9. 복합 테스트 (여러 기능 포함)
-
-### 4. 설정 관리
-
-```bash
-# 모든 설정 조회
-debug-mate config --list
-
-# 설정 값 설정
-debug-mate config --set api_key=your_key
-
-# 설정 값 조회
-debug-mate config --get api_key
-```
-
-### 5. 시스템 상태 확인
-
-```bash
-# 시스템 상태 확인
-debug-mate status
-```
-
-다음 항목들을 확인합니다:
-- Node.js 버전
-- inotify-tools 설치 여부
-- GCC 설치 여부
-- tmux 설치 여부
-- Gemini API 키 설정 여부
-
-### 6. 프로그램 정보
-
-```bash
-# 프로그램 정보 및 링크
-debug-mate info
-```
-
-다음 정보를 표시합니다:
-- 버전 정보
-- Node.js 및 플랫폼 정보
-- GitHub, Issues, NPM 링크
-- 라이선스 정보
-
-## 글로벌 옵션
-
-모든 명령어에서 사용할 수 있는 글로벌 옵션:
-
-```bash
-# 디버그 모드
-debug-mate --debug debug test.c
-
-# 조용한 모드
-debug-mate --quiet debug test.c
-```
-
-## 요구사항
-
-- **OS**: Linux (Ubuntu, Debian 등)
-- **Node.js**: 20.x 이상 (23.x 미만)
-- **시스템 패키지**: 
-  - `tmux` (sudo apt install tmux)
-  - `inotify-tools` (sudo apt install inotify-tools)
-  - `gcc/g++` (sudo apt install build-essential)
-  - `python3` (sudo apt install python3)
-  - `make` (sudo apt install make)
-
-## 기능
-
-- **tmux 분할 화면 기본**: 모든 디버깅이 tmux 분할 화면으로 실행
-- 파일 저장 감지 자동 디버깅
-- 대화형 자연어 쿼리
-- AI 기반 코드 분석
-- 실시간 피드백
-- 테스트 코드 자동 생성 (generate-test.sh 사용)
-- 예쁜 CLI 인터페이스 (chalk)
-- 시스템 상태 확인
-- 설정 관리
-- **통합된 단일 CLI**: 모든 기능이 하나의 파일에 통합
-
-## 사용 예시
-
-### 빠른 시작
-
-```bash
-# 1. 시스템 요구사항 설치
-sudo apt update
-sudo apt install -y tmux inotify-tools gcc g++ build-essential python3 make
-
-# 2. Node.js 설치
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# 3. CLI 설치
-npm install -g @debugmate/cli
-
-# 4. API 키 설정
-export GEMINI_API_KEY="your_key_here"
-
-# 5. 시스템 상태 확인
-debug-mate status
-
-# 6. 테스트 코드 생성
-debug-mate generate
-
-# 7. 디버깅 시작 (tmux 분할 화면 자동 시작)
-debug-mate debug test.c
-
-# 8. 파일 편집 후 저장하면 자동 디버깅!
-```
-
-### 워크플로우
-
-```bash
-# 1. API 키 설정
-export GEMINI_API_KEY="your_key_here"
-
-# 2. 테스트 코드 생성 (선택사항)
-debug-mate generate complex_test
-
-# 3. 디버깅 시작 (tmux 분할 화면 자동 시작)
-debug-mate debug complex_test.c
-
-# 4. 왼쪽 패널에서 코드 편집
-# 5. 저장하면 오른쪽에서 자동 디버깅
-# 6. 자연어로 추가 질문 가능
-```
-
-## 트러블슈팅
-
-### tmux 설치 실패
-```bash
-sudo apt update
-sudo apt install -y tmux
-```
-
-### inotify-tools 설치 실패
-```bash
-sudo apt install -y inotify-tools
-```
-
-### tree-sitter 설치 실패
-```bash
-# 빌드 도구 확인
-sudo apt install -y python3 make gcc g++
-
-# 캐시 정리 후 재설치
-npm cache clean --force
-npm install -g @debugmate/cli
-```
-
-### tmux 세션 종료
-```bash
-# 현재 세션 종료
-tmux kill-session
-
-# 특정 세션 종료
-tmux kill-session -t debug-mate-test
-```
-
-### Windows/macOS에서 실행 시
-이 CLI는 **Linux 전용**입니다. Windows나 macOS에서는 실행할 수 없습니다.
-
-**대안:**
-- WSL2 (Windows Subsystem for Linux) 사용
-- Linux 가상머신 사용
-- GitHub Codespaces 사용
-
-## 라이선스
+## 📄 라이선스
 
 MIT

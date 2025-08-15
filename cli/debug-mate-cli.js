@@ -32,7 +32,8 @@ program
   .name('debug-mate')
   .description(chalk.cyan('C/C++ 코드 분석을 위한 AI 기반 대화형 디버깅 도구'))
   .version(chalk.green(`v${VERSION}`), '-v, --version')
-  .usage(chalk.yellow('<command> [options]'));
+  .usage(chalk.yellow('<command> [options]'))
+  .helpOption('-h, --help', chalk.gray('도움말 표시'));
 
 // 글로벌 옵션
 program
@@ -63,7 +64,8 @@ async function tmuxDebug(file, options = {}) {
 
   // tmux 설치 확인
   try {
-    execSync('tmux --version', { stdio: 'ignore' });
+    const tmuxVersion = execSync('tmux -V', { encoding: 'utf8' }).trim();
+    console.log(chalk.green(`✅ tmux 감지됨: ${tmuxVersion}`));
   } catch (error) {
     console.error(chalk.red('❌ tmux가 설치되지 않았습니다.'));
     console.log(chalk.yellow('💡 설치 명령어: sudo apt install tmux'));
@@ -387,9 +389,27 @@ try {
 } catch (err) {
   if (err.code === 'commander.help') {
     console.log(LOGO);
-    console.log(chalk.blue('📖 도움말:'));
-    console.log(chalk.gray('자세한 정보는 각 명령어에 --help를 추가하세요.'));
-    console.log(chalk.gray('예: debug-mate debug --help'));
+    console.log(chalk.blue('📖 DebugMate CLI 도움말'));
+    console.log(chalk.gray('C/C++ 코드를 AI로 분석하고 디버깅하는 도구입니다.'));
+    console.log('');
+    console.log(chalk.yellow('🔧 주요 명령어:'));
+    console.log(chalk.cyan('  debug <file>     tmux 분할 화면으로 파일 감시 및 자동 디버깅'));
+    console.log(chalk.cyan('  tmux <file>      tmux 분할 화면으로 디버깅 (debug와 동일)'));
+    console.log(chalk.cyan('  generate [name]  테스트 코드 자동 생성'));
+    console.log(chalk.cyan('  status           시스템 상태 확인'));
+    console.log(chalk.cyan('  info             프로그램 정보'));
+    console.log('');
+    console.log(chalk.yellow('💡 사용 예시:'));
+    console.log(chalk.gray('  debug-mate debug test.c'));
+    console.log(chalk.gray('  debug-mate generate my_test'));
+    console.log(chalk.gray('  debug-mate status'));
+    console.log('');
+    console.log(chalk.yellow('📋 자세한 도움말:'));
+    console.log(chalk.gray('  debug-mate debug --help'));
+    console.log(chalk.gray('  debug-mate generate --help'));
+    console.log(chalk.gray('  debug-mate status --help'));
+    console.log('');
+    console.log(chalk.blue('🔗 더 많은 정보: https://github.com/zzmnxn/Debug_Mate'));
   } else {
     console.error(chalk.red(`❌ 오류: ${err.message}`));
     process.exit(1);
