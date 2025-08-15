@@ -100,12 +100,6 @@ async function tmuxDebug(file, options = {}) {
     # 새 tmux 세션 생성
     tmux new-session -d -s "${sessionName}" -n "editor"
 
-    # 왼쪽 패널: 파일 편집 안내
-    tmux send-keys -t "${sessionName}:editor" "echo '=== 파일 편집 ==='" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo '파일을 편집하고 저장하면 자동으로 디버깅이 실행됩니다.'" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo 'Ctrl+C로 종료'" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo ''" Enter
-
     # 파일이 없으면 기본 템플릿 생성
     if [ ! -f "${file}" ]; then
       cat > "${file}" << 'EOF'
@@ -119,30 +113,58 @@ int main() {
     return 0;
 }
 EOF
-      tmux send-keys -t "${sessionName}:editor" "echo '기본 템플릿 파일이 생성되었습니다: ${file}'" Enter
     fi
 
-    # 오른쪽 패널 생성 (디버깅 결과)
+    # 왼쪽 패널: 안내문 출력 후 vi 편집기 시작
+    tmux send-keys -t "${sessionName}:editor" "echo '=== DebugMate - C/C++ AI 디버깅 도구 ==='" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '왼쪽: 파일 편집 (vi)'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '오른쪽: AI 분석 결과'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo ''" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '💡 사용법:'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '1. vi에서 파일 편집 후 :w로 저장'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '2. 저장 후 자연어로 질문 입력'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '3. 오른쪽에서 AI 분석 결과 확인'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '4. Ctrl+C로 종료'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo ''" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '편집기를 시작합니다...'" Enter
+    tmux send-keys -t "${sessionName}:editor" "sleep 2" Enter
+    tmux send-keys -t "${sessionName}:editor" "vi ${file}" Enter
+
+    # 오른쪽 패널 생성 (AI 분석 결과)
     tmux split-window -h -t "${sessionName}:editor"
 
-    # 오른쪽 패널: 디버깅 결과
-    tmux send-keys -t "${sessionName}:editor.1" "echo '=== 디버깅 결과 ==='" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "echo '파일 저장을 기다리는 중...'" Enter
+    # 오른쪽 패널: AI 분석 결과 대기
+    tmux send-keys -t "${sessionName}:editor.1" "echo '=== AI 분석 결과 ==='" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo '파일 저장 및 질문을 기다리는 중...'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo ''" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo '💡 자연어 질문 예시:'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo '- 이 코드의 문제점은?'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo '- 어떻게 개선할 수 있어?'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo '- 메모리 누수는 없어?'" Enter
     tmux send-keys -t "${sessionName}:editor.1" "echo ''" Enter
 
-    # 파일 감시 시작 (오른쪽 패널에서)
+    # 파일 감시 및 자연어 입력 처리 (오른쪽 패널에서)
     tmux send-keys -t "${sessionName}:editor.1" "cd '${__dirname}'" Enter
     tmux send-keys -t "${sessionName}:editor.1" "echo '파일 감시 시작...'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo ''" Enter
 
-    # inotifywait로 파일 감시
+    # inotifywait로 파일 감시 및 자연어 입력 처리
     tmux send-keys -t "${sessionName}:editor.1" "inotifywait -m -e close_write --format '%w%f' '${file}' | while IFS= read -r FULLPATH; do" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 저장됨: \$FULLPATH ==='" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo 'BeforeDebug 실행 중...'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 파일이 저장되었습니다 ==='" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '자연어로 질문을 입력하세요 (예: 이 코드의 문제점은?):'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  read -p '질문: ' QUESTION" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo 'AI 분석 중...'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '질문: '\$QUESTION" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '파일: '\$FULLPATH" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
     ${distEntry.includes('ts-node') ? 
-      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && npx ${distEntry} \"\$FULLPATH\" < /dev/tty)" Enter` :
-      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && node ${distEntry} \"\$FULLPATH\" < /dev/tty)" Enter`
+      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && echo "\$QUESTION" | npx ${distEntry} "\$FULLPATH")" Enter` :
+      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && echo "\$QUESTION" | node ${distEntry} "\$FULLPATH")" Enter`
     }
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 실행 완료 ==='" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 분석 완료 ==='" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '다시 편집하고 저장하면 새로운 질문을 할 수 있습니다.'" Enter
     tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
     tmux send-keys -t "${sessionName}:editor.1" "done" Enter
 
@@ -151,7 +173,7 @@ EOF
 
     # 세션에 연결
     echo "tmux 세션 '${sessionName}'이 시작되었습니다."
-    echo "왼쪽: 파일 편집, 오른쪽: 디버깅 결과"
+    echo "왼쪽: vi 편집기, 오른쪽: AI 분석 결과"
     echo "종료하려면: tmux kill-session -t ${sessionName}"
     echo ""
     echo "세션에 연결 중..."

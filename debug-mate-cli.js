@@ -43,9 +43,9 @@ program
 // 플랫폼 체크 함수
 function checkPlatform() {
   if (process.platform !== 'linux') {
-    console.error(chalk.red('❌ 이 CLI는 Linux 환경에서만 실행할 수 있습니다.'));
-    console.log(chalk.yellow('💡 현재 플랫폼: ' + process.platform));
-    console.log(chalk.blue('📋 해결 방법:'));
+    console.error(chalk.red(' 이 CLI는 Linux 환경에서만 실행할 수 있습니다.'));
+    console.log(chalk.yellow(' 현재 플랫폼: ' + process.platform));
+    console.log(chalk.blue(' 해결 방법:'));
     console.log(chalk.cyan('   1. WSL2 (Windows Subsystem for Linux) 사용'));
     console.log(chalk.cyan('   2. Linux 가상머신 사용'));
     console.log(chalk.cyan('   3. GitHub Codespaces 사용'));
@@ -58,18 +58,18 @@ function checkPlatform() {
 async function tmuxDebug(file, options = {}) {
   const { session, leftSize = 60 } = options;
   
-  console.log(chalk.blue(`🖥️  tmux 분할 화면 모드 시작...`));
-  console.log(chalk.gray('📝 왼쪽: 파일 편집, 오른쪽: 디버깅 결과'));
-  console.log(chalk.gray('🛑 종료하려면 tmux 세션을 종료하세요.\n'));
+  console.log(chalk.blue(`  tmux 분할 화면 모드 시작...`));
+  console.log(chalk.gray(' 왼쪽: 파일 편집, 오른쪽: 디버깅 결과'));
+  console.log(chalk.gray(' 종료하려면 tmux 세션을 종료하세요.\n'));
 
   // tmux 설치 확인
   try {
     const tmuxVersion = execSync('tmux -V', { encoding: 'utf8' }).trim();
-    console.log(chalk.green(`✅ tmux 감지됨: ${tmuxVersion}`));
+    console.log(chalk.green(` tmux 감지됨: ${tmuxVersion}`));
   } catch (error) {
-    console.error(chalk.red('❌ tmux가 설치되지 않았습니다.'));
-    console.log(chalk.yellow('💡 설치 명령어: sudo apt install tmux'));
-    console.log(chalk.blue('📋 전체 시스템 요구사항:'));
+    console.error(chalk.red(' tmux가 설치되지 않았습니다.'));
+    console.log(chalk.yellow(' 설치 명령어: sudo apt install tmux'));
+    console.log(chalk.blue(' 전체 시스템 요구사항:'));
     console.log(chalk.cyan('   sudo apt update'));
     console.log(chalk.cyan('   sudo apt install -y tmux inotify-tools gcc g++ build-essential python3 make'));
     process.exit(1);
@@ -100,12 +100,6 @@ async function tmuxDebug(file, options = {}) {
     # 새 tmux 세션 생성
     tmux new-session -d -s "${sessionName}" -n "editor"
 
-    # 왼쪽 패널: 파일 편집 안내
-    tmux send-keys -t "${sessionName}:editor" "echo '=== 파일 편집 ==='" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo '파일을 편집하고 저장하면 자동으로 디버깅이 실행됩니다.'" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo 'Ctrl+C로 종료'" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo ''" Enter
-
     # 파일이 없으면 기본 템플릿 생성
     if [ ! -f "${file}" ]; then
       cat > "${file}" << 'EOF'
@@ -119,30 +113,58 @@ int main() {
     return 0;
 }
 EOF
-      tmux send-keys -t "${sessionName}:editor" "echo '기본 템플릿 파일이 생성되었습니다: ${file}'" Enter
     fi
 
-    # 오른쪽 패널 생성 (디버깅 결과)
+    # 왼쪽 패널: 안내문 출력 후 vi 편집기 시작
+    tmux send-keys -t "${sessionName}:editor" "echo '=== DebugMate - C/C++ AI 디버깅 도구 ==='" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '왼쪽: 파일 편집 (vi)'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '오른쪽: AI 분석 결과'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo ''" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '💡 사용법:'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '1. vi에서 파일 편집 후 :w로 저장'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '2. 저장 후 자연어로 질문 입력'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '3. 오른쪽에서 AI 분석 결과 확인'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '4. Ctrl+C로 종료'" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo ''" Enter
+    tmux send-keys -t "${sessionName}:editor" "echo '편집기를 시작합니다...'" Enter
+    tmux send-keys -t "${sessionName}:editor" "sleep 2" Enter
+    tmux send-keys -t "${sessionName}:editor" "vi ${file}" Enter
+
+    # 오른쪽 패널 생성 (AI 분석 결과)
     tmux split-window -h -t "${sessionName}:editor"
 
-    # 오른쪽 패널: 디버깅 결과
-    tmux send-keys -t "${sessionName}:editor.1" "echo '=== 디버깅 결과 ==='" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "echo '파일 저장을 기다리는 중...'" Enter
+    # 오른쪽 패널: AI 분석 결과 대기
+    tmux send-keys -t "${sessionName}:editor.1" "echo '=== AI 분석 결과 ==='" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo '파일 저장 및 질문을 기다리는 중...'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo ''" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo '💡 자연어 질문 예시:'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo '- 이 코드의 문제점은?'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo '- 어떻게 개선할 수 있어?'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo '- 메모리 누수는 없어?'" Enter
     tmux send-keys -t "${sessionName}:editor.1" "echo ''" Enter
 
-    # 파일 감시 시작 (오른쪽 패널에서)
+    # 파일 감시 및 자연어 입력 처리 (오른쪽 패널에서)
     tmux send-keys -t "${sessionName}:editor.1" "cd '${__dirname}'" Enter
     tmux send-keys -t "${sessionName}:editor.1" "echo '파일 감시 시작...'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "echo ''" Enter
 
-    # inotifywait로 파일 감시
+    # inotifywait로 파일 감시 및 자연어 입력 처리
     tmux send-keys -t "${sessionName}:editor.1" "inotifywait -m -e close_write --format '%w%f' '${file}' | while IFS= read -r FULLPATH; do" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 저장됨: \$FULLPATH ==='" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo 'BeforeDebug 실행 중...'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 파일이 저장되었습니다 ==='" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '자연어로 질문을 입력하세요 (예: 이 코드의 문제점은?):'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  read -p '질문: ' QUESTION" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo 'AI 분석 중...'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '질문: '\$QUESTION" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '파일: '\$FULLPATH" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
     ${distEntry.includes('ts-node') ? 
-      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && npx ${distEntry} \"\$FULLPATH\" < /dev/tty)" Enter` :
-      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && node ${distEntry} \"\$FULLPATH\" < /dev/tty)" Enter`
+      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && echo "\$QUESTION" | npx ${distEntry} "\$FULLPATH")" Enter` :
+      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && node ${distEntry} "\$FULLPATH")" Enter`
     }
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 실행 완료 ==='" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 분석 완료 ==='" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '다시 편집하고 저장하면 새로운 질문을 할 수 있습니다.'" Enter
     tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
     tmux send-keys -t "${sessionName}:editor.1" "done" Enter
 
@@ -151,7 +173,7 @@ EOF
 
     # 세션에 연결
     echo "tmux 세션 '${sessionName}'이 시작되었습니다."
-    echo "왼쪽: 파일 편집, 오른쪽: 디버깅 결과"
+    echo "왼쪽: vi 편집기, 오른쪽: AI 분석 결과"
     echo "종료하려면: tmux kill-session -t ${sessionName}"
     echo ""
     echo "세션에 연결 중..."
@@ -165,8 +187,8 @@ EOF
   });
 
   child.on('error', (err) => {
-    console.error(chalk.red(`❌ tmux 실행 오류: ${err.message}`));
-    console.log(chalk.yellow('💡 tmux가 설치되어 있는지 확인하세요: sudo apt install tmux'));
+    console.error(chalk.red(` tmux 실행 오류: ${err.message}`));
+    console.log(chalk.yellow(' tmux가 설치되어 있는지 확인하세요: sudo apt install tmux'));
     process.exit(1);
   });
 }
@@ -184,7 +206,7 @@ program
     checkPlatform();
     
     if (!existsSync(file)) {
-      console.error(chalk.red(`❌ 파일을 찾을 수 없습니다: ${file}`));
+      console.error(chalk.red(` 파일을 찾을 수 없습니다: ${file}`));
       process.exit(1);
     }
 
@@ -203,7 +225,7 @@ program
     checkPlatform();
     
     if (!existsSync(file)) {
-      console.error(chalk.red(`❌ 파일을 찾을 수 없습니다: ${file}`));
+      console.error(chalk.red(` 파일을 찾을 수 없습니다: ${file}`));
       process.exit(1);
     }
 
@@ -222,7 +244,7 @@ program
     checkPlatform();
 
     if (options.list) {
-      console.log(chalk.blue('📋 사용 가능한 테스트 타입:'));
+      console.log(chalk.blue('사용 가능한 테스트 타입:'));
       console.log(chalk.cyan('1. 기본 Hello World'));
       console.log(chalk.cyan('2. 루프 테스트 (for)'));
       console.log(chalk.cyan('3. 조건문 테스트 (if-else)'));
@@ -235,8 +257,8 @@ program
       return;
     }
 
-    console.log(chalk.blue(`🧪 테스트 코드 생성 중...`));
-    console.log(chalk.gray(`📁 파일명: ${name}.c`));
+    console.log(chalk.blue(`테스트 코드 생성 중...`));
+    console.log(chalk.gray(`파일명: ${name}.c`));
 
     // generate-test.sh 스크립트 호출
     const scriptPath = join(__dirname, 'generate-test.sh');
@@ -246,7 +268,7 @@ program
     });
 
     child.on('error', (err) => {
-      console.error(chalk.red(`❌ 생성 오류: ${err.message}`));
+      console.error(chalk.red(` 생성 오류: ${err.message}`));
       process.exit(1);
     });
   });
@@ -263,8 +285,8 @@ program
     console.log(LOGO);
     
     if (options.list) {
-      console.log(chalk.blue('⚙️  현재 설정:'));
-      console.log(chalk.cyan(`API Key: ${process.env.GEMINI_API_KEY ? '✅ 설정됨' : '❌ 설정되지 않음'}`));
+      console.log(chalk.blue('현재 설정:'));
+      console.log(chalk.cyan(`API Key: ${process.env.GEMINI_API_KEY ? '설정됨' : '설정되지 않음'}`));
       console.log(chalk.cyan(`Node.js: ${process.version}`));
       console.log(chalk.cyan(`Platform: ${process.platform}`));
       return;
@@ -272,18 +294,18 @@ program
 
     if (options.set) {
       const [key, value] = options.set.split('=');
-      console.log(chalk.blue(`🔧 설정 업데이트: ${key} = ${value}`));
+      console.log(chalk.blue(`설정 업데이트: ${key} = ${value}`));
       // 실제로는 설정 파일에 저장하는 로직 필요
       return;
     }
 
     if (options.get) {
-      console.log(chalk.blue(`🔍 설정 조회: ${options.get}`));
+      console.log(chalk.blue(`설정 조회: ${options.get}`));
       // 실제로는 설정 파일에서 읽는 로직 필요
       return;
     }
 
-    console.log(chalk.blue('⚙️  설정 관리'));
+    console.log(chalk.blue('설정 관리'));
     console.log(chalk.gray('사용법: debug-mate config --help'));
   });
 
@@ -295,15 +317,15 @@ program
   .action(async () => {
     console.log(LOGO);
     
-    console.log(chalk.blue('🔍 시스템 상태 확인 중...\n'));
+    console.log(chalk.blue('시스템 상태 확인 중...\n'));
 
     // 플랫폼 확인
     if (process.platform !== 'linux') {
-      console.log(chalk.red(`❌ 플랫폼: ${process.platform} (Linux가 필요합니다)`));
-      console.log(chalk.yellow('💡 이 CLI는 Linux 환경에서만 실행할 수 있습니다.'));
+      console.log(chalk.red(`플랫폼: ${process.platform} (Linux가 필요합니다)`));
+      console.log(chalk.yellow('이 CLI는 Linux 환경에서만 실행할 수 있습니다.'));
       return;
     } else {
-      console.log(chalk.green(`✅ 플랫폼: ${process.platform}`));
+      console.log(chalk.green(`플랫폼: ${process.platform}`));
     }
 
     // 필수 도구 확인
@@ -317,28 +339,28 @@ program
     for (const tool of tools) {
       try {
         if (tool.command === 'node') {
-          console.log(chalk.green(`✅ ${tool.name}: ${tool.version}`));
+          console.log(chalk.green(`${tool.name}: ${tool.version}`));
         } else {
           const version = execSync(`${tool.command} --version`, { encoding: 'utf8' }).split('\n')[0];
-          console.log(chalk.green(`✅ ${tool.name}: ${version}`));
+          console.log(chalk.green(`${tool.name}: ${version}`));
         }
       } catch (error) {
-        console.log(chalk.red(`❌ ${tool.name}: 설치되지 않음`));
+        console.log(chalk.red(` ${tool.name}: 설치되지 않음`));
         if (tool.command === 'tmux') {
-          console.log(chalk.yellow('   💡 설치: sudo apt install tmux'));
+          console.log(chalk.yellow('   설치: sudo apt install tmux'));
         } else if (tool.command === 'inotifywait') {
-          console.log(chalk.yellow('   💡 설치: sudo apt install inotify-tools'));
+          console.log(chalk.yellow('   설치: sudo apt install inotify-tools'));
         } else if (tool.command === 'gcc') {
-          console.log(chalk.yellow('   💡 설치: sudo apt install build-essential'));
+          console.log(chalk.yellow('   설치: sudo apt install build-essential'));
         }
       }
     }
 
     // API 키 확인
-    console.log(chalk.cyan(`\n🔑 Gemini API Key: ${process.env.GEMINI_API_KEY ? '✅ 설정됨' : '❌ 설정되지 않음'}`));
+    console.log(chalk.cyan(`\n Gemini API Key: ${process.env.GEMINI_API_KEY ? '설정됨' : '설정되지 않음'}`));
     
     if (!process.env.GEMINI_API_KEY) {
-      console.log(chalk.yellow('💡 API 키 설정: export GEMINI_API_KEY="your_key_here"'));
+      console.log(chalk.yellow(' API 키 설정: export GEMINI_API_KEY="your_key_here"'));
     }
   });
 
@@ -350,18 +372,18 @@ program
   .action(async () => {
     console.log(LOGO);
     
-    console.log(chalk.blue('📊 프로그램 정보:'));
+    console.log(chalk.blue('프로그램 정보:'));
     console.log(chalk.cyan(`Version: ${VERSION}`));
     console.log(chalk.cyan(`Node.js: ${process.version}`));
     console.log(chalk.cyan(`Platform: ${process.platform}`));
     console.log(chalk.cyan(`Architecture: ${process.arch}`));
     
-    console.log(chalk.blue('\n🔗 링크:'));
+    console.log(chalk.blue('\n링크:'));
     console.log(chalk.cyan(`GitHub: ${chalk.underline('https://github.com/zzmnxn/Debug_Mate')}`));
     console.log(chalk.cyan(`Issues: ${chalk.underline('https://github.com/zzmnxn/Debug_Mate/issues')}`));
     console.log(chalk.cyan(`NPM: ${chalk.underline('https://www.npmjs.com/package/@debugmate/cli')}`));
     
-    console.log(chalk.blue('\n📝 라이선스: MIT'));
+    console.log(chalk.blue('\n라이선스: MIT'));
     console.log(chalk.gray('Made with ❤️ by DebugMate Team'));
   });
 
@@ -371,7 +393,7 @@ program
   .action(async (file) => {
     if (!file) {
       console.log(LOGO);
-      console.log(chalk.yellow('💡 사용법: debug-mate <파일명> 또는 debug-mate --help'));
+      console.log(chalk.yellow(' 사용법: debug-mate <파일명> 또는 debug-mate --help'));
       program.help();
       return;
     }
@@ -389,29 +411,29 @@ try {
 } catch (err) {
   if (err.code === 'commander.help') {
     console.log(LOGO);
-    console.log(chalk.blue('📖 DebugMate CLI 도움말'));
+    console.log(chalk.blue('DebugMate CLI 도움말'));
     console.log(chalk.gray('C/C++ 코드를 AI로 분석하고 디버깅하는 도구입니다.'));
     console.log('');
-    console.log(chalk.yellow('🔧 주요 명령어:'));
+    console.log(chalk.yellow('주요 명령어:'));
     console.log(chalk.cyan('  debug <file>     tmux 분할 화면으로 파일 감시 및 자동 디버깅'));
     console.log(chalk.cyan('  tmux <file>      tmux 분할 화면으로 디버깅 (debug와 동일)'));
     console.log(chalk.cyan('  generate [name]  테스트 코드 자동 생성'));
     console.log(chalk.cyan('  status           시스템 상태 확인'));
     console.log(chalk.cyan('  info             프로그램 정보'));
     console.log('');
-    console.log(chalk.yellow('💡 사용 예시:'));
+    console.log(chalk.yellow('사용 예시:'));
     console.log(chalk.gray('  debug-mate debug test.c'));
     console.log(chalk.gray('  debug-mate generate my_test'));
     console.log(chalk.gray('  debug-mate status'));
     console.log('');
-    console.log(chalk.yellow('📋 자세한 도움말:'));
+    console.log(chalk.yellow('자세한 도움말:'));
     console.log(chalk.gray('  debug-mate debug --help'));
     console.log(chalk.gray('  debug-mate generate --help'));
     console.log(chalk.gray('  debug-mate status --help'));
     console.log('');
-    console.log(chalk.blue('🔗 더 많은 정보: https://github.com/zzmnxn/Debug_Mate'));
+    console.log(chalk.blue('더 많은 정보: https://github.com/zzmnxn/Debug_Mate'));
   } else {
-    console.error(chalk.red(`❌ 오류: ${err.message}`));
+    console.error(chalk.red(`오류: ${err.message}`));
     process.exit(1);
   }
 }
