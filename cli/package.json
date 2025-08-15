@@ -7,17 +7,20 @@
   },
   "type": "module",
   "files": [
+    "watch-and-debug.sh",
     "debug-mate-cli.js",
     "generate-test.sh",
     "dist/",
+    "src/",
+    "tsconfig.json",
     "README.md",
     "LICENSE",
     "package.json"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "prepublishOnly": "npm run build && chmod +x generate-test.sh",
-    "postinstall": "chmod +x cli/generate-test.sh && chmod +x watch-and-debug.sh",
+    "prepublishOnly": "npm run build && chmod +x generate-test.sh && chmod +x watch-and-debug.sh",
+    "postinstall": "chmod +x generate-test.sh && chmod +x watch-and-debug.sh",
     "dev": "ts-node src/agentica/inprogress-run.ts",
     "start": "node dist/agentica/inprogress-run.js",
     "debug": "node dist/agentica/inprogress-run.js"
