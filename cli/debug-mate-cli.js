@@ -122,8 +122,10 @@ EOF
     tmux split-window -h -t "${cleanSession}:editor" ${JSON.stringify(rightPaneCmd)}
     sleep 1
 
-    # 왼쪽 폭(열 수) 조절 - 퍼센트를 픽셀로 변환
-    tmux resize-pane -t "${cleanSession}:editor".0 -x ${Math.floor(Number(leftSize) * 2.5) || 150}
+    # 왼쪽 폭(열 수) 조절 - 터미널 크기에 따라 동적으로 계산
+    TERM_WIDTH=$(tput cols)
+    LEFT_WIDTH=$(($TERM_WIDTH * ${Number(leftSize) || 40} / 100))
+    tmux resize-pane -t "${cleanSession}:editor".0 -x $LEFT_WIDTH
     sleep 0.5
 
     # tmux 설정 파일 로드
@@ -175,7 +177,7 @@ program
   .alias('t')
   .description(chalk.cyan('tmux 분할 화면으로 디버깅 (debug 명령어와 동일)'))
   .option('-s, --session <name>', chalk.gray('tmux 세션 이름 지정'))
-  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 퍼센트 (기본: 60%)'), '60')
+  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 퍼센트 (기본: 40%)'), '40')
   .action(async (file, options) => {
     console.log(LOGO);
     checkPlatform();
