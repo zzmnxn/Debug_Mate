@@ -60,6 +60,7 @@ async function tmuxDebug(file, options = {}) {
 
   console.log(chalk.blue(`🖥️  tmux 분할 화면 모드 시작...`));
   console.log(chalk.gray('📝 왼쪽: vi 편집기, 오른쪽: 자동 분석 실행(inprogress-run.ts)'));
+  console.log(chalk.yellow('🔄 패널 간 이동: Ctrl+b + h(왼쪽) / l(오른쪽) / j(아래) / k(위)'));
   console.log(chalk.gray('🛑 종료는 tmux 세션 종료(Ctrl+b :kill-session 또는 별도 터미널에서 tmux kill-session -t <세션>)\n'));
 
   // 필수 도구 확인
@@ -124,6 +125,9 @@ EOF
     # 왼쪽 폭(열 수) 조절 - 퍼센트를 픽셀로 변환
     tmux resize-pane -t "${cleanSession}:editor".0 -x ${Math.floor(Number(leftSize) * 2.5) || 150}
     sleep 0.5
+
+    # tmux 설정 파일 로드
+    tmux source-file "${__dirname}/../.tmux.conf"
 
     # 포커스는 왼쪽(vi)
     tmux select-pane -t "${cleanSession}:editor".0
