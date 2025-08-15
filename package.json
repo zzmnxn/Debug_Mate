@@ -30,6 +30,10 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  },
   "dependencies": {
     "@agentica/core": "^0.29.6",
     "@agentica/rpc": "^0.29.5",
@@ -59,6 +63,7 @@
     "prettier": "^3.5.3",
     "rimraf": "^5.0.5",
     "ts-node": "^10.9.2",
+    "tsx": "^4.7.0",
     "ts-patch": "^3.3.0",
     "typescript": "~5.8.3"
   }
