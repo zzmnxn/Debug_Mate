@@ -15,8 +15,8 @@ const LOGO = `
 ${chalk.cyan.bold(`
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║  ${chalk.yellow.bold('DebugMate')} - C/C++ AI 디버깅 도구                    ║
-║  ${chalk.gray('파일 감시 • 대화형 분석 • tmux 분할 화면')}              ║
+║  ${chalk.yellow.bold('DebugMate')} - C/C++ AI 디버깅 도구      ║
+║  ${chalk.gray('파일 감시 • 대화형 분석 • tmux 분할 화면')}       ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
 `)}`;
@@ -58,14 +58,14 @@ async function tmuxDebug(file, options = {}) {
   // CLI에서 --left 로 전달된 값과의 호환을 위해 leftSize 유지
   const { session, leftSize = 60 } = options;
 
-  console.log(chalk.blue(`🖥️  tmux 분할 화면 모드 시작...`));
-  console.log(chalk.gray('📝 왼쪽: vi 편집기, 오른쪽: 자동 분석 실행(inprogress-run.ts)'));
-  console.log(chalk.yellow('🔄 패널 간 이동: Ctrl+b + h(왼쪽) / l(오른쪽) / j(아래) / k(위)'));
-  console.log(chalk.gray('🛑 종료는 tmux 세션 종료(Ctrl+b :kill-session 또는 별도 터미널에서 tmux kill-session -t <세션>)\n'));
+  console.log(chalk.blue(`  tmux 분할 화면 모드 시작...`));
+  console.log(chalk.gray(' 왼쪽: vi 편집기, 오른쪽: 자동 분석 실행(inprogress-run.ts)'));
+  console.log(chalk.yellow(' 패널 간 이동: Ctrl+b + h(왼쪽) / l(오른쪽) / j(아래) / k(위)'));
+  console.log(chalk.gray(' 종료는 tmux 세션 종료(Ctrl+b :kill-session 또는 별도 터미널에서 tmux kill-session -t <세션>)\n'));
 
   // 필수 도구 확인
   try { execSync('tmux -V', { encoding: 'utf8' }); }
-  catch { console.error(chalk.red('❌ tmux 미설치: sudo apt install -y tmux')); process.exit(1); }
+  catch { console.error(chalk.red('tmux 미설치: sudo apt install -y tmux')); process.exit(1); }
 
   try { 
     execSync('which inotifywait', { encoding: 'utf8' });
@@ -73,7 +73,7 @@ async function tmuxDebug(file, options = {}) {
     console.log(chalk.green('✓ inotifywait 확인됨'));
   }
   catch { 
-    console.error(chalk.red('❌ inotifywait 명령어를 찾을 수 없습니다.'));
+    console.error(chalk.red('inotifywait 명령어를 찾을 수 없습니다.'));
     console.error(chalk.yellow('다음 명령어로 설치해주세요:'));
     console.error(chalk.cyan('  sudo apt update && sudo apt install -y inotify-tools'));
     console.error(chalk.gray('또는 PATH에 inotifywait가 있는지 확인해주세요.'));
@@ -142,7 +142,7 @@ EOF
   });
 
   child.on('error', (err) => {
-    console.error(chalk.red(`❌ tmux 실행 오류: ${err.message}`));
+    console.error(chalk.red(`tmux 실행 오류: ${err.message}`));
     process.exit(1);
   });
 }
@@ -155,7 +155,7 @@ program
   .alias('d')
   .description(chalk.cyan('tmux 분할 화면으로 파일 감시 및 자동 디버깅'))
   .option('-s, --session <name>', chalk.gray('tmux 세션 이름 지정'))
-  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 퍼센트 (기본: 60%)'), '60')
+  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 퍼센트 (기본: 40%)'), '40')
   .option('-t, --timeout <ms>', chalk.gray('타임아웃 설정 (기본: 30000ms)'), '30000')
   .action(async (file, options) => {
     console.log(LOGO);
