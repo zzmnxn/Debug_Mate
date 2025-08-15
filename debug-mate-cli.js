@@ -148,23 +148,21 @@ EOF
     tmux send-keys -t "${sessionName}:editor.1" "echo '파일 감시 시작...'" Enter
     tmux send-keys -t "${sessionName}:editor.1" "echo ''" Enter
 
-    # inotifywait로 파일 감시 및 자연어 입력 처리
+    # inotifywait로 파일 감시 및 자동 AI 분석 실행
     tmux send-keys -t "${sessionName}:editor.1" "inotifywait -m -e close_write --format '%w%f' '${file}' | while IFS= read -r FULLPATH; do" Enter
     tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 파일이 저장되었습니다 ==='" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '자연어로 질문을 입력하세요 (예: 이 코드의 문제점은?):'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  read -p '질문: ' QUESTION" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '자동으로 AI 분석을 시작합니다...'" Enter
     tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
     tmux send-keys -t "${sessionName}:editor.1" "  echo 'AI 분석 중...'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '질문: '\$QUESTION" Enter
     tmux send-keys -t "${sessionName}:editor.1" "  echo '파일: '\$FULLPATH" Enter
     tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
     ${distEntry.includes('ts-node') ? 
-      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && echo "\$QUESTION" | npx ${distEntry} "\$FULLPATH")" Enter` :
+      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && npx ${distEntry} "\$FULLPATH")" Enter` :
       `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && node ${distEntry} "\$FULLPATH")" Enter`
     }
     tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
     tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 분석 완료 ==='" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '다시 편집하고 저장하면 새로운 질문을 할 수 있습니다.'" Enter
+    tmux send-keys -t "${sessionName}:editor.1" "  echo '다시 편집하고 저장하면 자동으로 분석이 실행됩니다.'" Enter
     tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
     tmux send-keys -t "${sessionName}:editor.1" "done" Enter
 
