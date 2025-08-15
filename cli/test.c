@@ -1,5 +1,4 @@
-t.c
-E <stdio.h>
+#include <stdio.h>
 
 int main() {
     int value = 42;

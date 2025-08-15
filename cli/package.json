@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run build && chmod +x generate-test.sh",
-    "postinstall": "chmod +x generate-test.sh",
+    "postinstall": "chmod +x cli/generate-test.sh && chmod +x watch-and-debug.sh",
     "dev": "ts-node src/agentica/inprogress-run.ts"
   },
   "keywords": ["debug", "c", "cpp", "analysis", "cli", "linux", "inotify", "tmux"],
