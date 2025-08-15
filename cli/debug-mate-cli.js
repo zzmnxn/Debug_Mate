@@ -13,12 +13,12 @@ const __dirname = dirname(__filename);
 // ASCII 아트 로고
 const LOGO = `
 ${chalk.cyan.bold(`
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║  ${chalk.yellow.bold('DebugMate')} - C/C++ AI 디버깅 도구      ║
-║  ${chalk.gray('파일 감시 • 대화형 분석 • tmux 분할 화면')}       ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════
+║                                                              
+║  ${chalk.yellow.bold('DebugMate')} - C/C++ AI 디버깅 도구      
+║  ${chalk.gray('파일 감시 • 대화형 분석 • tmux 분할 화면')}       
+║                                                              
+╚══════════════════════════════════════════════════════════════
 `)}`;
 
 // 버전 정보
@@ -56,7 +56,7 @@ function checkPlatform() {
 // === REPLACE: tmuxDebug() ===
 async function tmuxDebug(file, options = {}) {
   // CLI에서 --left 로 전달된 값과의 호환을 위해 leftSize 유지
-  const { session, leftSize = 60 } = options;
+  const { session, leftSize = 40 } = options;
 
   console.log(chalk.blue(`  tmux 분할 화면 모드 시작...`));
   console.log(chalk.gray(' 왼쪽: vi 편집기, 오른쪽: 자동 분석 실행(inprogress-run.ts)'));
