@@ -53,46 +53,42 @@ function checkPlatform() {
     process.exit(1);
   }
 }
-
-// === 통합본: tmuxDebug() (watch-and-debug.sh 불필요) ===
+// === REPLACE: tmuxDebug() ===
 async function tmuxDebug(file, options = {}) {
-  // --left 퍼센트 (기본 40%), 안전 범위 5~95%로 클램프
+  // CLI에서 --left 로 전달된 값과의 호환을 위해 leftSize 유지
   const { session, leftSize = 40 } = options;
-  const leftPctRaw = Number(leftSize);
-  const LEFT_PCT = Number.isFinite(leftPctRaw)
-    ? Math.min(95, Math.max(5, Math.floor(leftPctRaw)))
-    : 40;
-  const RIGHT_PCT = 100 - LEFT_PCT;
 
   console.log(chalk.blue(`  tmux 분할 화면 모드 시작...`));
   console.log(chalk.gray(' 왼쪽: vi 편집기, 오른쪽: 자동 분석 실행(inprogress-run.ts)'));
-  console.log(chalk.yellow(' 패널 이동: Ctrl+b + ←/→/↑/↓  | 세션 종료: Ctrl+b → :kill-session'));
-  console.log('');
+  console.log(chalk.yellow(' 패널 간 이동: Ctrl+b + h(왼쪽) / l(오른쪽) / j(아래) / k(위)'));
+  console.log(chalk.gray(' 종료는 tmux 세션 종료(Ctrl+b :kill-session 또는 별도 터미널에서 tmux kill-session -t <세션>)\n'));
 
   // 필수 도구 확인
   try { execSync('tmux -V', { encoding: 'utf8' }); }
   catch { console.error(chalk.red('tmux 미설치: sudo apt install -y tmux')); process.exit(1); }
 
-  // inotifywait 절대경로 확보( tmux 내부 PATH 이슈 회피 )
-  let INO = '';
-  try {
-    INO = execSync('command -v inotifywait', { encoding: 'utf8' }).trim();
-    if (!INO) throw new Error('not found');
+  try { 
+    execSync('which inotifywait', { encoding: 'utf8' });
+    // inotifywait가 설치되어 있는지만 확인하고, 실제 실행은 나중에
     console.log(chalk.green('✓ inotifywait 확인됨'));
-  } catch {
+  }
+  catch { 
     console.error(chalk.red('inotifywait 명령어를 찾을 수 없습니다.'));
-    console.error(chalk.yellow('설치: sudo apt update && sudo apt install -y inotify-tools'));
-    process.exit(1);
+    console.error(chalk.yellow('다음 명령어로 설치해주세요:'));
+    console.error(chalk.cyan('  sudo apt update && sudo apt install -y inotify-tools'));
+    console.error(chalk.gray('또는 PATH에 inotifywait가 있는지 확인해주세요.'));
+    process.exit(1); 
   }
 
   // 파일 경로 정규화
   const filePath = resolve(file);
   const fileName = basename(file);
+  const fileDir = dirname(filePath);
 
   // 세션명 안전화 (/, ., 공백, : → -)
   const cleanSession = (session || `dm-${fileName}`).replace(/[\/\.\s:]/g, '-');
 
-  // 파일 없으면 기본 템플릿 생성 (tmux 내부에서 처리)
+  // 파일 없으면 기본 템플릿 생성
   const initSnippet = `
     TARGET_FILE="${filePath}"
     if [ ! -f "$TARGET_FILE" ]; then
@@ -110,34 +106,33 @@ EOF
   try { execSync(`tmux kill-session -t "${cleanSession}" 2>/dev/null`); } catch {}
 
   // 오른쪽 패널에서 실행할 "저장 감시 + 분석" 파이프라인
-  // - close_write 이벤트마다 inprogress-run.ts 실행
-  // - /dev/tty를 stdin 으로 붙여 interactive 입력 지원
-  const rightPaneCmd =
-    `bash -lc 'echo " <${filePath}> 저장 감시 시작 (Ctrl+C로 중단)"; ` +
-    `${INO} -m -e close_write --format "%w%f" "${filePath}" | ` +
-    `while IFS= read -r FULLPATH; do ` +
-      `echo " 저장됨: ${'$'}FULLPATH → 분석 실행..."; ` +
-      `(cd "${__dirname}" && npx ts-node src/agentica/inprogress-run.ts "${'$'}FULLPATH" < /dev/tty); ` +
-      `echo " 실행 완료"; ` +
-    `done'`;
+  // watch-and-debug.sh 스크립트를 사용하여 더 안정적으로 실행
+  const rightPaneCmd = `bash "${__dirname}/../watch-and-debug.sh" "${filePath}"`;
 
-  // tmux 스크립트
+  // tmux 스크립트 - 개별 명령어로 실행
   const tmuxScript = `
     set -eo pipefail
-    set +u
     ${initSnippet}
 
     # 새 세션 생성: 왼쪽=vi
     tmux new-session -d -s "${cleanSession}" -n editor "vi '${filePath}'"
+    sleep 1
 
-    # 오른쪽=저장 감시+자동 실행 (비율 정확 분할: 오른쪽 ${RIGHT_PCT}%)
-    tmux split-window -h -p ${RIGHT_PCT} -t "${cleanSession}:editor" ${JSON.stringify(rightPaneCmd)}
+    # 오른쪽=저장 감시+자동 실행
+    tmux split-window -h -t "${cleanSession}:editor" ${JSON.stringify(rightPaneCmd)}
+    sleep 1
+
+    # 왼쪽 폭(열 수) 조절 - 터미널 크기에 따라 동적으로 계산
+    TERM_WIDTH=$(tput cols)
+    LEFT_WIDTH=$(($TERM_WIDTH * ${Number(leftSize) || 40} / 100))
+    tmux resize-pane -t "${cleanSession}:editor".0 -x $LEFT_WIDTH
+    sleep 0.5
+
+    # tmux 설정 파일 로드
+    tmux source-file "${__dirname}/../.tmux.conf"
 
     # 포커스는 왼쪽(vi)
     tmux select-pane -t "${cleanSession}:editor".0
-
-    # (선택) .tmux.conf가 상위에 있으면 로드
-    [ -f "${__dirname}/../.tmux.conf" ] && tmux source-file "${__dirname}/../.tmux.conf" || true
 
     # 세션 접속
     tmux attach -t "${cleanSession}"
@@ -154,6 +149,8 @@ EOF
   });
 }
 
+
+
 // 기본 디버깅 명령어 (tmux 분할 화면이 기본)
 program
   .command('debug <file>')
@@ -165,7 +162,7 @@ program
   .action(async (file, options) => {
     console.log(LOGO);
     checkPlatform();
-
+    
     if (!existsSync(file)) {
       console.log(chalk.yellow(` 파일이 존재하지 않습니다: ${file}`));
       console.log(chalk.blue('기본 C 템플릿을 생성하고 시작합니다...'));
@@ -174,7 +171,7 @@ program
     await tmuxDebug(file, options);
   });
 
-// tmux 분할 화면 명령어 (debug와 동일)
+// tmux 분할 화면 명령어 (별도 옵션으로 유지)
 program
   .command('tmux <file>')
   .alias('t')
@@ -184,7 +181,7 @@ program
   .action(async (file, options) => {
     console.log(LOGO);
     checkPlatform();
-
+    
     if (!existsSync(file)) {
       console.log(chalk.yellow(` 파일이 존재하지 않습니다: ${file}`));
       console.log(chalk.blue('기본 C 템플릿을 생성하고 시작합니다...'));
@@ -244,7 +241,7 @@ program
   .option('-l, --list', chalk.gray('모든 설정 조회'))
   .action(async (options) => {
     console.log(LOGO);
-
+    
     if (options.list) {
       console.log(chalk.blue('현재 설정:'));
       console.log(chalk.cyan(`API Key: ${process.env.GEMINI_API_KEY ? '설정됨' : '설정되지 않음'}`));
@@ -256,13 +253,13 @@ program
     if (options.set) {
       const [key, value] = options.set.split('=');
       console.log(chalk.blue(`설정 업데이트: ${key} = ${value}`));
-      // TODO: 설정 파일 저장 로직
+      // 실제로는 설정 파일에 저장하는 로직 필요
       return;
     }
 
     if (options.get) {
       console.log(chalk.blue(`설정 조회: ${options.get}`));
-      // TODO: 설정 파일 읽기 로직
+      // 실제로는 설정 파일에서 읽는 로직 필요
       return;
     }
 
@@ -277,7 +274,7 @@ program
   .description(chalk.cyan('시스템 상태 확인'))
   .action(async () => {
     console.log(LOGO);
-
+    
     console.log(chalk.blue('시스템 상태 확인 중...\n'));
 
     // 플랫폼 확인
@@ -302,6 +299,7 @@ program
         if (tool.command === 'node') {
           console.log(chalk.green(`${tool.name}: ${tool.version}`));
         } else if (tool.command === 'inotifywait') {
+          // inotifywait가 설치되어 있는지만 확인
           execSync('which inotifywait', { encoding: 'utf8' });
           console.log(chalk.green(`${tool.name}: 설치됨`));
         } else {
@@ -322,7 +320,7 @@ program
 
     // API 키 확인
     console.log(chalk.cyan(`\n Gemini API Key: ${process.env.GEMINI_API_KEY ? '설정됨' : '설정되지 않음'}`));
-
+    
     if (!process.env.GEMINI_API_KEY) {
       console.log(chalk.yellow(' API 키 설정: export GEMINI_API_KEY="your_key_here"'));
     }
@@ -335,18 +333,18 @@ program
   .description(chalk.cyan('프로그램 정보'))
   .action(async () => {
     console.log(LOGO);
-
+    
     console.log(chalk.blue('프로그램 정보:'));
     console.log(chalk.cyan(`Version: ${VERSION}`));
     console.log(chalk.cyan(`Node.js: ${process.version}`));
     console.log(chalk.cyan(`Platform: ${process.platform}`));
     console.log(chalk.cyan(`Architecture: ${process.arch}`));
-
+    
     console.log(chalk.blue('\n링크:'));
     console.log(chalk.cyan(`GitHub: ${chalk.underline('https://github.com/zzmnxn/Debug_Mate')}`));
     console.log(chalk.cyan(`Issues: ${chalk.underline('https://github.com/zzmnxn/Debug_Mate/issues')}`));
     console.log(chalk.cyan(`NPM: ${chalk.underline('https://www.npmjs.com/package/@debugmate/cli')}`));
-
+    
     console.log(chalk.blue('\n라이선스: MIT'));
     console.log(chalk.gray('Made with ❤️ by DebugMate Team'));
   });
@@ -364,12 +362,12 @@ program
 
     console.log(LOGO);
     checkPlatform();
-
+    
     if (!existsSync(file)) {
       console.log(chalk.yellow(` 파일이 존재하지 않습니다: ${file}`));
       console.log(chalk.blue('기본 C 템플릿을 생성하고 시작합니다...'));
     }
-
+    
     await tmuxDebug(file);
   });
 
