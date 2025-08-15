@@ -12,7 +12,8 @@
     "cli:dev": "cd cli && npm run dev",
     "cli:install": "cd cli && npm install",
     "debug-mate": "node cli/debug-mate-cli.js",
-    "debug-mate-generate": "bash cli/generate-test.sh"
+    "debug-mate-generate": "bash cli/generate-test.sh",
+    "postinstall": "chmod +x cli/generate-test.sh && chmod +x watch-and-debug.sh"
   },
   "keywords": [
     "agentica",

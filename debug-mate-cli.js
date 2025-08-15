@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import { Command } from 'commander';
 import { spawn, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve, basename } from 'path';
 import { existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -53,143 +53,97 @@ function checkPlatform() {
     process.exit(1);
   }
 }
-
-// tmux 분할 화면 함수 (기본 디버깅 모드)
+// === REPLACE: tmuxDebug() ===
 async function tmuxDebug(file, options = {}) {
+  // CLI에서 --left 로 전달된 값과의 호환을 위해 leftSize 유지
   const { session, leftSize = 60 } = options;
-  
-  console.log(chalk.blue(`  tmux 분할 화면 모드 시작...`));
-  console.log(chalk.gray(' 왼쪽: 파일 편집, 오른쪽: 디버깅 결과'));
-  console.log(chalk.gray(' 종료하려면 tmux 세션을 종료하세요.\n'));
 
-  // tmux 설치 확인
-  try {
-    const tmuxVersion = execSync('tmux -V', { encoding: 'utf8' }).trim();
-    console.log(chalk.green(` tmux 감지됨: ${tmuxVersion}`));
-  } catch (error) {
-    console.error(chalk.red(' tmux가 설치되지 않았습니다.'));
-    console.log(chalk.yellow(' 설치 명령어: sudo apt install tmux'));
-    console.log(chalk.blue(' 전체 시스템 요구사항:'));
-    console.log(chalk.cyan('   sudo apt update'));
-    console.log(chalk.cyan('   sudo apt install -y tmux inotify-tools gcc g++ build-essential python3 make'));
-    process.exit(1);
+  console.log(chalk.blue(`🖥️  tmux 분할 화면 모드 시작...`));
+  console.log(chalk.gray('📝 왼쪽: vi 편집기, 오른쪽: 자동 분석 실행(inprogress-run.ts)'));
+  console.log(chalk.gray('🛑 종료는 tmux 세션 종료(Ctrl+b :kill-session 또는 별도 터미널에서 tmux kill-session -t <세션>)\n'));
+
+  // 필수 도구 확인
+  try { execSync('tmux -V', { encoding: 'utf8' }); }
+  catch { console.error(chalk.red('❌ tmux 미설치: sudo apt install -y tmux')); process.exit(1); }
+
+  try { 
+    execSync('which inotifywait', { encoding: 'utf8' });
+    // inotifywait가 설치되어 있는지만 확인하고, 실제 실행은 나중에
+    console.log(chalk.green('✓ inotifywait 확인됨'));
+  }
+  catch { 
+    console.error(chalk.red('❌ inotifywait 명령어를 찾을 수 없습니다.'));
+    console.error(chalk.yellow('다음 명령어로 설치해주세요:'));
+    console.error(chalk.cyan('  sudo apt update && sudo apt install -y inotify-tools'));
+    console.error(chalk.gray('또는 PATH에 inotifywait가 있는지 확인해주세요.'));
+    process.exit(1); 
   }
 
-  // tmux 세션 이름
-  const sessionName = session || `debug-mate-${file.replace('.c', '')}`;
+  // 파일 경로 정규화
+  const filePath = resolve(file);
+  const fileName = basename(file);
+  const fileDir = dirname(filePath);
 
-  // 기존 세션이 있으면 종료
-  try {
-    execSync(`tmux kill-session -t "${sessionName}" 2>/dev/null`, { stdio: 'ignore' });
-  } catch (error) {
-    // 세션이 없으면 무시
-  }
+  // 세션명 안전화 (/, ., 공백, : → -)
+  const cleanSession = (session || `dm-${fileName}`).replace(/[\/\.\s:]/g, '-');
 
-  // 개발 환경에서는 ts-node 사용, 프로덕션에서는 컴파일된 JS 사용
-  let distEntry;
-  if (existsSync(join(__dirname, 'lib/agentica/inprogress-run.js'))) {
-    distEntry = 'lib/agentica/inprogress-run.js';
-  } else if (existsSync(join(__dirname, 'dist/agentica/inprogress-run.js'))) {
-    distEntry = 'dist/agentica/inprogress-run.js';
-  } else {
-    distEntry = 'ts-node src/agentica/inprogress-run.ts';
-  }
-
-  // tmux 스크립트 구성
-  const tmuxScript = `
-    # 새 tmux 세션 생성
-    tmux new-session -d -s "${sessionName}" -n "editor"
-
-    # 파일이 없으면 기본 템플릿 생성
-    if [ ! -f "${file}" ]; then
-      cat > "${file}" << 'EOF'
+  // 파일 없으면 기본 템플릿 생성
+  const initSnippet = `
+    TARGET_FILE="${filePath}"
+    if [ ! -f "$TARGET_FILE" ]; then
+      cat > "$TARGET_FILE" <<'EOF'
 #include <stdio.h>
-
-int main() {
-    int i;
-    for (i = 0; i < 5; i++) {
-        printf("Hello, World! %d\\n", i);
-    }
-    return 0;
+int main(void){
+  printf("Hello DebugMate!\\n");
+  return 0;
 }
 EOF
     fi
-
-    # 왼쪽 패널: 안내문 출력 후 vi 편집기 시작
-    tmux send-keys -t "${sessionName}:editor" "echo '=== DebugMate - C/C++ AI 디버깅 도구 ==='" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo '왼쪽: 파일 편집 (vi)'" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo '오른쪽: AI 분석 결과'" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo ''" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo '💡 사용법:'" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo '1. vi에서 파일 편집 후 :w로 저장'" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo '2. 저장 후 자연어로 질문 입력'" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo '3. 오른쪽에서 AI 분석 결과 확인'" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo '4. Ctrl+C로 종료'" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo ''" Enter
-    tmux send-keys -t "${sessionName}:editor" "echo '편집기를 시작합니다...'" Enter
-    tmux send-keys -t "${sessionName}:editor" "sleep 2" Enter
-    tmux send-keys -t "${sessionName}:editor" "vi ${file}" Enter
-
-    # 오른쪽 패널 생성 (AI 분석 결과)
-    tmux split-window -h -t "${sessionName}:editor"
-
-    # 오른쪽 패널: AI 분석 결과 대기
-    tmux send-keys -t "${sessionName}:editor.1" "echo '=== AI 분석 결과 ==='" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "echo '파일 저장 및 질문을 기다리는 중...'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "echo ''" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "echo '💡 자연어 질문 예시:'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "echo '- 이 코드의 문제점은?'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "echo '- 어떻게 개선할 수 있어?'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "echo '- 메모리 누수는 없어?'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "echo ''" Enter
-
-    # 파일 감시 및 자연어 입력 처리 (오른쪽 패널에서)
-    tmux send-keys -t "${sessionName}:editor.1" "cd '${__dirname}'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "echo '파일 감시 시작...'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "echo ''" Enter
-
-    # inotifywait로 파일 감시 및 자동 AI 분석 실행
-    tmux send-keys -t "${sessionName}:editor.1" "inotifywait -m -e close_write --format '%w%f' '${file}' | while IFS= read -r FULLPATH; do" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 파일이 저장되었습니다 ==='" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '자동으로 AI 분석을 시작합니다...'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo 'AI 분석 중...'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '파일: '\$FULLPATH" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
-    ${distEntry.includes('ts-node') ? 
-      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && npx ${distEntry} "\$FULLPATH")" Enter` :
-      `tmux send-keys -t "${sessionName}:editor.1" "  (cd '${__dirname}' && node ${distEntry} "\$FULLPATH")" Enter`
-    }
-    tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '=== 분석 완료 ==='" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo '다시 편집하고 저장하면 자동으로 분석이 실행됩니다.'" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "  echo ''" Enter
-    tmux send-keys -t "${sessionName}:editor.1" "done" Enter
-
-    # 패널 크기 조정
-    tmux resize-pane -t "${sessionName}:editor.0" -x ${leftSize}
-
-    # 세션에 연결
-    echo "tmux 세션 '${sessionName}'이 시작되었습니다."
-    echo "왼쪽: vi 편집기, 오른쪽: AI 분석 결과"
-    echo "종료하려면: tmux kill-session -t ${sessionName}"
-    echo ""
-    echo "세션에 연결 중..."
-
-    tmux attach-session -t "${sessionName}"
   `;
 
-  const child = spawn('bash', ['-c', tmuxScript], {
+  // 기존 세션 종료 시도(있으면 정리)
+  try { execSync(`tmux kill-session -t "${cleanSession}" 2>/dev/null`); } catch {}
+
+  // 오른쪽 패널에서 실행할 "저장 감시 + 분석" 파이프라인
+  // watch-and-debug.sh 스크립트를 사용하여 더 안정적으로 실행
+  const rightPaneCmd = `bash "${__dirname}/../watch-and-debug.sh" "${filePath}"`;
+
+  // tmux 스크립트 - 개별 명령어로 실행
+  const tmuxScript = `
+    set -eo pipefail
+    ${initSnippet}
+
+    # 새 세션 생성: 왼쪽=vi
+    tmux new-session -d -s "${cleanSession}" -n editor "vi '${filePath}'"
+    sleep 1
+
+    # 오른쪽=저장 감시+자동 실행
+    tmux split-window -h -t "${cleanSession}:editor" ${JSON.stringify(rightPaneCmd)}
+    sleep 1
+
+    # 왼쪽 폭(열 수) 조절 - 퍼센트를 픽셀로 변환
+    tmux resize-pane -t "${cleanSession}:editor".0 -x ${Math.floor(Number(leftSize) * 2.5) || 150}
+    sleep 0.5
+
+    # 포커스는 왼쪽(vi)
+    tmux select-pane -t "${cleanSession}:editor".0
+
+    # 세션 접속
+    tmux attach -t "${cleanSession}"
+  `;
+
+  const child = spawn('bash', ['-lc', tmuxScript], {
     stdio: 'inherit',
     env: { ...process.env }
   });
 
   child.on('error', (err) => {
-    console.error(chalk.red(` tmux 실행 오류: ${err.message}`));
-    console.log(chalk.yellow(' tmux가 설치되어 있는지 확인하세요: sudo apt install tmux'));
+    console.error(chalk.red(`❌ tmux 실행 오류: ${err.message}`));
     process.exit(1);
   });
 }
+
+
 
 // 기본 디버깅 명령어 (tmux 분할 화면이 기본)
 program
@@ -197,15 +151,15 @@ program
   .alias('d')
   .description(chalk.cyan('tmux 분할 화면으로 파일 감시 및 자동 디버깅'))
   .option('-s, --session <name>', chalk.gray('tmux 세션 이름 지정'))
-  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 (기본: 60%)'), '60')
+  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 퍼센트 (기본: 60%)'), '60')
   .option('-t, --timeout <ms>', chalk.gray('타임아웃 설정 (기본: 30000ms)'), '30000')
   .action(async (file, options) => {
     console.log(LOGO);
     checkPlatform();
     
     if (!existsSync(file)) {
-      console.error(chalk.red(` 파일을 찾을 수 없습니다: ${file}`));
-      process.exit(1);
+      console.log(chalk.yellow(` 파일이 존재하지 않습니다: ${file}`));
+      console.log(chalk.blue('기본 C 템플릿을 생성하고 시작합니다...'));
     }
 
     await tmuxDebug(file, options);
@@ -217,14 +171,14 @@ program
   .alias('t')
   .description(chalk.cyan('tmux 분할 화면으로 디버깅 (debug 명령어와 동일)'))
   .option('-s, --session <name>', chalk.gray('tmux 세션 이름 지정'))
-  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 (기본: 60%)'), '60')
+  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 퍼센트 (기본: 60%)'), '60')
   .action(async (file, options) => {
     console.log(LOGO);
     checkPlatform();
     
     if (!existsSync(file)) {
-      console.error(chalk.red(` 파일을 찾을 수 없습니다: ${file}`));
-      process.exit(1);
+      console.log(chalk.yellow(` 파일이 존재하지 않습니다: ${file}`));
+      console.log(chalk.blue('기본 C 템플릿을 생성하고 시작합니다...'));
     }
 
     await tmuxDebug(file, options);
@@ -338,6 +292,10 @@ program
       try {
         if (tool.command === 'node') {
           console.log(chalk.green(`${tool.name}: ${tool.version}`));
+        } else if (tool.command === 'inotifywait') {
+          // inotifywait가 설치되어 있는지만 확인
+          execSync('which inotifywait', { encoding: 'utf8' });
+          console.log(chalk.green(`${tool.name}: 설치됨`));
         } else {
           const version = execSync(`${tool.command} --version`, { encoding: 'utf8' }).split('\n')[0];
           console.log(chalk.green(`${tool.name}: ${version}`));
@@ -398,6 +356,12 @@ program
 
     console.log(LOGO);
     checkPlatform();
+    
+    if (!existsSync(file)) {
+      console.log(chalk.yellow(` 파일이 존재하지 않습니다: ${file}`));
+      console.log(chalk.blue('기본 C 템플릿을 생성하고 시작합니다...'));
+    }
+    
     await tmuxDebug(file);
   });
 
