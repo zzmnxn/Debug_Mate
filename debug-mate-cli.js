@@ -123,7 +123,8 @@ EOF
 
   // tmux 스크립트
   const tmuxScript = `
-    set -euo pipefail
+    set -eo pipefail
+    set +u
     ${initSnippet}
 
     # 새 세션 생성: 왼쪽=vi
