@@ -1037,7 +1037,7 @@ Based on this information, please analyze in the following format (respond in Ko
 `.trim();
 
     // 2) 간단 재시도 + 지수 백오프(추가 함수 없이 루프만)
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+    const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
     const model = genAI.getGenerativeModel({
       model: modelName,
       generationConfig: { temperature: 0.3, maxOutputTokens: 1000 },

@@ -285,11 +285,11 @@ program
           // 기존 .env 파일 읽기
           let existingContent = '';
           try {
-            existingContent = fs.readFileSync(envPath, 'utf8');
+            existingContent = readFileSync(envPath, 'utf8');
           } catch (err) {
             // 파일이 없으면 기본 내용으로 생성
             const defaultContent = `GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent\n`;
-            fs.writeFileSync(envPath, defaultContent);
+            writeFileSync(envPath, defaultContent);
             existingContent = defaultContent;
             console.log(chalk.blue('✓ 기본 .env 파일 생성됨'));
           }
@@ -298,7 +298,7 @@ program
           const lines = existingContent.split('\n').filter(line => line.trim() && !line.startsWith(actualKey + '='));
           lines.push(envContent.trim());
           
-          fs.writeFileSync(envPath, lines.join('\n') + '\n');
+          writeFileSync(envPath, lines.join('\n') + '\n');
           console.log(chalk.green(`✓ .env 파일에 저장됨: ${envPath}`));
           console.log(chalk.yellow('다음 세션부터 적용됩니다. 즉시 적용하려면 터미널을 재시작하세요.'));
         } catch (err) {
