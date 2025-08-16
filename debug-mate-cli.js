@@ -5,7 +5,7 @@ import { Command } from 'commander';
 import { spawn, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve, basename } from 'path';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -14,9 +14,9 @@ const __dirname = dirname(__filename);
 const LOGO = `
 ${chalk.cyan.bold(`
 ══════════════════════════════════════════════════════════════
-                                                              
-   ${chalk.yellow.bold('DebugMate')}       
-   ${chalk.gray('C/C++ AI 디버깅 도구')}       
+                                                               
+   ${chalk.yellow.bold('DebugMate')} - C/C++ AI 디버깅 도구      
+   ${chalk.gray('파일 감시 • 대화형 분석 • tmux 분할 화면')}       
                                                               
 ══════════════════════════════════════════════════════════════
 `)}`;
@@ -36,57 +36,6 @@ program
   .helpOption('-h, --help', chalk.gray('도움말 표시'));
 
 
-
-// 의존성 체크 및 자동 설치 함수
-async function checkAndInstallDependencies() {
-  const dependencies = [
-    { name: 'tmux', package: 'tmux', checkCmd: 'tmux -V', description: '터미널 멀티플렉서' },
-    { name: 'inotifywait', package: 'inotify-tools', checkCmd: 'which inotifywait', description: '파일 감시 도구' },
-    { name: 'gcc', package: 'build-essential', checkCmd: 'gcc --version', description: 'C 컴파일러' },
-    { name: 'python3', package: 'python3', checkCmd: 'python3 --version', description: 'Python 인터프리터' },
-    { name: 'make', package: 'make', checkCmd: 'make --version', description: '빌드 도구' }
-  ];
-
-  const missing = [];
-
-  console.log(chalk.blue(' 필수 의존성 확인 중...'));
-
-  for (const dep of dependencies) {
-    try {
-      execSync(dep.checkCmd, { encoding: 'utf8', stdio: 'ignore' });
-      console.log(chalk.green(`✓ ${dep.name} 확인됨`));
-    } catch {
-      console.log(chalk.yellow(`⚠ ${dep.name} 없음`));
-      missing.push(dep);
-    }
-  }
-
-  if (missing.length > 0) {
-    console.log(chalk.red(`\n ${missing.length}개의 필수 도구가 설치되지 않았습니다.`));
-    console.log(chalk.blue('자동 설치를 시도합니다...\n'));
-
-    try {
-      // 패키지 목록 업데이트
-      console.log(chalk.gray('패키지 목록 업데이트 중...'));
-      execSync('sudo apt update', { stdio: 'inherit' });
-
-      // 누락된 패키지들 설치
-      const packages = missing.map(dep => dep.package).join(' ');
-      console.log(chalk.gray(`설치 중: ${packages}`));
-      execSync(`sudo apt install -y ${packages}`, { stdio: 'inherit' });
-
-      console.log(chalk.green('\n 모든 의존성이 성공적으로 설치되었습니다!'));
-    } catch (error) {
-      console.error(chalk.red('\n 자동 설치에 실패했습니다.'));
-      console.log(chalk.yellow('수동으로 다음 명령어를 실행해주세요:'));
-      console.log(chalk.cyan(`  sudo apt update && sudo apt install -y ${missing.map(dep => dep.package).join(' ')}`));
-      process.exit(1);
-    }
-  } else {
-    console.log(chalk.green(' 모든 의존성이 준비되었습니다!\n'));
-  }
-}
-
 // 플랫폼 체크 함수
 function checkPlatform() {
   if (process.platform !== 'linux') {
@@ -103,15 +52,29 @@ function checkPlatform() {
 // === REPLACE: tmuxDebug() ===
 async function tmuxDebug(file, options = {}) {
   // CLI에서 --left 로 전달된 값과의 호환을 위해 leftSize 유지
-  const { session, leftSize = 50 } = options;
-
-  // 의존성 자동 체크 및 설치
-  await checkAndInstallDependencies();
+  const { session, leftSize = 40 } = options;
 
   console.log(chalk.blue(`  tmux 분할 화면 모드 시작...`));
   console.log(chalk.gray(' 왼쪽: vi 편집기, 오른쪽: 자동 분석 실행(inprogress-run.ts)'));
-  console.log(chalk.yellow(' 패널 간 이동: Ctrl+b + h(왼쪽) / l(오른쪽)'));
+  console.log(chalk.yellow(' 패널 간 이동: Ctrl+b + h(왼쪽) / l(오른쪽) / j(아래) / k(위)'));
   console.log(chalk.gray(' 종료는 tmux 세션 종료(Ctrl+b :kill-session 또는 별도 터미널에서 tmux kill-session -t <세션>)\n'));
+
+  // 필수 도구 확인
+  try { execSync('tmux -V', { encoding: 'utf8' }); }
+  catch { console.error(chalk.red('tmux 미설치: sudo apt install -y tmux')); process.exit(1); }
+
+  try { 
+    execSync('which inotifywait', { encoding: 'utf8' });
+    // inotifywait가 설치되어 있는지만 확인하고, 실제 실행은 나중에
+    console.log(chalk.green('✓ inotifywait 확인됨'));
+  }
+  catch { 
+    console.error(chalk.red('inotifywait 명령어를 찾을 수 없습니다.'));
+    console.error(chalk.yellow('다음 명령어로 설치해주세요:'));
+    console.error(chalk.cyan('  sudo apt update && sudo apt install -y inotify-tools'));
+    console.error(chalk.gray('또는 PATH에 inotifywait가 있는지 확인해주세요.'));
+    process.exit(1); 
+  }
 
   // 파일 경로 정규화
   const filePath = resolve(file);
@@ -140,15 +103,11 @@ EOF
 
   // 오른쪽 패널에서 실행할 "저장 감시 + 분석" 파이프라인
   // watch-and-debug.sh 스크립트를 사용하여 더 안정적으로 실행
-  const rightPaneCmd = `bash "${__dirname}/watch-and-debug.sh" "${filePath}"`;
+  const rightPaneCmd = `bash "${__dirname}/../watch-and-debug.sh" "${filePath}"`;
 
   // tmux 스크립트 - 개별 명령어로 실행
   const tmuxScript = `
     set -eo pipefail
-    
-    # 환경변수 설정
-    ${envVars}
-    
     ${initSnippet}
 
     # 새 세션 생성: 왼쪽=vi
@@ -161,7 +120,7 @@ EOF
 
     # 왼쪽 폭(열 수) 조절 - 터미널 크기에 따라 동적으로 계산
     TERM_WIDTH=$(tput cols)
-    LEFT_WIDTH=$(($TERM_WIDTH * ${Number(leftSize) || 50} / 100))
+    LEFT_WIDTH=$(($TERM_WIDTH * ${Number(leftSize) || 40} / 100))
     tmux resize-pane -t "${cleanSession}:editor".0 -x $LEFT_WIDTH
     sleep 0.5
 
@@ -174,12 +133,6 @@ EOF
     # 세션 접속
     tmux attach -t "${cleanSession}"
   `;
-
-  // 환경변수를 tmux 세션에 전달하기 위한 설정
-  const envVars = Object.entries(process.env)
-    .filter(([key]) => key.startsWith('GEMINI_'))
-    .map(([key, value]) => `${key}="${value}"`)
-    .join(' ');
 
   const child = spawn('bash', ['-lc', tmuxScript], {
     stdio: 'inherit',
@@ -198,7 +151,9 @@ EOF
 program
   .command('debug <file>')
   .alias('d')
-  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 퍼센트 (기본: 50%)'), '50')
+  .description(chalk.cyan('tmux 분할 화면으로 파일 감시 및 자동 디버깅'))
+  .option('-s, --session <name>', chalk.gray('tmux 세션 이름 지정'))
+  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 퍼센트 (기본: 40%)'), '40')
   .option('-t, --timeout <ms>', chalk.gray('타임아웃 설정 (기본: 30000ms)'), '30000')
   .action(async (file, options) => {
     console.log(LOGO);
@@ -212,21 +167,35 @@ program
     await tmuxDebug(file, options);
   });
 
+// tmux 분할 화면 명령어 (별도 옵션으로 유지)
+program
+  .command('tmux <file>')
+  .alias('t')
+  .description(chalk.cyan('tmux 분할 화면으로 디버깅 (debug 명령어와 동일)'))
+  .option('-s, --session <name>', chalk.gray('tmux 세션 이름 지정'))
+  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 퍼센트 (기본: 40%)'), '40')
+  .action(async (file, options) => {
+    console.log(LOGO);
+    checkPlatform();
+    
+    if (!existsSync(file)) {
+      console.log(chalk.yellow(` 파일이 존재하지 않습니다: ${file}`));
+      console.log(chalk.blue('기본 C 템플릿을 생성하고 시작합니다...'));
+    }
 
+    await tmuxDebug(file, options);
+  });
 
 // 테스트 코드 생성 명령어 (generate-test.sh 사용)
 program
-  .command('generate')
+  .command('generate [name]')
   .alias('g')
   .description(chalk.cyan('테스트 코드 자동 생성'))
   .option('-t, --type <type>', chalk.gray('테스트 타입 (1-9)'))
   .option('-l, --list', chalk.gray('사용 가능한 테스트 타입 목록'))
-  .action(async (options) => {
+  .action(async (name = 'test', options) => {
     console.log(LOGO);
     checkPlatform();
-    
-    // 의존성 체크 (generate는 gcc, make만 필요)
-    await checkAndInstallDependencies();
 
     if (options.list) {
       console.log(chalk.blue('사용 가능한 테스트 타입:'));
@@ -243,11 +212,11 @@ program
     }
 
     console.log(chalk.blue(`테스트 코드 생성 중...`));
-    console.log(chalk.gray(`파일명: test.c`));
+    console.log(chalk.gray(`파일명: ${name}.c`));
 
     // generate-test.sh 스크립트 호출
     const scriptPath = join(__dirname, 'generate-test.sh');
-    const child = spawn('bash', [scriptPath, 'test'], {
+    const child = spawn('bash', [scriptPath, name], {
       stdio: 'inherit',
       env: { ...process.env, TEST_TYPE: options.type }
     });
@@ -258,65 +227,50 @@ program
     });
   });
 
+// 설정 명령어
+program
+  .command('config')
+  .alias('c')
+  .description(chalk.cyan('설정 관리'))
+  .option('-s, --set <key=value>', chalk.gray('설정 값 설정'))
+  .option('-g, --get <key>', chalk.gray('설정 값 조회'))
+  .option('-l, --list', chalk.gray('모든 설정 조회'))
+  .action(async (options) => {
+    console.log(LOGO);
+    
+    if (options.list) {
+      console.log(chalk.blue('현재 설정:'));
+      console.log(chalk.cyan(`API Key: ${process.env.GEMINI_API_KEY ? '설정됨' : '설정되지 않음'}`));
+      console.log(chalk.cyan(`Node.js: ${process.version}`));
+      console.log(chalk.cyan(`Platform: ${process.platform}`));
+      return;
+    }
 
+    if (options.set) {
+      const [key, value] = options.set.split('=');
+      console.log(chalk.blue(`설정 업데이트: ${key} = ${value}`));
+      // 실제로는 설정 파일에 저장하는 로직 필요
+      return;
+    }
+
+    if (options.get) {
+      console.log(chalk.blue(`설정 조회: ${options.get}`));
+      // 실제로는 설정 파일에서 읽는 로직 필요
+      return;
+    }
+
+    console.log(chalk.blue('설정 관리'));
+    console.log(chalk.gray('사용법: debug-mate config --help'));
+  });
 
 // 상태 확인 명령어
 program
   .command('status')
   .alias('s')
-  .description(chalk.cyan('시스템 상태 및 설정 확인'))
-  .option('-s, --set <key=value>', chalk.gray('환경변수 설정 (예: GEMINI_API_KEY=your_key)'))
-  .action(async (options) => {
+  .description(chalk.cyan('시스템 상태 확인'))
+  .action(async () => {
     console.log(LOGO);
     
-    // 환경변수 설정 처리
-    if (options.set) {
-      const [key, value] = options.set.split('=');
-      if (!key || !value) {
-        console.error(chalk.red('올바른 형식: key=value (예: KEY=your_key_here)'));
-        return;
-      }
-      
-      // 사용자 친화적인 키를 실제 환경변수 키로 매핑
-      const keyMapping = {
-        'KEY': 'GEMINI_API_KEY',
-        'API_KEY': 'GEMINI_API_KEY',
-        'GEMINI_API_KEY': 'GEMINI_API_KEY'
-      };
-      
-      const actualKey = keyMapping[key.toUpperCase()] || key;
-      console.log(chalk.blue(`환경변수 설정: ${actualKey} = ${value}`));
-      
-      // .env 파일에 저장
-      const envPath = join(__dirname, '..', '.env');
-      const envContent = `${actualKey}=${value}\n`;
-      
-              try {
-          // 기존 .env 파일 읽기
-          let existingContent = '';
-          try {
-            existingContent = readFileSync(envPath, 'utf8');
-          } catch (err) {
-            // 파일이 없으면 기본 내용으로 생성
-            const defaultContent = `GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent\n`;
-            writeFileSync(envPath, defaultContent);
-            existingContent = defaultContent;
-            console.log(chalk.blue('✓ 기본 .env 파일 생성됨'));
-          }
-          
-          // 기존 키가 있으면 업데이트, 없으면 추가
-          const lines = existingContent.split('\n').filter(line => line.trim() && !line.startsWith(actualKey + '='));
-          lines.push(envContent.trim());
-          
-          writeFileSync(envPath, lines.join('\n') + '\n');
-          console.log(chalk.green(`✓ .env 파일에 저장됨: ${envPath}`));
-          console.log(chalk.yellow('다음 세션부터 적용됩니다. 즉시 적용하려면 터미널을 재시작하세요.'));
-        } catch (err) {
-          console.error(chalk.red(`환경변수 설정 실패: ${err.message}`));
-        }
-      return;
-    }
-
     console.log(chalk.blue('시스템 상태 확인 중...\n'));
 
     // 플랫폼 확인
@@ -388,7 +342,7 @@ program
     console.log(chalk.cyan(`NPM: ${chalk.underline('https://www.npmjs.com/package/@debugmate/cli')}`));
     
     console.log(chalk.blue('\n라이선스: MIT'));
-    console.log(chalk.gray('Made with ❤️ by Ctr_Z Team'));
+    console.log(chalk.gray('Made with ❤️ by DebugMate Team'));
   });
 
 // 기본 명령어 (파일명만 입력했을 때 - tmux 분할 화면이 기본)
@@ -426,13 +380,14 @@ try {
     console.log('');
     console.log(chalk.yellow('주요 명령어:'));
     console.log(chalk.cyan('  debug <file>     tmux 분할 화면으로 파일 감시 및 자동 디버깅'));
-    console.log(chalk.cyan('  generate         테스트 코드 자동 생성'));
-    console.log(chalk.cyan('  status           시스템 상태 및 설정 확인'));
+    console.log(chalk.cyan('  tmux <file>      tmux 분할 화면으로 디버깅 (debug와 동일)'));
+    console.log(chalk.cyan('  generate [name]  테스트 코드 자동 생성'));
+    console.log(chalk.cyan('  status           시스템 상태 확인'));
     console.log(chalk.cyan('  info             프로그램 정보'));
     console.log('');
     console.log(chalk.yellow('사용 예시:'));
     console.log(chalk.gray('  debug-mate debug test.c'));
-    console.log(chalk.gray('  debug-mate generate'));
+    console.log(chalk.gray('  debug-mate generate my_test'));
     console.log(chalk.gray('  debug-mate status'));
     console.log('');
     console.log(chalk.yellow('자세한 도움말:'));

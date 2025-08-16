@@ -1,0 +1,56 @@
+{
+  "private": true,
+  "name": "agentica-template-nodejs",
+  "version": "0.1.0",
+  "description": "Template repository of Agentica for NodeJS WebSocket Server",
+  "scripts": {
+    "build": "rimraf lib && tsc",
+    "prepare": "ts-patch install && ts-node build/env.ts",
+    "start": "node lib",
+    "start:http": "ts-node src/http-server.ts",
+    "start:http:js": "node http-server.js",
+    "test:http": "ts-node http-test.ts",
+    "debug": "ts-node src/agentica/DebugAgent.ts",
+    "test:afterdebug": "ts-node test_afterDebug_improved.ts",
+    "test:markerrors": "ts-node test_markErrors_improved.ts",
+    "test:execution": "ts-node test_execution_output.ts"
+  },
+  "keywords": [
+    "agentica",
+    "template",
+    "nodejs",
+    "websocket"
+  ],
+  "author": "Wrtn Technologies",
+  "license": "ISC",
+  "dependencies": {
+    "@agentica/core": "^0.29.6",
+    "@agentica/rpc": "^0.29.5",
+    "@google/generative-ai": "^0.24.1",
+    "@samchon/openapi": "^4.3.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "dotenv-expand": "^12.0.1",
+    "express": "^5.1.0",
+    "openai": "^5.10.2",
+    "tgrid": "^1.1.0",
+    "tree-sitter": "^0.22.4",
+    "tree-sitter-c": "^0.24.1",
+    "tstl": "^3.0.0",
+    "typia": "^9.3.1",
+    "uuid": "^11.1.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@trivago/prettier-plugin-sort-imports": "^5.2.2",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.17.0",
+    "@types/uuid": "^10.0.0",
+    "prettier": "^3.5.3",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "ts-patch": "^3.3.0",
+    "typescript": "~5.8.3"
+  }
+}
