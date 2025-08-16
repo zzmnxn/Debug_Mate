@@ -37,6 +37,56 @@ program
 
 
 
+// 의존성 체크 및 자동 설치 함수
+async function checkAndInstallDependencies() {
+  const dependencies = [
+    { name: 'tmux', package: 'tmux', checkCmd: 'tmux -V' },
+    { name: 'inotifywait', package: 'inotify-tools', checkCmd: 'which inotifywait' },
+    { name: 'gcc', package: 'build-essential', checkCmd: 'gcc --version' },
+    { name: 'python3', package: 'python3', checkCmd: 'python3 --version' },
+    { name: 'make', package: 'make', checkCmd: 'make --version' }
+  ];
+
+  const missing = [];
+
+  console.log(chalk.blue(' 필수 의존성 확인 중...'));
+
+  for (const dep of dependencies) {
+    try {
+      execSync(dep.checkCmd, { encoding: 'utf8', stdio: 'ignore' });
+      console.log(chalk.green(`✓ ${dep.name} 확인됨`));
+    } catch {
+      console.log(chalk.yellow(`⚠ ${dep.name} 없음`));
+      missing.push(dep);
+    }
+  }
+
+  if (missing.length > 0) {
+    console.log(chalk.red(`\n ${missing.length}개의 필수 도구가 설치되지 않았습니다.`));
+    console.log(chalk.blue('자동 설치를 시도합니다...\n'));
+
+    try {
+      // 패키지 목록 업데이트
+      console.log(chalk.gray('패키지 목록 업데이트 중...'));
+      execSync('sudo apt update', { stdio: 'inherit' });
+
+      // 누락된 패키지들 설치
+      const packages = missing.map(dep => dep.package).join(' ');
+      console.log(chalk.gray(`설치 중: ${packages}`));
+      execSync(`sudo apt install -y ${packages}`, { stdio: 'inherit' });
+
+      console.log(chalk.green('\n 모든 의존성이 성공적으로 설치되었습니다!'));
+    } catch (error) {
+      console.error(chalk.red('\n 자동 설치에 실패했습니다.'));
+      console.log(chalk.yellow('수동으로 다음 명령어를 실행해주세요:'));
+      console.log(chalk.cyan(`  sudo apt update && sudo apt install -y ${missing.map(dep => dep.package).join(' ')}`));
+      process.exit(1);
+    }
+  } else {
+    console.log(chalk.green(' 모든 의존성이 준비되었습니다!\n'));
+  }
+}
+
 // 플랫폼 체크 함수
 function checkPlatform() {
   if (process.platform !== 'linux') {
@@ -55,27 +105,13 @@ async function tmuxDebug(file, options = {}) {
   // CLI에서 --left 로 전달된 값과의 호환을 위해 leftSize 유지
   const { session, leftSize = 50 } = options;
 
+  // 의존성 자동 체크 및 설치
+  await checkAndInstallDependencies();
+
   console.log(chalk.blue(`  tmux 분할 화면 모드 시작...`));
   console.log(chalk.gray(' 왼쪽: vi 편집기, 오른쪽: 자동 분석 실행(inprogress-run.ts)'));
   console.log(chalk.yellow(' 패널 간 이동: Ctrl+b + h(왼쪽) / l(오른쪽)'));
   console.log(chalk.gray(' 종료는 tmux 세션 종료(Ctrl+b :kill-session 또는 별도 터미널에서 tmux kill-session -t <세션>)\n'));
-
-  // 필수 도구 확인
-  try { execSync('tmux -V', { encoding: 'utf8' }); }
-  catch { console.error(chalk.red('tmux 미설치: sudo apt install -y tmux')); process.exit(1); }
-
-  try { 
-    execSync('which inotifywait', { encoding: 'utf8' });
-    // inotifywait가 설치되어 있는지만 확인하고, 실제 실행은 나중에
-    console.log(chalk.green('✓ inotifywait 확인됨'));
-  }
-  catch { 
-    console.error(chalk.red('inotifywait 명령어를 찾을 수 없습니다.'));
-    console.error(chalk.yellow('다음 명령어로 설치해주세요:'));
-    console.error(chalk.cyan('  sudo apt update && sudo apt install -y inotify-tools'));
-    console.error(chalk.gray('또는 PATH에 inotifywait가 있는지 확인해주세요.'));
-    process.exit(1); 
-  }
 
   // 파일 경로 정규화
   const filePath = resolve(file);
@@ -178,6 +214,9 @@ program
   .action(async (options) => {
     console.log(LOGO);
     checkPlatform();
+    
+    // 의존성 체크 (generate는 gcc, make만 필요)
+    await checkAndInstallDependencies();
 
     if (options.list) {
       console.log(chalk.blue('사용 가능한 테스트 타입:'));
