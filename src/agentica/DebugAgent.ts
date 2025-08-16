@@ -1,23 +1,33 @@
+import { loopCheck, afterDebugFromCode, traceVar } from "./handlers";
+import * as fs from "fs";
+import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import dotenv from "dotenv";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+dotenv.config();
 
-// 유저의 자연어를 분석해 아래의 tool / target / details 형태로 반환
-export interface ParsedIntent {
+interface CompileInput {
+  code: string;
+}
+
+//유저의 자연어를 분석해 아래의 tool / target / details 형태로 반환
+interface ParsedIntent {
   tool: string;
   target?: string;
   details?: any;
 }
 
 // 복수 명령어를 처리하기 위한 새로운 인터페이스
-export interface MultipleIntents {
+interface MultipleIntents {
   intents: ParsedIntent[];
   isMultiple: boolean;
 }
 
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
 // 텍스트 정규화 함수 - 오타와 다양한 표현 처리
-export function normalizeText(text: string): string {
+function normalizeText(text: string): string {
   return text
     .toLowerCase()
     .replace(/\s+/g, ' ') // 여러 공백을 하나로
@@ -26,7 +36,7 @@ export function normalizeText(text: string): string {
 }
 
 // 유연한 키워드 매칭 함수
-export function flexibleMatch(text: string, keywords: string[]): boolean {
+function flexibleMatch(text: string, keywords: string[]): boolean {
   const normalizedText = normalizeText(text);
   return keywords.some(keyword => {
     const normalizedKeyword = normalizeText(keyword);
@@ -40,7 +50,7 @@ export function flexibleMatch(text: string, keywords: string[]): boolean {
 }
 
 // 간단한 문자열 유사도 계산 (Jaccard similarity)
-export function similarity(str1: string, str2: string): number {
+function similarity(str1: string, str2: string): number {
   const set1 = new Set(str1.split(''));
   const set2 = new Set(str2.split(''));
   const intersection = new Set([...set1].filter(x => set2.has(x)));
@@ -48,8 +58,28 @@ export function similarity(str1: string, str2: string): number {
   return intersection.size / union.size;
 }
 
+
+
+
+
+// afterDebugFromCode를 직접 호출하는 함수
+async function runAfterDebug(
+  code: string,
+  userQuery: string,
+  fileName: string
+): Promise<string> {
+  const { analysis, markedFilePath } = await afterDebugFromCode(
+    code,
+    fileName
+  );
+  return (
+    analysis +
+    (markedFilePath ? `\n[마킹된 코드 파일]: ${markedFilePath}` : "")
+  );
+}
+
 // AI 파싱 강화를 위한 헬퍼 함수
-export async function enhancedAIParsing(query: string, context: string = ""): Promise<ParsedIntent | null> {
+async function enhancedAIParsing(query: string, context: string = ""): Promise<ParsedIntent | null> {
   const enhancedPrompt = `You are an expert in analyzing natural language requests from users.
 Understand various expressions, typos, abbreviations, and colloquial language, and convert them into appropriate JSON format.
 
@@ -103,7 +133,7 @@ Output the analysis result in JSON format only:`;
 }
 
 // 폴백 메커니즘을 포함한 강화된 파싱 함수
-export async function robustParseSingleIntent(query: string): Promise<ParsedIntent> {
+async function robustParseSingleIntent(query: string): Promise<ParsedIntent> {
   const normalizedQuery = normalizeText(query);
   
   // 1단계: 기본 패턴 매칭
@@ -162,9 +192,10 @@ export async function robustParseSingleIntent(query: string): Promise<ParsedInte
   return basicResult;
 }
 
-// 단일 의도 파싱
-export async function parseSingleIntent(query: string): Promise<ParsedIntent> {
+async function parseSingleIntent(query: string): Promise<ParsedIntent> {
   const normalizedQuery = normalizeText(query);
+  
+
   
   // 더 유연한 패턴 매칭
   const orderPatterns = [
@@ -391,6 +422,8 @@ Respond with only one word: loopCheck, traceVar, or afterDebugFromCode`;
     }
   }
   
+
+  
   // 루프 타입 패턴 매칭
   for (const pattern of loopTypePatterns) {
     if (flexibleMatch(normalizedQuery, pattern.keywords)) {
@@ -425,8 +458,7 @@ Respond with only one word: loopCheck, traceVar, or afterDebugFromCode`;
   return result;
 }
 
-// 복합 의도 파싱
-export async function parseUserIntent(query: string): Promise<MultipleIntents> {
+async function parseUserIntent(query: string): Promise<MultipleIntents> {
   const normalizedQuery = normalizeText(query);
   
   // 더 유연한 복합 요청 패턴 검사
@@ -524,3 +556,135 @@ Output JSON only:`;
     isMultiple: false
   };
 }
+
+async function main() {
+  try {
+    const [, , filePath, ...queryParts] = process.argv;
+    const userQuery = queryParts.join(" ").trim();
+
+    if (!filePath || !userQuery) {
+      console.error('Usage: debug <filePath> "<natural language query>"');
+      process.exit(1);
+    }
+
+    // API 키 검증
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("[Error] GEMINI_API_KEY 환경변수가 설정되지 않았습니다.");
+      process.exit(1);
+    }
+
+    // 파일 경로 검증
+    const absolutePath = path.resolve(filePath);
+    if (!fs.existsSync(absolutePath)) {
+      console.error(`[Error] 파일을 찾을 수 없습니다: ${absolutePath}`);
+      process.exit(1);
+    }
+    
+    // 파일명 추출 (확장자 포함)
+    const fileName = path.basename(filePath);
+
+    // 파일 읽기
+    let code: string;
+    try {
+      code = fs.readFileSync(absolutePath, "utf-8");
+      if (!code || code.trim().length === 0) {
+        console.error("[Error] 파일이 비어있습니다.");
+        process.exit(1);
+      }
+    } catch (readError: any) {
+      console.error(`[Error] 파일 읽기 실패: ${readError.message}`);
+      process.exit(1);
+    }
+
+    //add or modify your homework function here !! @@@@@@@@@@@@@@@@@@
+    try {
+      const parsedIntents = await parseUserIntent(userQuery);
+      let resultText = "";
+      let actualTools: string[] = []; // 실제 실행된 도구들을 추적
+
+      if (parsedIntents.isMultiple) {
+        // 복합 요청인 경우 - 비교 요청인지 확인
+        const isComparison =
+          userQuery.includes("비교") || userQuery.includes("차이");
+
+        if (
+          isComparison &&
+          parsedIntents.intents.every((intent) => intent.tool === "loopCheck")
+        ) {
+          // 루프 비교 요청인 경우
+          resultText = "루프 비교 기능이 제거되었습니다. 개별 루프 검사를 사용해주세요.";
+          actualTools.push("loopCheck");
+        } else {
+          // 일반적인 복수 요청 처리
+          for (let i = 0; i < parsedIntents.intents.length; i++) {
+            const intent = parsedIntents.intents[i];
+            let sectionResult = "";
+
+            if (intent.tool === "loopCheck") {
+              const result = await loopCheck({
+                code,
+                target: intent.target,
+                details: intent.details,
+              });
+              sectionResult = result.result ?? "";
+              actualTools.push("loopCheck");
+            } else if (intent.tool === "afterDebugFromCode") {
+              // afterDebugFromCode 직접 호출
+              resultText = await runAfterDebug(code, userQuery, fileName);
+              actualTools.push("afterDebugFromCode");
+            } else if (intent.tool === "traceVar") {
+              const result = await traceVar({ code, userQuery: userQuery });
+              sectionResult = result.variableTrace ?? "";
+              actualTools.push("traceVar");
+            }
+
+            resultText += `\n=== 요청 ${i + 1}: ${intent.tool} (${intent.target || "all"}) ===\n${sectionResult}\n`;
+          }
+        }
+      } else {
+        // 단일 요청 처리
+        const intent = parsedIntents.intents[0];
+        if (intent.tool === "loopCheck") {
+          const result = await loopCheck({
+            code,
+            target: intent.target,
+            details: intent.details,
+          });
+          resultText = result.result ?? "";
+          actualTools.push("loopCheck");
+        } else if (intent.tool === "afterDebugFromCode") {
+          // afterDebugFromCode 직접 호출
+          resultText = await runAfterDebug(code, userQuery, fileName);
+          actualTools.push("afterDebugFromCode");
+        } else if (intent.tool === "traceVar") {
+          const result = await traceVar({ code, userQuery: userQuery });
+          resultText = result.variableTrace ?? "";
+          actualTools.push("traceVar");
+        }
+      }
+
+      const toolNames = parsedIntents.intents
+        .map((intent) => intent.tool)
+        .join(", ");
+      const actualToolNames = actualTools.join(", ");
+      // console.log("\n선택된 함수(테스트용) : ", toolNames);
+      // console.log("실제 실행된 함수(테스트용) : ", actualToolNames);
+      console.log(resultText);
+    } catch (err: any) {
+      console.error("[Error] 처리 중 오류 발생: ", err.message || err);
+    }
+  } catch (err: any) {
+    console.error("[Error] 초기화 중 오류 발생: ", err.message || err);
+  }
+}
+
+// 프로그램 종료 시 정리 작업
+process.on('exit', () => {
+  // 정리 작업
+});
+
+process.on('SIGINT', () => {
+  process.exit(0);
+});
+
+main();
