@@ -3,16 +3,16 @@
  * Avoids false positives from comments and strings
  */
 
+/*
 export interface LoopInfo {
   code: string;
   level: number;
   parentIndex?: number;
   index: number;
 }
+*/
 
-/**
- * Remove comments and strings from C/C++ code to avoid false positives
- */
+/* CodeUtils.ts
 function sanitizeCode(code: string): string {
   let result = '';
   let i = 0;
@@ -82,9 +82,6 @@ function sanitizeCode(code: string): string {
   return result;
 }
 
-/**
- * Find matching brace for a given opening brace position
- */
 function findMatchingBrace(code: string, startPos: number): number {
   let braceCount = 0;
   let pos = startPos;
@@ -99,9 +96,7 @@ function findMatchingBrace(code: string, startPos: number): number {
   return -1; // No matching brace found
 }
 
-/**
- * Extract a single statement (for single-line loops without braces)
- */
+// Extract a single statement (for single-line loops without braces)
 function extractSingleStatement(code: string, startPos: number): number {
   let pos = startPos;
   
@@ -127,9 +122,7 @@ function extractSingleStatement(code: string, startPos: number): number {
   return pos;
 }
 
-/**
- * Enhanced loop extraction with AST-like approach
- */
+// Enhanced loop extraction with AST-like approach
 export function extractLoopsWithNesting(code: string): LoopInfo[] {
   const sanitizedCode = sanitizeCode(code);
   const loops: LoopInfo[] = [];
@@ -328,11 +321,8 @@ export function extractLoopsWithNesting(code: string): LoopInfo[] {
   return loops;
 }
 
-/**
- * 코드 문자열에서 for/while/do-while 루프 블록만 추출 (괄호 균형 고려)
- * 중첩된 반복문과 복잡한 구조도 처리 가능
- */
 export function extractLoopsFromCode(code: string): string[] {
   const loopInfos = extractLoopsWithNesting(code);
   return loopInfos.map(info => info.code);
 }
+*/

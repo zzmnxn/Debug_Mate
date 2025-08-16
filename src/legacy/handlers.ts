@@ -1,7 +1,7 @@
-import { SGlobal } from "../config/SGlobal";
+import { SGlobal } from "../../src_origin/config/SGlobal";
 import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
-import { CompilerError, CompilerWarning, CompilerResultParser } from '../parsing/compilerResultParser';
-import { extractLoopsFromCode, extractLoopsWithNesting, LoopInfo } from '../parsing/loopExtractor';
+import { CompilerError, CompilerWarning, CompilerResultParser } from '../../src_origin/parsing/compilerResultParser';
+import { extractLoopsFromCode, extractLoopsWithNesting, LoopInfo } from '../../src_origin/parsing/loopExtractor';
 import { execSync } from "child_process";
 import { spawnSync } from "child_process";
 import fs from "fs";

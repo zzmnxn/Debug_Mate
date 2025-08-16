@@ -1,3 +1,4 @@
+/* DebugTypes.ts
 export interface CompilerResult {
   success: boolean;
   errors: CompilerError[];
@@ -32,7 +33,9 @@ export interface ExecutionResult {
   signal?: string;
   crashed: boolean;
 }
+*/
 
+/* ResponseParser.ts
 export class CompilerResultParser {
   private static readonly runtimeKeywords = [
     'segmentation fault',
@@ -239,3 +242,4 @@ export class CompilerResultParser {
     return parts.join(', ');
   }
 }
+*/
