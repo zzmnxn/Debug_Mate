@@ -1,0 +1,55 @@
+name: Version Bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        
+    - name: Install dependencies
+      run: |
+        cd cli
+        npm ci
+        
+    - name: Bump version
+      run: |
+        cd cli
+        npm version ${{ github.event.inputs.bump_type }} --no-git-tag-version
+        
+    - name: Get new version
+      id: get-version
+      run: |
+        cd cli
+        echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+        
+    - name: Commit and push changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add cli/package.json cli/package-lock.json
+        git commit -m "Bump CLI version to ${{ steps.get-version.outputs.version }}"
+        git tag "cli-v${{ steps.get-version.outputs.version }}"
+        git push
+        git push --tags
