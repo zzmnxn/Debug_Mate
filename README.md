@@ -1,92 +1,179 @@
-# Debug Mate - C 코드 디버깅 도구
+# DebugMate CLI
 
-## 🚀 개선된 afterDebug 함수
+C/C++ 코드를 AI로 분석하고 디버깅하는 Linux 전용 CLI 도구
 
-### 주요 개선 사항:
-- **강화된 에러 처리**: API 키 검증, 네트워크 오류, 타임아웃 처리
-- **입력 검증**: 빈 문자열, 잘못된 타입 입력에 대한 방어 코드
-- **Windows 호환성**: `/tmp` 경로 대신 크로스 플랫폼 임시 디렉토리 사용
-- **메모리 정리**: 임시 파일 자동 삭제로 메모리 누수 방지
-- **응답 검증**: AI 응답 형식 검증 및 fallback 처리
-- **상세한 에러 메시지**: 사용자 친화적인 한국어 에러 메시지
-- **타임아웃 설정**: API 호출 30초, 실행 5초 타임아웃
-- **에러 우선순위**: fatal → runtime → memory → syntax → semantic → warning 순서
+## 🚀 빠른 시작
 
-### 에러 처리 개선:
-- API 키 누락 시 명확한 안내
-- 네트워크 오류 시 재시도 안내
-- 할당량 초과 시 대기 안내
-- GCC 미설치 시 설치 안내
-- 파일 권한 오류 시 권한 확인 안내
+### 1. 설치
 
-### 실행 결과 표시 기능:
-- **성공 실행**: 프로그램 출력 결과를 터미널에 표시
-- **런타임 에러**: 에러 메시지와 함께 실행 결과 표시
-- **컴파일 에러**: 컴파일 에러 분석 결과 표시
-- **AI 분석**: 실행 결과를 고려한 종합적인 분석 제공
-
-## 실행 방법
-
-### 1. 환경 설정
-먼저 `.env` 파일을 생성하고 Gemini API 키를 설정하세요:
-```
-GEMINI_API_KEY=your_gemini_api_key_here
-PORT=3000
-```
-
-### 2. 메인 워크플로우 실행
 ```bash
-npm run debug:main
+# 시스템 요구사항 설치
+sudo apt update
+sudo apt install -y tmux inotify-tools gcc g++ build-essential python3 make
+
+# Node.js 20+ 설치
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# CLI 설치
+npm install -g @debugmate/cli
 ```
 
-이 명령어는 다음 워크플로우를 실행합니다:
-1. 현재 디렉토리의 .c 파일을 자동으로 찾아서 분석
-2. `beforeDebug()` - 빠른 사전 분석 실행
-3. 터미널에 분석 결과 출력
-4. "요청 사항을 입력하시오 : " 메시지 표시
-5. 사용자 입력에 따라 다음 중 하나 실행:
-   - "컴파일 실행 결과 알려줘" → `afterDebug()`
-   - "루프 검사해줘" → `loopCheck()`
-   - "변수 추적해줘" → `traceVar()`
+### 2. API 키 설정
 
-### 3. afterDebug 함수 테스트
+#### 방법 1: 환경 변수로 설정 (임시)
 ```bash
-npm run test:afterdebug
+export GEMINI_API_KEY="your_api_key_here"
+export GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
 ```
 
-### 4. markErrors 함수 테스트
+#### 방법 2: CLI로 설정 (권장)
 ```bash
-npm run test:markerrors
+# API 키만 설정하면 됩니다 (BASE_URL은 자동으로 설정됨)
+debug-mate status --set KEY=your_api_key_here
 ```
 
-### 5. 실행 결과 표시 기능 테스트
+#### 방법 3: 시스템 전역 설정 (영구)
 ```bash
-npm run test:execution
+# ~/.bashrc 또는 ~/.zshrc에 추가
+echo 'export GEMINI_API_KEY="your_api_key_here"' >> ~/.bashrc
+echo 'export GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-### 6. 기존 테스트 실행
+> **API 키 발급 방법**: [Google AI Studio](https://makersuite.google.com/app/apikey)에서 무료로 발급받을 수 있습니다.
+
+### 3. 사용하기
+
 ```bash
-npx ts-node test_driver.ts test.c
-npx ts-node src/testcode/test_afterDebugFromCode.ts
+# 테스트 코드 생성 (test.c 파일 생성)
+debug-mate generate
+
+# tmux 분할 화면으로 디버깅 시작
+debug-mate debug test.c
+
+# 또는 파일명만 입력 (기본 명령어)
+debug-mate test.c
 ```
 
---- Git 협업 가이드 ---
-원격 저장소 삭제 확인
- git remote -v 
+## 🎯 사용법
 
-원격 저장소 추가
- git remote add origin https://github.com/zzmnxn/Debug_Mate
+### 기본 워크플로우
 
- 최신 main으로 이동 후 동기화
-git checkout main
-git pull origin main
+1. **시작**: `debug-mate debug test.c` 또는 `debug-mate test.c` 실행
+2. **왼쪽 패널**: vi 편집기가 자동으로 열림 (50% 크기)
+3. **코드 편집**: vi에서 코드 수정
+4. **저장**: `:w` 명령어로 저장
+5. **자동 분석**: 오른쪽에서 자동으로 AI 분석 실행
+6. **결과 확인**: 오른쪽에서 AI 분석 결과 확인
+7. **반복**: 다시 편집 → 저장 → 자동 분석 반복
 
-브랜치 생성 및 이동
- git checkout -b jimin
+### 패널 크기 조절
 
-작업 후 커밋 & 푸시
-git add .
-git commit -m "소희: 일기 작성 기능"
-git push origin sohee/feature-diary
+```bash
+# 기본 50:50 분할
+debug-mate debug test.c
 
+# 왼쪽 패널 크기 조절 (예: 30%)
+debug-mate debug test.c --left 30
 
+# 왼쪽 패널 크기 조절 (예: 70%)
+debug-mate debug test.c --left 70
+```
+
+### AI 분석 기능
+
+- **자동 코드 분석**: 파일 저장 시 자동으로 코드 분석 실행
+- **문제점 진단**: 코드의 버그, 메모리 누수, 성능 문제 등 자동 진단
+- **개선 제안**: 더 효율적인 코드로 개선하는 방법 제안
+- **보안 검사**: 보안 취약점 및 안전하지 않은 코드 패턴 검사
+
+## 📋 주요 명령어
+
+| 명령어 | 설명 | 예시 |
+|--------|------|------|
+| `debug <file>` | tmux 분할 화면으로 vi 편집기 + AI 분석 | `debug-mate debug test.c` |
+| `generate` | 테스트 코드 자동 생성 (test.c) | `debug-mate generate` |
+| `status` | 시스템 상태 및 설정 확인 | `debug-mate status` |
+| `status --set` | 환경변수 설정 | `debug-mate status --set KEY=your_key_here` |
+| `info` | 프로그램 정보 | `debug-mate info` |
+| `--version` | 버전 정보 표시 | `debug-mate --version` |
+| `--help` | 도움말 표시 | `debug-mate --help` |
+
+## 🎯 주요 기능
+
+- **tmux 분할 화면**: 왼쪽에서 vi 편집기, 오른쪽에서 AI 분석 결과 (기본 50:50 분할)
+- **자동 파일 감시**: 파일 저장 시 자동으로 AI 분석 실행
+- **AI 기반 분석**: 코드의 문제점, 개선점, 보안 취약점 자동 진단
+- **자동화된 워크플로우**: 편집 → 저장 → 자동 분석 반복
+- **테스트 코드 생성**: 9가지 타입의 테스트 코드 자동 생성
+- **간단한 CLI**: 중복 없는 깔끔한 명령어 구조
+
+## ⚠️ 요구사항
+
+- **OS**: Linux (Ubuntu, Debian 등)
+- **Node.js**: 20.x 이상
+- **시스템 패키지**: tmux, inotify-tools, gcc/g++, python3, make
+
+## 🔧 트러블슈팅
+
+### tmux가 감지되지 않는 경우
+```bash
+sudo apt install -y tmux
+```
+
+### inotify-tools 오류
+```bash
+sudo apt install -y inotify-tools
+```
+
+### vi 편집기 사용법
+```bash
+# vi 기본 명령어
+i          # 입력 모드
+Esc        # 명령 모드
+:w          # 파일 저장
+:q          # 종료
+:wq         # 저장 후 종료
+:q!         # 저장하지 않고 종료
+```
+
+### 환경변수 설정 문제
+```bash
+# CLI로 환경변수 설정 (권장)
+debug-mate status --set KEY=your_api_key_here
+
+# 환경변수가 제대로 설정되었는지 확인
+echo $GEMINI_API_KEY
+echo $GEMINI_BASE_URL
+
+# 또는 CLI로 확인
+debug-mate status
+```
+
+### Windows/macOS 사용자
+- WSL2 (Windows Subsystem for Linux) 사용
+- Linux 가상머신 사용
+- GitHub Codespaces 사용
+
+## 📖 자세한 사용법
+
+```bash
+# 도움말
+debug-mate --help
+
+# 특정 명령어 도움말
+debug-mate debug --help
+debug-mate generate --help
+debug-mate status --help
+```
+
+## 🔗 링크
+
+- [GitHub](https://github.com/zzmnxn/Debug_Mate)
+- [Issues](https://github.com/zzmnxn/Debug_Mate/issues)
+- [NPM](https://www.npmjs.com/package/@debugmate/cli)
+
+## 📄 라이선스
+
+MIT
