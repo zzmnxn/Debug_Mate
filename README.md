@@ -25,16 +25,43 @@
 - **컴파일 에러**: 컴파일 에러 분석 결과 표시
 - **AI 분석**: 실행 결과를 고려한 종합적인 분석 제공
 
+## 🔗 Agentica 프레임워크 통합
+
+### 새로운 기능:
+- **실제 Agentica 프레임워크 사용**: 모방이 아닌 진짜 Agentica
+- **자연어 처리**: AI를 통한 지능형 코드 분석
+- **WebSocket RPC**: 실시간 통신 지원
+- **함수 자동 선택**: 사용자 요청에 따른 적절한 함수 자동 실행
+
 ## 실행 방법
 
 ### 1. 환경 설정
-먼저 `.env` 파일을 생성하고 Gemini API 키를 설정하세요:
-```
+먼저 `.env` 파일을 생성하고 필요한 API 키를 설정하세요:
+
+```bash
+# OpenAI API 설정 (Agentica용)
+OPENAI_API_KEY=your_openai_api_key_here
+MODEL=gpt-4o-mini
+
+# Gemini API 설정 (기존 기능용)
 GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com
+
+# 서버 포트
 PORT=3000
 ```
 
-### 2. 메인 워크플로우 실행
+### 2. Agentica 서버 실행
+```bash
+npm run start:agentica
+```
+
+### 3. Agentica 테스트
+```bash
+npm run test:agentica
+```
+
+### 4. 메인 워크플로우 실행
 ```bash
 npm run debug:main
 ```
@@ -49,26 +76,51 @@ npm run debug:main
    - "루프 검사해줘" → `loopCheck()`
    - "변수 추적해줘" → `traceVar()`
 
-### 3. afterDebug 함수 테스트
+### 5. afterDebug 함수 테스트
 ```bash
 npm run test:afterdebug
 ```
 
-### 4. markErrors 함수 테스트
+### 6. markErrors 함수 테스트
 ```bash
 npm run test:markerrors
 ```
 
-### 5. 실행 결과 표시 기능 테스트
+### 7. 실행 결과 표시 기능 테스트
 ```bash
 npm run test:execution
 ```
 
-### 6. 기존 테스트 실행
+### 8. 기존 테스트 실행
 ```bash
 npx ts-node test_driver.ts test.c
 npx ts-node src/testcode/test_afterDebugFromCode.ts
 ```
+
+## 🆕 Agentica 사용법
+
+### 자연어 요청 예시:
+```bash
+# 서버 실행 후
+npm run start:agentica
+
+# 새 터미널에서 테스트
+npm run test:agentica
+```
+
+### 사용 가능한 함수들:
+- `beforeDebug` - 빠른 사전 분석
+- `afterDebug` - 컴파일 후 상세 분석
+- `afterDebugFromCode` - 코드에서 직접 디버깅
+- `loopCheck` - 루프 구조 분석
+- `traceVar` - 변수 추적
+- `markErrors` - 에러 마킹
+
+### Agentica의 장점:
+1. **자연어 처리**: "이 코드의 루프를 분석해줘" 같은 자연어 요청
+2. **함수 자동 선택**: AI가 요청에 맞는 적절한 함수를 자동으로 선택
+3. **실시간 통신**: WebSocket을 통한 빠른 응답
+4. **확장성**: 새로운 함수를 쉽게 추가할 수 있는 구조
 
 --- Git 협업 가이드 ---
 원격 저장소 삭제 확인
