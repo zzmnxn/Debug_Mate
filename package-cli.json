@@ -1,0 +1,100 @@
+{
+  "name": "@debugmate/cli",
+  "version": "1.1.0",
+  "description": "C/C++ 대화형 디버깅 CLI (Linux only, no server)",
+  "bin": { 
+    "debug-mate": "debug-mate-cli.js"
+  },
+  "type": "module",
+  "files": [
+    "debug-mate-cli.js",
+    "generate-test.sh",
+    "watch-and-debug.sh",
+    "src/",
+    "tsconfig.json",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "package.json",
+    ".tmux.conf"
+  ],
+  "scripts": {
+    "build": "rimraf lib && tsc",
+    "prepublishOnly": "npm run build && chmod +x generate-test.sh && chmod +x watch-and-debug.sh",
+    "postinstall": "chmod +x generate-test.sh && chmod +x watch-and-debug.sh",
+    "dev": "ts-node src/agentica/inprogress-run.ts",
+    "start": "node lib",
+    "debug": "ts-node src/agentica/DebugAgent.ts",
+    "test": "echo \"No tests specified\" && exit 0",
+    "clean": "rimraf lib",
+    "format": "prettier --write \"src/**/*.{ts,js}\" \"*.{ts,js,json,md}\""
+  },
+  "keywords": ["debug", "c", "cpp", "analysis", "cli", "linux", "inotify", "tmux"],
+  "author": "Ctr_Z Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zzmnxn/Debug_Mate.git"
+  },
+  "bugs": { "url": "https://github.com/zzmnxn/Debug_Mate/issues" },
+  "homepage": "https://github.com/zzmnxn/Debug_Mate#readme",
+  "dependencies": {
+    "@agentica/core": "^0.29.6",
+    "@agentica/rpc": "^0.29.5",
+    "@google/generative-ai": "^0.24.1",
+    "@samchon/openapi": "^4.3.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "dotenv-expand": "^12.0.1",
+    "express": "^5.1.0",
+    "openai": "^5.10.2",
+    "tgrid": "^1.1.0",
+    "tree-sitter": "^0.22.4",
+    "tree-sitter-c": "^0.24.1",
+    "tstl": "^3.0.0",
+    "typia": "^9.3.1",
+    "uuid": "^11.1.0",
+    "zod": "^3.25.76",
+    "chalk": "^5.3.0",
+    "commander": "^11.1.0"
+  },
+  "devDependencies": {
+    "@trivago/prettier-plugin-sort-imports": "^5.2.2",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.17.0",
+    "@types/uuid": "^10.0.0",
+    "prettier": "^3.5.3",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "ts-patch": "^3.3.0",
+    "typescript": "~5.8.3"
+  },
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=20" },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  },
+  "prettier": {
+    "semi": true,
+    "trailingComma": "es5",
+    "singleQuote": true,
+    "printWidth": 80,
+    "tabWidth": 2
+  },
+  "os": ["linux"],
+  "cpu": ["x64", "arm64"],
+  "systemRequirements": {
+    "linux": {
+      "required": [
+        "tmux (sudo apt install tmux)",
+        "inotify-tools (sudo apt install inotify-tools)",
+        "gcc/g++ (sudo apt install build-essential)",
+        "python3 (sudo apt install python3)",
+        "make (sudo apt install make)"
+      ],
+      "optional": []
+    }
+  }
+}

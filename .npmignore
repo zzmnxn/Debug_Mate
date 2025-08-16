@@ -1,0 +1,73 @@
+# 개발 관련 파일들
+.vscode/
+.git/
+.gitignore
+.DS_Store
+
+# 로그 파일들
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 런타임 데이터
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# 커버리지 디렉토리
+coverage/
+.nyc_output
+
+# 의존성 디렉토리
+node_modules/
+
+# 임시 파일들
+.tmp/
+.temp/
+tmp/
+temp/
+
+# 환경 설정 파일들
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 테스트 파일들
+test.c
+your_program
+test_*.ts
+http-test.ts
+
+# 개발용 스크립트들
+setup-linux.sh
+env.example
+pre-publish-check.sh
+
+
+# 빌드 아티팩트
+lib/
+dist/
+build/
+
+# IDE 설정
+.idea/
+*.swp
+*.swo
+*~
+
+# OS 생성 파일
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 패키지 관련
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# 문서 (선택적)
+DEPLOYMENT.md

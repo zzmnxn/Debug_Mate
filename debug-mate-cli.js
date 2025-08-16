@@ -40,11 +40,11 @@ program
 // 의존성 체크 및 자동 설치 함수
 async function checkAndInstallDependencies() {
   const dependencies = [
-    { name: 'tmux', package: 'tmux', checkCmd: 'tmux -V' },
-    { name: 'inotifywait', package: 'inotify-tools', checkCmd: 'which inotifywait' },
-    { name: 'gcc', package: 'build-essential', checkCmd: 'gcc --version' },
-    { name: 'python3', package: 'python3', checkCmd: 'python3 --version' },
-    { name: 'make', package: 'make', checkCmd: 'make --version' }
+    { name: 'tmux', package: 'tmux', checkCmd: 'tmux -V', description: '터미널 멀티플렉서' },
+    { name: 'inotifywait', package: 'inotify-tools', checkCmd: 'which inotifywait', description: '파일 감시 도구' },
+    { name: 'gcc', package: 'build-essential', checkCmd: 'gcc --version', description: 'C 컴파일러' },
+    { name: 'python3', package: 'python3', checkCmd: 'python3 --version', description: 'Python 인터프리터' },
+    { name: 'make', package: 'make', checkCmd: 'make --version', description: '빌드 도구' }
   ];
 
   const missing = [];
