@@ -103,7 +103,7 @@ EOF
 
   // 오른쪽 패널에서 실행할 "저장 감시 + 분석" 파이프라인
   // watch-and-debug.sh 스크립트를 사용하여 더 안정적으로 실행
-  const rightPaneCmd = `bash "${__dirname}/../watch-and-debug.sh" "${filePath}"`;
+  const rightPaneCmd = `bash "${__dirname}/watch-and-debug.sh" "${filePath}"`;
 
   // tmux 스크립트 - 개별 명령어로 실행
   const tmuxScript = `
@@ -125,7 +125,7 @@ EOF
     sleep 0.5
 
     # tmux 설정 파일 로드
-    tmux source-file "${__dirname}/../.tmux.conf"
+    tmux source-file "${__dirname}/.tmux.conf"
 
     # 포커스는 왼쪽(vi)
     tmux select-pane -t "${cleanSession}:editor".0
