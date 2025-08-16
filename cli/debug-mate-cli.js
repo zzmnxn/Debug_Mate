@@ -145,6 +145,10 @@ EOF
   // tmux 스크립트 - 개별 명령어로 실행
   const tmuxScript = `
     set -eo pipefail
+    
+    # 환경변수 설정
+    ${envVars}
+    
     ${initSnippet}
 
     # 새 세션 생성: 왼쪽=vi
@@ -170,6 +174,12 @@ EOF
     # 세션 접속
     tmux attach -t "${cleanSession}"
   `;
+
+  // 환경변수를 tmux 세션에 전달하기 위한 설정
+  const envVars = Object.entries(process.env)
+    .filter(([key]) => key.startsWith('GEMINI_'))
+    .map(([key, value]) => `${key}="${value}"`)
+    .join(' ');
 
   const child = spawn('bash', ['-lc', tmuxScript], {
     stdio: 'inherit',

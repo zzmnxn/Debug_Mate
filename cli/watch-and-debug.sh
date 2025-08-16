@@ -31,10 +31,23 @@ if [ -z "$GEMINI_API_KEY" ]; then
 fi
 
 echo " 환경변수 확인 완료: GEMINI_API_KEY=${GEMINI_API_KEY:0:10}..."
+echo " 현재 작업 디렉토리: $(pwd)"
+echo " 스크립트 디렉토리: $SCRIPT_DIR"
+echo " 프로젝트 루트: $PROJECT_ROOT"
+
+echo " 파일 감시 시작: $TARGET_FILE"
+echo " inotifywait 명령어: inotifywait -m -e close_write --format '%w%f' \"$TARGET_FILE\""
+echo " 감시 대기 중... (파일을 저장하면 자동으로 감지됩니다)"
 
 inotifywait -m -e close_write --format '%w%f' "$TARGET_FILE" | \
 while IFS= read -r FULLPATH; do
-  echo " 저장됨: $FULLPATH → BeforeDebug 실행 중..."
+  echo ""
+  echo "=========================================="
+  echo " 📁 파일 저장 감지됨!"
+  echo " 파일 경로: $FULLPATH"
+  echo " 감지 시간: $(date '+%Y-%m-%d %H:%M:%S')"
+  echo "=========================================="
+  echo " BeforeDebug 실행 중..."
   (
     cd "$SCRIPT_DIR"
     
@@ -50,6 +63,9 @@ while IFS= read -r FULLPATH; do
     echo " GEMINI_BASE_URL: $GEMINI_BASE_URL"
     
     # 표준입력을 /dev/tty에 붙여야 readline이 동작함
+    echo " Node.js 실행 시작..."
+    echo " 명령어: node dist/agentica/inprogress-run.js \"$FULLPATH\""
+    
     if [ -t 0 ]; then
       # 터미널에서 실행 중인 경우
       node dist/agentica/inprogress-run.js "$FULLPATH"
@@ -60,10 +76,12 @@ while IFS= read -r FULLPATH; do
     
     EXIT_CODE=$?
     if [ $EXIT_CODE -eq 0 ]; then
-      echo " BeforeDebug 실행 성공"
+      echo " ✅ BeforeDebug 실행 성공"
     else
-      echo " BeforeDebug 실행 실패 (종료 코드: $EXIT_CODE)"
+      echo " ❌ BeforeDebug 실행 실패 (종료 코드: $EXIT_CODE)"
     fi
   )
-  echo " 실행 완료"
+  echo "=========================================="
+  echo " 🔄 다음 저장을 기다리는 중... (Ctrl+C로 중단)"
+  echo "=========================================="
 done
