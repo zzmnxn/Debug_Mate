@@ -557,9 +557,16 @@ Output JSON only:`;
   };
 }
 
-// DebugAgent 클래스 정의
-export class DebugAgent {
-  constructor() {
+async function main() {
+  try {
+    const [, , filePath, ...queryParts] = process.argv;
+    const userQuery = queryParts.join(" ").trim();
+
+    if (!filePath || !userQuery) {
+      console.error('Usage: debug <filePath> "<natural language query>"');
+      process.exit(1);
+    }
+
     // API 키 검증
     if (!process.env.GEMINI_API_KEY) {
       console.error("[Error] GEMINI_API_KEY 환경변수가 설정되지 않았습니다.");
@@ -594,7 +601,6 @@ export class DebugAgent {
       const parsedIntents = await parseUserIntent(userQuery);
       let resultText = "";
       let actualTools: string[] = []; // 실제 실행된 도구들을 추적
-      let markedFilePath: string | null = null;
 
       if (parsedIntents.isMultiple) {
         // 복합 요청인 경우 - 비교 요청인지 확인
@@ -657,64 +663,18 @@ export class DebugAgent {
         }
       }
 
-      return {
-        analysis: resultText,
-        markedFilePath: markedFilePath,
-        tools: actualTools,
-        filename: filename,
-        userQuery: userQuery
-      };
-
+      const toolNames = parsedIntents.intents
+        .map((intent) => intent.tool)
+        .join(", ");
+      const actualToolNames = actualTools.join(", ");
+      // console.log("\n선택된 함수(테스트용) : ", toolNames);
+      // console.log("실제 실행된 함수(테스트용) : ", actualToolNames);
+      console.log(resultText);
     } catch (err: any) {
-      throw new Error(`처리 중 오류 발생: ${err.message || err}`);
+      console.error("[Error] 처리 중 오류 발생: ", err.message || err);
     }
-  }
-}
-
-async function main() {
-  try {
-    const [, , filePath, ...queryParts] = process.argv;
-    const userQuery = queryParts.join(" ").trim();
-
-    if (!filePath || !userQuery) {
-      console.error('Usage: debug <filePath> "<natural language query>"');
-      process.exit(1);
-    }
-
-    // API 키 검증
-    if (!process.env.GEMINI_API_KEY) {
-      console.error("[Error] GEMINI_API_KEY 환경변수가 설정되지 않았습니다.");
-      process.exit(1);
-    }
-
-    // 파일 경로 검증
-    const absolutePath = path.resolve(filePath);
-    if (!fs.existsSync(absolutePath)) {
-      console.error(`[Error] 파일을 찾을 수 없습니다: ${absolutePath}`);
-      process.exit(1);
-    }
-
-    // 파일 읽기
-    let code: string;
-    try {
-      code = fs.readFileSync(absolutePath, "utf-8");
-      if (!code || code.trim().length === 0) {
-        console.error("[Error] 파일이 비어있습니다.");
-        process.exit(1);
-      }
-    } catch (readError: any) {
-      console.error(`[Error] 파일 읽기 실패: ${readError.message}`);
-      process.exit(1);
-    }
-
-    // DebugAgent 인스턴스 생성 및 실행
-    const debugAgent = new DebugAgent();
-    const result = await debugAgent.processUserQuery(code, userQuery, path.basename(filePath));
-    console.log(result.analysis);
-
   } catch (err: any) {
     console.error("[Error] 초기화 중 오류 발생: ", err.message || err);
-    process.exit(1);
   }
 }
 
