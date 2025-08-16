@@ -117,6 +117,16 @@ export interface DebugSession {
   status: 'running' | 'completed' | 'failed' | 'cancelled';
 }
 
+export interface BeforeDebugResult {
+  result: string;
+}
+
+export interface InProgressRunConfig {
+  targetFile: string;
+  code: string;
+  userInput?: string;
+}
+
 /**
  * AI 분석 요청
  */

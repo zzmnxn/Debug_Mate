@@ -464,3 +464,82 @@ export function markErrors(
 
   return outputPath;
 }
+
+/**
+ * beforeDebug: 코드 실행 전 사전 분석
+ * 사용자가 작성 중인 코드의 명백한 문제점을 미리 점검합니다.
+ */
+export async function beforeDebug({ code: inputCode }: { code: string }): Promise<{ result: string }> {
+  try {
+    if (!inputCode || typeof inputCode !== 'string') {
+      throw new Error('Invalid code: must be a non-empty string');
+    }
+
+    if (!SGlobal.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY is not configured. Please set it in your environment variables.');
+    }
+
+    const prompt = `당신은 C 언어 전문가입니다. 아래는 사용자가 작성 중인 전체 코드입니다.
+
+코드가 아직 실행되기 전 상태로, 문법 오류, 누락된 세미콜론, 선언되지 않은 변수, 함수 호출 오류, 누락된 return 문 등 명백한 문제점이 있는지 확인해주세요.
+
+가능하면 줄 번호를 포함해 수정 제안을 해주세요. 아직 작성 중일 수 있으므로 유연하게 판단해주세요.
+
+답변은 다음 형식을 지켜주세요:
+
+[Result] 문제가 감지되었는지 여부 (예: "문제 있음", "문제 없음")
+[Issues] 줄 번호와 함께 발견된 주요 문제 요약 (없으면 "없음")
+[Suggestions] 각 문제에 대한 간단한 수정 제안 (없으면 "없음")
+
+아래는 코드입니다:
+\`\`\`${inputCode}\`\`\``;
+
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 1000,
+      }
+    });
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('API request timed out after 10 seconds')), 10000);
+    });
+
+    const apiPromise = model.generateContent(prompt);
+    const result = await Promise.race([apiPromise, timeoutPromise]) as any;
+
+    if (!result || !result.response || !result.response.text) {
+      throw new Error('Invalid response from Gemini API');
+    }
+
+    const responseText = result.response.text().trim();
+    
+    if (!responseText) {
+      throw new Error('Empty response from Gemini API');
+    }
+
+    return { result: responseText };
+
+  } catch (error: any) {
+    let errorMessage = 'Unknown error occurred';
+    
+    if (error.message.includes('API_KEY')) {
+      errorMessage = 'Gemini API 키가 설정되지 않았습니다. 환경 변수 GEMINI_API_KEY를 확인해주세요.';
+    } else if (error.message.includes('timed out')) {
+      errorMessage = 'API 요청이 시간 초과되었습니다. 네트워크 연결을 확인하고 다시 시도해주세요.';
+    } else if (error.message.includes('network') || error.message.includes('fetch')) {
+      errorMessage = '네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.';
+    } else if (error.message.includes('quota') || error.message.includes('rate limit')) {
+      errorMessage = 'API 할당량이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+    } else {
+      errorMessage = `분석 중 오류가 발생했습니다: ${error.message}`;
+    }
+
+    console.error('beforeDebug 에러:', error);
+    
+    return { 
+      result: `[Result] 문제 있음\n[Issues] 시스템 오류로 인해 분석을 완료할 수 없습니다\n[Suggestions] ${errorMessage}` 
+    };
+  }
+}

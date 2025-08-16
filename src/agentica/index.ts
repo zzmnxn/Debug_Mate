@@ -4,11 +4,11 @@
 // 핸들러들
 export * from './handlers/DebugHandler';
 export * from './handlers/LoopHandler';
-export * from './handlers/VariableHandler';
-export * from './handlers/MemoryHandler';
+
+// 코어 서비스들
+export * from './core/InProgressRunService';
 
 // 파서들
-export * from './parsers/IntentParser';
 export * from './parsers/QueryParser';
 export * from './parsers/ResponseParser';
 
@@ -17,6 +17,8 @@ export * from './utils/FileUtils';
 export * from './utils/CodeUtils';
 export * from './utils/CacheManager';
 export * from './utils/ErrorHandler';
+export * from './utils/ProcessUtils';
+export * from './utils/InputUtils';
 
 // 타입들
 export * from './types/DebugTypes';
@@ -24,5 +26,5 @@ export * from './types/IntentTypes';
 export * from './types/ResponseTypes';
 
 // 레거시 지원 (점진적 마이그레이션)
-export * from './legacy/handlers';
-export * from './legacy/DebugAgent';
+// export * from './legacy/handlers';
+// export * from './legacy/DebugAgent';
