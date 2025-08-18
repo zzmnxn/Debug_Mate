@@ -1,8 +1,8 @@
 import { SGlobal } from "../config/SGlobal.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { CompilerError, CompilerWarning, CompilerResultParser } from '../parsing/compilerResultParser.js';
-import fs from "fs";
-import path from "path";
+import * as fs from "fs";
+import * as path from "path";
 import { buildAfterDebugPrompt } from "../prompts/prompt_afterDebug.js";
 import { compileAndRunC } from "../services/compile.js";
 

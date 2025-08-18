@@ -4,7 +4,7 @@ import { traceVar } from "./traceVar.js";
 import * as fs from "fs";
 import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import dotenv from "dotenv";
+import * as dotenv from "dotenv";
 import { buildEnhancedAIParsingPrompt, buildComparisonPrompt, buildIntentPrompt } from "../prompts/prompt_debugAgent.js";
 
 
@@ -57,8 +57,8 @@ function flexibleMatch(text: string, keywords: string[]): boolean {
 function similarity(str1: string, str2: string): number {
   const set1 = new Set(str1.split(''));
   const set2 = new Set(str2.split(''));
-  const intersection = new Set([...set1].filter(x => set2.has(x)));
-  const union = new Set([...set1, ...set2]);
+  const intersection = new Set(Array.from(set1).filter(x => set2.has(x)));
+  const union = new Set(Array.from(set1).concat(Array.from(set2)));
   return intersection.size / union.size;
 }
 
