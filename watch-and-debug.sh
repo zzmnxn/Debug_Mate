@@ -52,7 +52,8 @@ while IFS= read -r FULLPATH; do
       pkill -f "ts-node src/analysis/InProgressInteractive.ts" >/dev/null 2>&1
 
       # 표준입력을 /dev/tty에 붙여야 readline이 동작함
-      npx ts-node src/analysis/inprogress-run.ts "$FULLPATH" < /dev/tty
+      # ts-node를 명시적으로 사용하여 TypeScript 파일 실행
+      npx ts-node --esm src/analysis/inprogress-run.ts "$FULLPATH" < /dev/tty
     )
     
     if [ $? -eq 0 ]; then
