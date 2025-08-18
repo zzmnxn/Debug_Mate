@@ -1,9 +1,11 @@
-import { loopCheck, traceVar } from "./handlers";
-import { afterDebugFromCode } from "./afterDebug";
+import { loopCheck } from "./loopCheck";
+import {afterDebugFromCode } from "./afterDebug";
+import { traceVar } from "./traceVar";
 import * as fs from "fs";
 import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
+
 
 dotenv.config();
 
