@@ -34,9 +34,7 @@ const program = new Command();
 program
   .name('debug-mate')
   .description(chalk.cyan('C/C++ 코드 분석을 위한 AI 기반 대화형 디버깅 도구'))
-  .version(chalk.green(`v${VERSION}`), '-v, --version')
-  .usage(chalk.yellow('<command> [options]'))
-  .helpOption('-h, --help', chalk.gray('도움말 표시'));
+  .usage(chalk.yellow('<command> [options]'));
 
 // .env 파일 생성 함수
 function createEnvFile(apiKey) {
@@ -450,46 +448,50 @@ program
 // 시작 시 .env 파일 로드
 loadEnvFile();
 
-// 에러 처리 및 help 커스터마이징
-program.exitOverride();
+// 커스텀 help와 version 처리
+program
+  .helpOption('-h, --help', chalk.gray('도움말 표시'))
+  .version(chalk.green(`v${VERSION}`), '-v, --version');
 
+// 기본 명령어가 없을 때 커스텀 help 표시
+program
+  .hook('preAction', (thisCommand) => {
+    if (thisCommand.args.length === 0 && !thisCommand.parent) {
+      console.log(LOGO);
+      console.log(chalk.blue('DebugMate CLI 도움말'));
+      console.log(chalk.gray('C/C++ 코드를 AI로 분석하고 디버깅하는 도구입니다.'));
+      console.log('');
+      console.log(chalk.yellow('주요 명령어:'));
+      console.log(chalk.cyan('  debug <file>     tmux 분할 화면으로 파일 감시 및 자동 디버깅'));
+      console.log(chalk.cyan('  generate [name]  테스트 코드 자동 생성'));
+      console.log(chalk.cyan('  check-deps       의존성 체크 및 자동 설치'));
+      console.log(chalk.cyan('  status           시스템 환경 및 의존성 상태 확인'));
+      console.log(chalk.cyan('  info             프로그램 정보'));
+      console.log('');
+      console.log(chalk.yellow('사용 예시:'));
+      console.log(chalk.gray('  ctrz debug test.c'));
+      console.log(chalk.gray('  ctrz test.c              # 기본 명령어'));
+      console.log(chalk.gray('  ctrz generate my_test'));
+      console.log(chalk.gray('  ctrz status'));
+      console.log('');
+      console.log(chalk.yellow('API 키 설정:'));
+      console.log(chalk.gray('  ctrz status --set KEY=your_api_key_here'));
+      console.log(chalk.gray('  export GEMINI_API_KEY="your_api_key_here"'));
+      console.log('');
+      console.log(chalk.yellow('자세한 도움말:'));
+      console.log(chalk.gray('  ctrz debug --help'));
+      console.log(chalk.gray('  ctrz generate --help'));
+      console.log(chalk.gray('  ctrz status --help'));
+      console.log('');
+      console.log(chalk.blue('더 많은 정보: https://github.com/zzmnxn/Debug_Mate'));
+      process.exit(0);
+    }
+  });
+
+// 에러 처리
 try {
   program.parse();
 } catch (err) {
-  if (err.code === 'commander.help' || err.code === 'commander.helpDisplayed') {
-    console.log(LOGO);
-    console.log(chalk.blue('DebugMate CLI 도움말'));
-    console.log(chalk.gray('C/C++ 코드를 AI로 분석하고 디버깅하는 도구입니다.'));
-    console.log('');
-    console.log(chalk.yellow('주요 명령어:'));
-    console.log(chalk.cyan('  debug <file>     tmux 분할 화면으로 파일 감시 및 자동 디버깅'));
-    console.log(chalk.cyan('  generate [name]  테스트 코드 자동 생성'));
-    console.log(chalk.cyan('  check-deps       의존성 체크 및 자동 설치'));
-    console.log(chalk.cyan('  status           시스템 환경 및 의존성 상태 확인'));
-    console.log(chalk.cyan('  info             프로그램 정보'));
-    console.log('');
-    console.log(chalk.yellow('사용 예시:'));
-    console.log(chalk.gray('  debug-mate debug test.c'));
-    console.log(chalk.gray('  debug-mate test.c              # 기본 명령어'));
-    console.log(chalk.gray('  debug-mate generate my_test'));
-    console.log(chalk.gray('  debug-mate status'));
-    console.log('');
-    console.log(chalk.yellow('API 키 설정:'));
-    console.log(chalk.gray('  ctrz status --set KEY=your_api_key_here'));
-    console.log(chalk.gray('  export GEMINI_API_KEY="your_api_key_here"'));
-    console.log('');
-    console.log(chalk.yellow('자세한 도움말:'));
-    console.log(chalk.gray('  debug-mate debug --help'));
-    console.log(chalk.gray('  debug-mate generate --help'));
-    console.log(chalk.gray('  debug-mate status --help'));
-    console.log('');
-    console.log(chalk.blue('더 많은 정보: https://github.com/zzmnxn/Debug_Mate'));
-    process.exit(0);
-  } else if (err.code === 'commander.version') {
-    console.log(chalk.green(`v${VERSION}`));
-    process.exit(0);
-  } else {
-    console.error(chalk.red(`오류: ${err.message}`));
-    process.exit(1);
-  }
+  console.error(chalk.red(`오류: ${err.message}`));
+  process.exit(1);
 }
