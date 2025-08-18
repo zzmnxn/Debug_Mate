@@ -1,8 +1,8 @@
 import { SGlobal } from "../config/SGlobal";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { compileAndRunC } from "../services/compile";
 
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
 
@@ -11,9 +11,6 @@ const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
   export async function beforeDebug({ code }: { code: string }) {
     const tmpDir = process.platform === "win32" ? path.join(process.cwd(), "tmp") : "/tmp";
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);  // Windows에서는 tmp 폴더 없을 수 있음
-    
-    const tmpFile = path.join(tmpDir, `code_${Date.now()}.c`);
-    const outputFile = path.join(tmpDir, `a.out`);
   
     // 1) 토큰 절약용 트리머 (함수 내부에만 둠: 별도 유틸/함수 추가 없음)
     const trim = (s: string, max = 18000) =>
@@ -23,26 +20,8 @@ const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
     const modelName = process.env.GEMINI_MODEL || "gemini-1.5-flash";
   
     try {
-      // 임시파일에 코드 저장
-      fs.writeFileSync(tmpFile, code);
-  
-      // GCC 컴파일 수행
-      const compileResult = spawnSync("gcc", [
-        "-Wall", "-Wextra", "-O2", "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address",
-        tmpFile, "-o", outputFile
-      ], {
-        encoding: "utf-8",
-        stdio: ["ignore", "pipe", "pipe"]
-      });
-  
-      // 로그 수집
-      let log = (compileResult.stdout || "") + (compileResult.stderr || "");
-      if (compileResult.status === 0) {
-        const runResult = spawnSync(outputFile, [], { encoding: "utf-8", timeout: 1000 });
-        log += "\n\n=== Runtime Output ===\n";
-        log += runResult.stdout || "";
-        log += runResult.stderr || "";
-      }
+      // 컴파일 및 실행 (서비스 사용)
+      const { log } = compileAndRunC(code, { timeoutMs: 1000 });
   
       // 1) 코드/로그를 트림해서 입력 토큰 축소
       const slimCode = trim(code, 9000);
@@ -120,8 +99,7 @@ const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
     } catch (e: any) {
       return `[Result] 분석 실패\n[Reason] ${e.message || e.toString()}\n[Suggestion] 로그 확인 필요`;
     } finally {
-      // 리소스 정리
-      [tmpFile, outputFile].forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
+      // 리소스 정리: compileAndRunC 내부에서 임시 파일 정리 수행
     }
   }
   
