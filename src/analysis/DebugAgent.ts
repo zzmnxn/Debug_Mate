@@ -1,4 +1,5 @@
-import { loopCheck, afterDebugFromCode, traceVar } from "./handlers";
+import { loopCheck, traceVar } from "./handlers";
+import { afterDebugFromCode } from "./afterDebug";
 import * as fs from "fs";
 import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";

@@ -7,17 +7,18 @@ C/C++ 코드를 AI로 분석하고 디버깅하는 Linux 전용 CLI 도구
 ### 1. 설치
 
 ```bash
-# 시스템 요구사항 설치
-sudo apt update
-sudo apt install -y tmux inotify-tools gcc g++ build-essential python3 make
-
 # Node.js 20+ 설치
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # CLI 설치
 npm install -g ctrz
+
+# 의존성 자동 설치 (선택사항)
+ctrz check-deps
 ```
+
+> **💡 자동 의존성 설치**: CLI가 실행될 때 필요한 시스템 도구(tmux, inotify-tools, gcc, python3, make)를 자동으로 확인하고 설치합니다.
 
 ### 2. API 키 설정
 
@@ -88,6 +89,7 @@ ctrz debug test.c --left 70
 |--------|------|------|
 | `debug <file>` | tmux 분할 화면으로 vi 편집기 + AI 분석 | `ctrz debug test.c` |
 | `generate` | 테스트 코드 자동 생성 (test.c) | `ctrz generate` |
+| `check-deps` | 의존성 체크 및 자동 설치 | `ctrz check-deps` |
 | `status` | 시스템 상태 및 설정 확인 | `ctrz status` |
 | `status --set` | 환경변수 설정 | `ctrz status --set KEY=your_key_here` |
 | `info` | 프로그램 정보 | `ctrz info` |
@@ -101,24 +103,38 @@ ctrz debug test.c --left 70
 - **AI 기반 분석**: 코드의 문제점, 개선점, 보안 취약점 자동 진단
 - **자동화된 워크플로우**: 편집 → 저장 → 자동 분석 반복
 - **테스트 코드 생성**: 9가지 타입의 테스트 코드 자동 생성
+- **의존성 자동 설치**: 필요한 시스템 도구를 자동으로 확인하고 설치
 - **간단한 CLI**: 중복 없는 깔끔한 명령어 구조
 
 ## ⚠️ 요구사항
 
 - **OS**: Linux (Ubuntu, Debian 등)
 - **Node.js**: 20.x 이상
-- **시스템 패키지**: tmux, inotify-tools, gcc/g++, python3, make
+- **시스템 패키지**: tmux, inotify-tools, gcc/g++, python3, make (자동 설치됨)
 
 ## 🔧 트러블슈팅
 
-### tmux가 감지되지 않는 경우
+### 의존성 자동 설치
 ```bash
-sudo apt install -y tmux
+# 모든 필수 도구를 한 번에 확인하고 설치
+ctrz check-deps
+
+# 또는 개별 명령어 실행 시 자동으로 의존성 체크됨
+ctrz debug test.c
+ctrz status
+ctrz generate
 ```
 
-### inotify-tools 오류
+### 수동 설치 (자동 설치 실패 시)
 ```bash
+# tmux가 감지되지 않는 경우
+sudo apt install -y tmux
+
+# inotify-tools 오류
 sudo apt install -y inotify-tools
+
+# 모든 의존성 한 번에 설치
+sudo apt update && sudo apt install -y tmux inotify-tools build-essential python3 make
 ```
 
 ### vi 편집기 사용법
@@ -159,6 +175,7 @@ ctrz --help
 # 특정 명령어 도움말
 ctrz debug --help
 ctrz generate --help
+ctrz check-deps --help
 ctrz status --help
 ```
 

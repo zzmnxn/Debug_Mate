@@ -21,9 +21,9 @@
     "build": "rimraf lib && tsc",
     "prepublishOnly": "npm run build && chmod +x generate-test.sh && chmod +x watch-and-debug.sh",
     "postinstall": "chmod +x generate-test.sh && chmod +x watch-and-debug.sh",
-    "dev": "ts-node src/agentica/inprogress-run.ts",
+    "dev": "ts-node src/analysis/inprogress-run.ts",
     "start": "node lib",
-    "debug": "ts-node src/agentica/DebugAgent.ts",
+    "debug": "ts-node src/analysis/DebugAgent.ts",
     "test": "echo \"No tests specified\" && exit 0",
     "clean": "rimraf lib",
     "format": "prettier --write \"src/**/*.{ts,js}\" \"*.{ts,js,json,md}\""
