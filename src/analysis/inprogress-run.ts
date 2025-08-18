@@ -68,10 +68,10 @@ async function main() {
     console.log(`DebugAgent 실행 중: ${targetFile} - "${req}"`);
 
     // DebugAgent 동기 실행 → 종료 코드 반영하여 즉시 종료
-    // TypeScript 파일을 JavaScript로 컴파일 후 실행
+    // tsconfig.json을 사용하여 전체 프로젝트 컴파일
     const compileResult = spawnSync(
       "npx",
-      ["tsc", "src/analysis/DebugAgent.ts", "--outDir", "lib", "--target", "ES2020", "--module", "ESNext", "--moduleResolution", "node", "--esModuleInterop"],
+      ["tsc"],
       { stdio: "pipe" }
     );
     
