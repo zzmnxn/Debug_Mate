@@ -1,6 +1,6 @@
-import { loopCheck } from "./loopCheck";
-import { afterDebugFromCode } from "./afterDebug";
-import { traceVar } from "./traceVar";
+import { loopCheck } from "./loopCheck.js";
+import { afterDebugFromCode } from "./afterDebug.js";
+import { traceVar } from "./traceVar.js";
 import * as fs from "fs";
 import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
