@@ -3,7 +3,7 @@ import { LoopInfo } from '../parsing/loopExtractor';
 /**
  * 계층적 번호 생성 (1, 2.1, 2.2, 3 등)
  */
-function generateHierarchicalNumber(currentLoop: LoopInfo, allLoops: LoopInfo[]): string {
+export function generateHierarchicalNumber(currentLoop: LoopInfo, allLoops: LoopInfo[]): string {
   if (!currentLoop || !allLoops) {
     return "unknown";
   }
