@@ -1,11 +1,10 @@
 import { SGlobal } from "../config/SGlobal";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { CompilerError, CompilerWarning, CompilerResultParser } from '../parsing/compilerResultParser';
-import { execSync } from "child_process";
-import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { buildAfterDebugPrompt } from "../prompts/prompt_afterDebug";
+import { compileAndRunC } from "../services/compile";
 
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
 
@@ -99,15 +98,10 @@ export async function afterDebug(logSummary: string, errors: CompilerError[], wa
  * 개선: 실행 결과도 함께 표시
  */
 export async function afterDebugFromCode(code: string, originalFileName: string = "input.c"): Promise<{ analysis: string, markedFilePath: string, executionOutput?: string }> {
-  // 임시 파일 경로 설정 (Windows 호환성)
-  const tmpDir = process.platform === "win32" ? path.join(process.cwd(), "tmp") : "/tmp";
-  const tmpFile = path.join(tmpDir, `code_${Date.now()}.c`);
-  const outputFile = path.join(tmpDir, `a.out_${Date.now()}`);
-  
-  let compileLog = "";
   let markedFilePath = "";
   let executionOutput = ""; // 실행 결과 저장용
   let compileSuccess = false; // 컴파일 성공 여부 추적
+  let compileLog = ""; // 컴파일 로그
 
   try {
     // 1. 입력 검증
@@ -119,95 +113,30 @@ export async function afterDebugFromCode(code: string, originalFileName: string 
       originalFileName = "input.c";
     }
 
-    // 2. 임시 디렉토리 생성 (Windows용)
-    if (process.platform === "win32" && !fs.existsSync(tmpDir)) {
-      fs.mkdirSync(tmpDir, { recursive: true });
-    }
-
-    // 3. 임시 파일 생성
-    fs.writeFileSync(tmpFile, code, 'utf-8');
-
-    // 4. GCC 컴파일 (에러 처리 개선)
-    const compileResult = spawnSync("gcc", [
-      "-Wall", "-Wextra", "-Wpedantic", "-O2", "-Wdiv-by-zero", 
-      "-fanalyzer", "-fsanitize=undefined", "-fsanitize=address", 
-      tmpFile, "-o", outputFile
-    ], {
-      encoding: "utf-8",
-      timeout: 10000 // 10초 타임아웃
+    // 2. 컴파일 및 실행 (서비스 사용)
+    const result = compileAndRunC(code, { 
+      timeoutMs: 3000,
+      extraGccFlags: ["-Wpedantic", "-Wdiv-by-zero"]
     });
-
-    // 5. 컴파일 로그 수집
-    if (compileResult.stdout) {
-      compileLog += compileResult.stdout;
-    }
-    if (compileResult.stderr) {
-      compileLog += compileResult.stderr;
-    }
-
-         // 6. 컴파일 성공 시 실행
-     if (compileResult.status === 0) {
-       compileSuccess = true; // 컴파일 성공 표시
-       compileLog += "\n\n=== Runtime Output ===\n";
-      
-      try {
-        const runResult = spawnSync(outputFile, [], { 
-          encoding: "utf-8", 
-          timeout: 3000 // 3초
-        });
-
-        if (runResult.stdout) {
-          compileLog += runResult.stdout;
-          executionOutput += runResult.stdout; // 실행 결과 저장
-        }
-        if (runResult.stderr) {
-          compileLog += runResult.stderr;
-          executionOutput += runResult.stderr; // 에러도 실행 결과에 포함
-        }
-        
-        if (runResult.error) {
-          const errorAny = runResult.error as any;
-          if (errorAny && errorAny.code === 'ETIMEDOUT') {
-            compileLog += `\n[Runtime Error] Execution timed out (possible infinite loop)\n[Hint] loopCheck() 함수를 사용하여 루프 조건을 검토해보세요.`;
-          } else {
-            compileLog += `\n[Runtime Error] ${runResult.error.message}`;
-          }
-        }
-      } catch (runError: any) {
-        compileLog += `\n[Runtime Execution Error] ${runError.message}`;
-      }
-    } else {
-      // 7. 컴파일 실패 처리
-      compileLog += "\n\n=== Compile Failed ===\n";
-      if (compileResult.error) {
-        compileLog += `[Compile Process Error] ${compileResult.error.message}\n`;
-      }
-      if (compileResult.signal) {
-        compileLog += `[Compile Signal] ${compileResult.signal}\n`;
-      }
+    
+    compileLog = result.log;
+    compileSuccess = result.compiled;
+    
+    // 3. 실행 결과 추출 (Runtime Output 섹션에서)
+    const runtimeMatch = compileLog.match(/=== Runtime Output ===\n([\s\S]*?)(?=\n\n|$)/);
+    if (runtimeMatch) {
+      executionOutput = runtimeMatch[1].trim();
     }
 
   } catch (err: any) {
-    // 8. 예상치 못한 에러 처리
-    compileLog += "\n\n=== Unexpected Error ===\n";
-    compileLog += `[Error] ${err.message || err.toString()}\n`;
+    // 예상치 못한 에러 처리
+    console.error(' 컴파일/실행 중 오류:', err);
+    compileLog = `\n\n=== Unexpected Error ===\n[Error] ${err.message || err.toString()}\n`;
     
     if (err.code === 'ENOENT') {
       compileLog += "[Suggestion] GCC가 설치되어 있는지 확인해주세요.\n";
     } else if (err.code === 'EACCES') {
       compileLog += "[Suggestion] 파일 권한을 확인해주세요.\n";
-    }
-  } finally {
-    // 9. 임시 파일 정리
-    try {
-      if (fs.existsSync(tmpFile)) {
-        fs.unlinkSync(tmpFile);
-      }
-      if (fs.existsSync(outputFile)) {
-        fs.unlinkSync(outputFile);
-      }
-    } catch (cleanupError) {
-      console.warn(' 임시 파일 정리 중 오류:', cleanupError);
     }
   }
 
