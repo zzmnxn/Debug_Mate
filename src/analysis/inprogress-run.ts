@@ -68,23 +68,38 @@ async function main() {
     console.log(`DebugAgent 실행 중: ${targetFile} - "${req}"`);
 
     // DebugAgent 동기 실행 → 종료 코드 반영하여 즉시 종료
-    // tsconfig.json을 사용하여 전체 프로젝트 컴파일
-    const compileResult = spawnSync(
-      "npx",
-      ["tsc"],
-      { stdio: "pipe" }
-    );
+    // lib 디렉토리가 있으면 미리 컴파일된 파일 사용, 없으면 컴파일
+    const fs = await import("fs");
+    const libPath = "lib/analysis/DebugAgent.js";
     
-    if (compileResult.status !== 0) {
-      console.error("TypeScript 컴파일 실패:", compileResult.stderr?.toString());
-      process.exit(1);
+    let r;
+    if (fs.existsSync(libPath)) {
+      console.log(" 미리 컴파일된 JavaScript 파일 사용");
+      r = spawnSync(
+        "node",
+        [libPath, targetFile, req],
+        { stdio: "inherit" }
+      );
+    } else {
+      console.log(" TypeScript 컴파일 후 실행");
+      // tsconfig.json을 사용하여 전체 프로젝트 컴파일
+      const compileResult = spawnSync(
+        "npx",
+        ["tsc"],
+        { stdio: "pipe" }
+      );
+      
+      if (compileResult.status !== 0) {
+        console.error("TypeScript 컴파일 실패:", compileResult.stderr?.toString());
+        process.exit(1);
+      }
+      
+      r = spawnSync(
+        "node",
+        [libPath, targetFile, req],
+        { stdio: "inherit" }
+      );
     }
-    
-    const r = spawnSync(
-      "node",
-      ["lib/analysis/DebugAgent.js", targetFile, req],
-      { stdio: "inherit" }
-    );
 
     if (r.error) {
       console.error("\n[Error] DebugAgent 실행 실패:", r.error.message);
