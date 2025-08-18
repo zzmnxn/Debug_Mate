@@ -10,7 +10,7 @@
     "start:http": "ts-node src/http-server.ts",
     "start:http:js": "node http-server.js",
     "test:http": "ts-node http-test.ts",
-    "debug": "ts-node src/agentica/DebugAgent.ts",
+    "debug": "ts-node src/analysis/DebugAgent.ts",
     "test:afterdebug": "ts-node test_afterDebug_improved.ts",
     "test:markerrors": "ts-node test_markErrors_improved.ts",
     "test:execution": "ts-node test_execution_output.ts"

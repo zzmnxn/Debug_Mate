@@ -18,10 +18,10 @@ while IFS= read -r FULLPATH; do
   (
     cd "$SCRIPT_DIR"
     # (선택) 이전 프롬프트 대기 중인 프로세스 정리
-    pkill -f "ts-node src/agentica/InProgressInteractive.ts" >/dev/null 2>&1
+    pkill -f "ts-node src/analysis/InProgressInteractive.ts" >/dev/null 2>&1
 
     # 표준입력을 /dev/tty에 붙여야 readline이 동작함
-    npx ts-node src/agentica/inprogress-run.ts "$FULLPATH" < /dev/tty
+    npx ts-node src/analysis/inprogress-run.ts "$FULLPATH" < /dev/tty
   )
   echo " 실행 완료"
 done
