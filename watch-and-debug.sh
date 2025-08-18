@@ -51,9 +51,13 @@ while IFS= read -r FULLPATH; do
       # (선택) 이전 프롬프트 대기 중인 프로세스 정리
       pkill -f "ts-node src/analysis/InProgressInteractive.ts" >/dev/null 2>&1
 
+      # lib 디렉토리 생성
+      mkdir -p lib/analysis
+
       # 표준입력을 /dev/tty에 붙여야 readline이 동작함
-      # ts-node를 명시적으로 사용하여 TypeScript 파일 실행
-      npx ts-node --esm src/analysis/inprogress-run.ts "$FULLPATH" < /dev/tty
+      # TypeScript 파일을 JavaScript로 컴파일 후 실행
+      npx tsc src/analysis/inprogress-run.ts --outDir lib --target ES2020 --module ESNext --moduleResolution node --esModuleInterop
+      node lib/analysis/inprogress-run.js "$FULLPATH" < /dev/tty
     )
     
     if [ $? -eq 0 ]; then

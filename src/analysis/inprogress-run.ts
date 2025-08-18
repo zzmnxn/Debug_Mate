@@ -68,9 +68,21 @@ async function main() {
     console.log(`DebugAgent 실행 중: ${targetFile} - "${req}"`);
 
     // DebugAgent 동기 실행 → 종료 코드 반영하여 즉시 종료
-    const r = spawnSync(
+    // TypeScript 파일을 JavaScript로 컴파일 후 실행
+    const compileResult = spawnSync(
       "npx",
-      ["ts-node", "--esm", "src/analysis/DebugAgent.ts", targetFile, req],
+      ["tsc", "src/analysis/DebugAgent.ts", "--outDir", "lib", "--target", "ES2020", "--module", "ESNext", "--moduleResolution", "node", "--esModuleInterop"],
+      { stdio: "pipe" }
+    );
+    
+    if (compileResult.status !== 0) {
+      console.error("TypeScript 컴파일 실패:", compileResult.stderr?.toString());
+      process.exit(1);
+    }
+    
+    const r = spawnSync(
+      "node",
+      ["lib/analysis/DebugAgent.js", targetFile, req],
       { stdio: "inherit" }
     );
 
