@@ -1,4 +1,4 @@
-# DebugMate CLI
+# CtrZ CLI
 
 C/C++ 코드를 AI로 분석하고 디버깅하는 Linux 전용 CLI 도구
 
@@ -16,7 +16,7 @@ curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # CLI 설치
-npm install -g @debugmate/cli
+npm install -g ctrz
 ```
 
 ### 2. API 키 설정
@@ -30,16 +30,10 @@ export GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/models/
 #### 방법 2: CLI로 설정 (권장)
 ```bash
 # API 키만 설정하면 됩니다 (BASE_URL은 자동으로 설정됨)
-debug-mate status --set KEY=your_api_key_here
+ctrz status --set KEY=your_api_key_here
 ```
 
-#### 방법 3: 시스템 전역 설정 (영구)
-```bash
-# ~/.bashrc 또는 ~/.zshrc에 추가
-echo 'export GEMINI_API_KEY="your_api_key_here"' >> ~/.bashrc
-echo 'export GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"' >> ~/.bashrc
-source ~/.bashrc
-```
+
 
 > **API 키 발급 방법**: [Google AI Studio](https://makersuite.google.com/app/apikey)에서 무료로 발급받을 수 있습니다.
 
@@ -47,20 +41,20 @@ source ~/.bashrc
 
 ```bash
 # 테스트 코드 생성 (test.c 파일 생성)
-debug-mate generate
+ctrz generate
 
 # tmux 분할 화면으로 디버깅 시작
-debug-mate debug test.c
+ctrz debug test.c
 
 # 또는 파일명만 입력 (기본 명령어)
-debug-mate test.c
+ctrz test.c
 ```
 
 ## 🎯 사용법
 
 ### 기본 워크플로우
 
-1. **시작**: `debug-mate debug test.c` 또는 `debug-mate test.c` 실행
+1. **시작**: `ctrz debug test.c` 또는 `ctrz test.c` 실행
 2. **왼쪽 패널**: vi 편집기가 자동으로 열림 (50% 크기)
 3. **코드 편집**: vi에서 코드 수정
 4. **저장**: `:w` 명령어로 저장
@@ -72,13 +66,13 @@ debug-mate test.c
 
 ```bash
 # 기본 50:50 분할
-debug-mate debug test.c
+ctrz debug test.c
 
 # 왼쪽 패널 크기 조절 (예: 30%)
-debug-mate debug test.c --left 30
+ctrz debug test.c --left 30
 
 # 왼쪽 패널 크기 조절 (예: 70%)
-debug-mate debug test.c --left 70
+ctrz debug test.c --left 70
 ```
 
 ### AI 분석 기능
@@ -92,13 +86,13 @@ debug-mate debug test.c --left 70
 
 | 명령어 | 설명 | 예시 |
 |--------|------|------|
-| `debug <file>` | tmux 분할 화면으로 vi 편집기 + AI 분석 | `debug-mate debug test.c` |
-| `generate` | 테스트 코드 자동 생성 (test.c) | `debug-mate generate` |
-| `status` | 시스템 상태 및 설정 확인 | `debug-mate status` |
-| `status --set` | 환경변수 설정 | `debug-mate status --set KEY=your_key_here` |
-| `info` | 프로그램 정보 | `debug-mate info` |
-| `--version` | 버전 정보 표시 | `debug-mate --version` |
-| `--help` | 도움말 표시 | `debug-mate --help` |
+| `debug <file>` | tmux 분할 화면으로 vi 편집기 + AI 분석 | `ctrz debug test.c` |
+| `generate` | 테스트 코드 자동 생성 (test.c) | `ctrz generate` |
+| `status` | 시스템 상태 및 설정 확인 | `ctrz status` |
+| `status --set` | 환경변수 설정 | `ctrz status --set KEY=your_key_here` |
+| `info` | 프로그램 정보 | `ctrz info` |
+| `--version` | 버전 정보 표시 | `ctrz --version` |
+| `--help` | 도움말 표시 | `ctrz --help` |
 
 ## 🎯 주요 기능
 
@@ -141,14 +135,14 @@ Esc        # 명령 모드
 ### 환경변수 설정 문제
 ```bash
 # CLI로 환경변수 설정 (권장)
-debug-mate status --set KEY=your_api_key_here
+ctrz status --set KEY=your_api_key_here
 
 # 환경변수가 제대로 설정되었는지 확인
 echo $GEMINI_API_KEY
 echo $GEMINI_BASE_URL
 
 # 또는 CLI로 확인
-debug-mate status
+ctrz status
 ```
 
 ### Windows/macOS 사용자
@@ -160,19 +154,19 @@ debug-mate status
 
 ```bash
 # 도움말
-debug-mate --help
+ctrz --help
 
 # 특정 명령어 도움말
-debug-mate debug --help
-debug-mate generate --help
-debug-mate status --help
+ctrz debug --help
+ctrz generate --help
+ctrz status --help
 ```
 
 ## 🔗 링크
 
 - [GitHub](https://github.com/zzmnxn/Debug_Mate)
 - [Issues](https://github.com/zzmnxn/Debug_Mate/issues)
-- [NPM](https://www.npmjs.com/package/@debugmate/cli)
+- [NPM](https://www.npmjs.com/package/ctrz)
 
 ## 📄 라이선스
 

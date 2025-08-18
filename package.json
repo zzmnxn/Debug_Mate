@@ -1,9 +1,9 @@
 {
-  "name": "@debugmate/cli",
-  "version": "1.1.0",
+  "name": "ctrz",
+  "version": "1.2.0",
   "description": "C/C++ 대화형 디버깅 CLI (Linux only, no server)",
   "bin": { 
-    "debug-mate": "debug-mate-cli.js"
+    "ctrz": "debug-mate-cli.js"
   },
   "files": [
     "debug-mate-cli.js",
