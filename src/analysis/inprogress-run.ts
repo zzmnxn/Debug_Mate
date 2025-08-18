@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from "fs";
 import { spawnSync } from "child_process";
 import * as path from "path";
 import * as readline from "readline";
-import { beforeDebug } from "./beforeDebug";
+import { beforeDebug } from "./beforeDebug.js";
 
 async function main() {
   const targetFile = process.argv[2];

@@ -1,5 +1,5 @@
 
-import { CompilerError, CompilerWarning } from '../parsing/compilerResultParser';
+import { CompilerError, CompilerWarning } from '../parsing/compilerResultParser.js';
 
 
 export function buildAfterDebugPrompt(logSummary: string, errors: CompilerError[], warnings: CompilerWarning[], executionOutput?: string): string {

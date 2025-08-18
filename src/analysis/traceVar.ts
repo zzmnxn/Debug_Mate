@@ -1,9 +1,9 @@
-import { SGlobal } from "../config/SGlobal";
+import { SGlobal } from "../config/SGlobal.js";
 import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
 import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
-import { buildTraceVarPrompt } from "../prompts/prompt_traceVar";
+import { buildTraceVarPrompt } from "../prompts/prompt_traceVar.js";
 
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
 

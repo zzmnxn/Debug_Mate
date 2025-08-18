@@ -1,8 +1,8 @@
-import { SGlobal } from "../config/SGlobal";
+import { SGlobal } from "../config/SGlobal.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import fs from "fs";
 import path from "path";
-import { compileAndRunC } from "../services/compile";
+import { compileAndRunC } from "../services/compile.js";
 
 // API 키 검증
 const apiKey = SGlobal.env.GEMINI_API_KEY;
