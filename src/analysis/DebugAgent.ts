@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
-import { buildEnhancedAIParsingPrompt, buildComparisonPrompt, buildIntentPrompt } from "../prompts/prompt_debugAgent";
+import { buildEnhancedAIParsingPrompt, buildComparisonPrompt, buildIntentPrompt } from "../prompts/prompt_debugAgent.js";
 
 
 dotenv.config();

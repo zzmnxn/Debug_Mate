@@ -1,4 +1,4 @@
-import { LoopInfo } from '../parsing/loopExtractor';
+import { LoopInfo } from '../parsing/loopExtractor.js';
 
 /**
  * 계층적 번호 생성 (1, 2.1, 2.2, 3 등)
