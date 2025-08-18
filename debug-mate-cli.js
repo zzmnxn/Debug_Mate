@@ -24,8 +24,8 @@ ${chalk.cyan.bold(`
 // 버전 정보
 const VERSION = '1.2.0';
 
-// .env 파일 경로
-const ENV_FILE = join(__dirname, '.env');
+// .env 파일 경로 - 사용자 홈 디렉토리에 생성
+const ENV_FILE = join(process.env.HOME || process.env.USERPROFILE || process.cwd(), '.debug-mate.env');
 
 // CLI 설정
 const program = new Command();
@@ -46,10 +46,26 @@ GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-1
 `;
   
   try {
+    // 디렉토리가 없으면 생성
+    const envDir = dirname(ENV_FILE);
+    if (!existsSync(envDir)) {
+      console.log(chalk.gray(`디렉토리 생성 중: ${envDir}`));
+      // mkdirSync는 이미 존재하는 디렉토리에 대해서는 에러를 발생시키지 않음
+      try {
+        require('fs').mkdirSync(envDir, { recursive: true });
+      } catch (mkdirError) {
+        console.error(chalk.red('디렉토리 생성 실패:', mkdirError.message));
+        return false;
+      }
+    }
+    
     writeFileSync(ENV_FILE, envContent, 'utf8');
+    console.log(chalk.green(`환경 변수 파일 생성 완료: ${ENV_FILE}`));
     return true;
   } catch (error) {
     console.error(chalk.red('환경 변수 파일 생성 오류:', error.message));
+    console.log(chalk.yellow('대안: 환경 변수로 직접 설정하세요:'));
+    console.log(chalk.cyan(`  export GEMINI_API_KEY="${apiKey}"`));
     return false;
   }
 }
@@ -70,6 +86,9 @@ function loadEnvFile() {
           }
         }
       }
+      console.log(chalk.gray(`환경 변수 파일 로드됨: ${ENV_FILE}`));
+    } else {
+      console.log(chalk.yellow(`환경 변수 파일이 없습니다: ${ENV_FILE}`));
     }
   } catch (error) {
     console.error(chalk.red('환경 변수 파일 읽기 오류:', error.message));
@@ -162,6 +181,14 @@ async function tmuxDebug(file, options = {}) {
   // 파일 없으면 기본 템플릿 생성
   const initSnippet = `
     TARGET_FILE="${filePath}"
+    TARGET_DIR=$(dirname "$TARGET_FILE")
+    
+    # 디렉토리가 없으면 생성
+    if [ ! -d "$TARGET_DIR" ]; then
+      mkdir -p "$TARGET_DIR"
+    fi
+    
+    # 파일이 없으면 기본 템플릿 생성
     if [ ! -f "$TARGET_FILE" ]; then
       cat > "$TARGET_FILE" <<'EOF'
 #include <stdio.h>
@@ -170,7 +197,11 @@ int main(void){
   return 0;
 }
 EOF
+      echo "기본 C 템플릿이 생성되었습니다: $TARGET_FILE"
     fi
+    
+    # 파일 권한 확인 및 수정
+    chmod 644 "$TARGET_FILE"
   `;
 
   // 기존 세션 종료 시도(있으면 정리)
@@ -282,41 +313,7 @@ program
     });
   });
 
-// 설정 명령어
-program
-  .command('config')
-  .alias('c')
-  .description(chalk.cyan('설정 관리'))
-  .option('-s, --set <key=value>', chalk.gray('설정 값 설정'))
-  .option('-g, --get <key>', chalk.gray('설정 값 조회'))
-  .option('--list', chalk.gray('모든 설정 조회'))
-  .action(async (options) => {
-    console.log(LOGO);
-    
-    if (options.list) {
-      console.log(chalk.blue('현재 설정:'));
-      console.log(chalk.cyan(`API Key: ${process.env.GEMINI_API_KEY ? '설정됨' : '설정되지 않음'}`));
-      console.log(chalk.cyan(`Node.js: ${process.version}`));
-      console.log(chalk.cyan(`Platform: ${process.platform}`));
-      return;
-    }
 
-    if (options.set) {
-      const [key, value] = options.set.split('=');
-      console.log(chalk.blue(`설정 업데이트: ${key} = ${value}`));
-      // 실제로는 설정 파일에 저장하는 로직 필요
-      return;
-    }
-
-    if (options.get) {
-      console.log(chalk.blue(`설정 조회: ${options.get}`));
-      // 실제로는 설정 파일에서 읽는 로직 필요
-      return;
-    }
-
-    console.log(chalk.blue('설정 관리'));
-    console.log(chalk.gray('사용법: debug-mate config --help'));
-  });
 
 // 의존성 체크 명령어
 program
@@ -333,8 +330,9 @@ program
 program
   .command('status')
   .alias('s')
-  .description(chalk.cyan('시스템 상태 확인'))
+  .description(chalk.cyan('시스템 환경 및 의존성 상태 확인'))
   .option('-s, --set <key=value>', chalk.gray('API 키 설정 (예: --set KEY=your_api_key_here)'))
+  .option('--quick', chalk.gray('빠른 상태 확인 (의존성 체크 생략)'))
   .action(async (options) => {
     console.log(LOGO);
     
@@ -361,32 +359,47 @@ program
       }
     }
     
-    console.log(chalk.blue('시스템 상태 확인 중...\n'));
+    console.log(chalk.blue('시스템 환경 및 의존성 상태 확인 중...\n'));
 
     // 플랫폼 확인
     if (process.platform !== 'linux') {
       console.log(chalk.red(`플랫폼: ${process.platform} (Linux가 필요합니다)`));
       console.log(chalk.yellow('이 CLI는 Linux 환경에서만 실행할 수 있습니다.'));
+      console.log(chalk.blue('해결 방법:'));
+      console.log(chalk.cyan('   1. WSL2 (Windows Subsystem for Linux) 사용'));
+      console.log(chalk.cyan('   2. Linux 가상머신 사용'));
+      console.log(chalk.cyan('   3. GitHub Codespaces 사용'));
       return;
     } else {
-      console.log(chalk.green(`플랫폼: ${process.platform}`));
+      console.log(chalk.green(`✓ 플랫폼: ${process.platform}`));
     }
 
     // Node.js 버전 표시
-    console.log(chalk.green(`Node.js: ${process.version}`));
+    console.log(chalk.green(`✓ Node.js: ${process.version}`));
 
-    // 의존성 체크 및 자동 설치
-    await checkAndInstallDependencies();
+    // 의존성 체크 (quick 옵션이 없을 때만)
+    if (!options.quick) {
+      console.log(chalk.blue('\n의존성 상태 확인 중...'));
+      await checkAndInstallDependencies();
+    } else {
+      console.log(chalk.yellow('\n빠른 확인 모드: 의존성 체크 생략'));
+    }
 
     // API 키 확인
     console.log(chalk.cyan(`\n Gemini API Key: ${process.env.GEMINI_API_KEY ? '설정됨' : '설정되지 않음'}`));
     console.log(chalk.cyan(` Gemini Base URL: ${process.env.GEMINI_BASE_URL ? '설정됨' : '설정되지 않음'}`));
+    console.log(chalk.cyan(` 환경 변수 파일: ${ENV_FILE}`));
     
     if (!process.env.GEMINI_API_KEY) {
-      console.log(chalk.yellow(' API 키 설정 방법:'));
-      console.log(chalk.cyan('   1. CLI 설정: debug-mate status --set KEY=your_api_key_here'));
+      console.log(chalk.yellow('\n API 키 설정 방법:'));
+      console.log(chalk.cyan('   1. CLI 설정: ctrz status --set KEY=your_api_key_here'));
       console.log(chalk.cyan('   2. 환경변수: export GEMINI_API_KEY="your_api_key_here"'));
+      console.log(chalk.cyan('   3. .env 파일 직접 생성: ~/.debug-mate.env'));
+    } else {
+      console.log(chalk.green('\n✓ API 키가 설정되어 있어 AI 분석 기능을 사용할 수 있습니다.'));
     }
+
+    console.log(chalk.blue('\n시스템이 정상적으로 설정되었습니다!'));
   });
 
 // 정보 명령어
@@ -443,7 +456,7 @@ program.exitOverride();
 try {
   program.parse();
 } catch (err) {
-  if (err.code === 'commander.help') {
+  if (err.code === 'commander.help' || err.code === 'commander.helpDisplayed') {
     console.log(LOGO);
     console.log(chalk.blue('DebugMate CLI 도움말'));
     console.log(chalk.gray('C/C++ 코드를 AI로 분석하고 디버깅하는 도구입니다.'));
@@ -452,9 +465,8 @@ try {
     console.log(chalk.cyan('  debug <file>     tmux 분할 화면으로 파일 감시 및 자동 디버깅'));
     console.log(chalk.cyan('  generate [name]  테스트 코드 자동 생성'));
     console.log(chalk.cyan('  check-deps       의존성 체크 및 자동 설치'));
-    console.log(chalk.cyan('  status           시스템 상태 확인'));
+    console.log(chalk.cyan('  status           시스템 환경 및 의존성 상태 확인'));
     console.log(chalk.cyan('  info             프로그램 정보'));
-    console.log(chalk.cyan('  config           설정 관리'));
     console.log('');
     console.log(chalk.yellow('사용 예시:'));
     console.log(chalk.gray('  debug-mate debug test.c'));
@@ -463,16 +475,19 @@ try {
     console.log(chalk.gray('  debug-mate status'));
     console.log('');
     console.log(chalk.yellow('API 키 설정:'));
-    console.log(chalk.gray('  debug-mate status --set KEY=your_api_key_here'));
+    console.log(chalk.gray('  ctrz status --set KEY=your_api_key_here'));
     console.log(chalk.gray('  export GEMINI_API_KEY="your_api_key_here"'));
     console.log('');
     console.log(chalk.yellow('자세한 도움말:'));
     console.log(chalk.gray('  debug-mate debug --help'));
     console.log(chalk.gray('  debug-mate generate --help'));
     console.log(chalk.gray('  debug-mate status --help'));
-    console.log(chalk.gray('  debug-mate config --help'));
     console.log('');
     console.log(chalk.blue('더 많은 정보: https://github.com/zzmnxn/Debug_Mate'));
+    process.exit(0);
+  } else if (err.code === 'commander.version') {
+    console.log(chalk.green(`v${VERSION}`));
+    process.exit(0);
   } else {
     console.error(chalk.red(`오류: ${err.message}`));
     process.exit(1);
