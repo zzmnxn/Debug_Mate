@@ -3,8 +3,8 @@ import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
 import { extractLoopsFromCode, extractLoopsWithNesting, LoopInfo } from '../parsing/loopExtractor.js';
 import { execSync } from "child_process";
 import { spawnSync } from "child_process";
-import fs from "fs";
-import path from "path";
+import * as fs from "fs";
+import * as path from "path";
 import { buildTargetSelectionPrompt, buildBatchAnalysisPrompt, generateHierarchicalNumber } from "../prompts/prompt_loopCheck.js";
 
 const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
