@@ -11,6 +11,10 @@ C/C++ 코드를 AI로 분석하고 디버깅하는 Linux 전용 CLI 도구
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
+# 설치 확인
+node --version
+npm --version
+
 # CLI 설치
 npm install -g ctrz
 

@@ -1,48 +1,16 @@
 import { SGlobal } from "../config/SGlobal";
-import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
 import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { buildTraceVarPrompt } from "../prompts/prompt_traceVar";
+import { AIService } from "../utils/ai";
 
-const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
+// AI 서비스 인스턴스 생성 (2048 토큰으로 설정)
+const aiService = new AIService(undefined, { maxOutputTokens: 2048 }); 
 
 
 // sohyeon hw
-// [API] 오류에 대비한 재시도 로직 헬퍼 함수
-async function callWithRetry<T>(
-  apiCall: () => Promise<T>,
-  retries = 3,
-  delay = 1000 // 1초
-): Promise<T> {
-  for (let i = 0; i < retries; i++) {
-      try {
-          return await apiCall();
-      } catch (error: any) {
-          // [API] 키 오류는 재시도하지 않고 바로 던집니다.
-          if (error.response && error.response.status === 400 &&
-              error.response.data?.error?.details?.some((d: any) => d.reason === "API_KEY_INVALID")) {
-              throw new Error(`[API Key Error]: 유효한 [API] 키를 확인하세요.`);
-          }
-          // [Rate Limit](429), [Server Error](5xx), [Network Error] 등에 대해 재시도합니다.
-          if (error.response && (error.response.status === 429 || error.response.status >= 500) ||
-              error.message.includes("Network Error")) {
-              if (i < retries - 1) {
-                  console.warn(`[API] 호출 실패 ([Status]: ${error.response?.status}). ${delay / 1000}초 후 재시도...`);
-                  await new Promise(resolve => setTimeout(resolve, delay));
-                  delay *= 2; // [Exponential Backoff] (점점 더 길게 대기)
-              } else {
-                  throw new Error(`[API Retry Failed]: ${error.message || "알 수 없는 [API] 오류"}. 최대 재시도 횟수 도달.`);
-              }
-          } else {
-              // 다른 예상치 못한 오류는 즉시 던집니다.
-              throw new Error(`[API Error]: ${error.message || "예상치 못한 오류 발생"}`);
-          }
-      }
-  }
-  // 이 부분은 도달하지 않아야 하지만, 안전을 위해 추가합니다.
-  throw new Error("[Unexpected Error] 재시도 로직에서 예상치 못한 오류로 종료되었습니다.");
-}
+
 
 // sohyeon's hw
 // traceVar 함수를 비동기(async) 함수로 정의합니다.
@@ -57,20 +25,9 @@ export async function traceVar({
     // [Gemini Model]에 전달할 프롬프트([Prompt])를 정의합니다.
   const prompt = buildTraceVarPrompt(code, userQuery);
 
-  // '[gemini-1.5-flash]' 모델을 사용하여 [Gemini AI Model] 인스턴스를 생성합니다.
-  const model: GenerativeModel = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    generationConfig: {
-      temperature: 0.3, // 더 일관된 응답을 위해 낮은 [Temperature] 설정
-      maxOutputTokens: 2048, // 응답 길이 제한
-    },
-  });
-
   try {
-    // [API] 호출을 재시도 로직으로 감싸서 호출합니다.
-    const result = await callWithRetry(() => model.generateContent(prompt));
-
-    const responseText = result.response.text();
+    // AI 서비스를 사용한 API 호출 (재시도 로직 포함)
+    const responseText = await aiService.generateContentWithRetry(prompt);
 
     // 1. 응답이 비어있는 경우를 처리합니다.
     if (!responseText || responseText.trim().length === 0) {
@@ -86,7 +43,7 @@ export async function traceVar({
     return { variableTrace: responseText };
 
   } catch (error: any) {
-    // callWithRetry 함수에서 던져진 오류를 받아서 처리합니다.
+    // AI 서비스에서 처리된 오류를 받아서 처리합니다.
     throw new Error(`[traceVar Error]: ${error.message || "변수 추적 중 알 수 없는 오류 발생"}`);
   }
 }

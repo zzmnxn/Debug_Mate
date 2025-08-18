@@ -3,9 +3,9 @@ import { afterDebugFromCode } from "./afterDebug";
 import { traceVar } from "./traceVar";
 import * as fs from "fs";
 import * as path from "path";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
 import { buildEnhancedAIParsingPrompt, buildComparisonPrompt, buildIntentPrompt } from "../prompts/prompt_debugAgent";
+import { AIService } from "../utils/ai";
 
 
 dotenv.config();
@@ -27,8 +27,8 @@ interface MultipleIntents {
   isMultiple: boolean;
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+// AI 서비스 인스턴스 생성 (기본 토큰 수 사용)
+const aiService = new AIService();
 
 // 텍스트 정규화 함수 - 오타와 다양한 표현 처리
 function normalizeText(text: string): string {
@@ -87,8 +87,7 @@ async function enhancedAIParsing(query: string, context: string = ""): Promise<P
   const enhancedPrompt = buildEnhancedAIParsingPrompt(query, context);
 
   try {
-    const result = await model.generateContent(enhancedPrompt);
-    const responseText = result.response.text().trim();
+    const responseText = await aiService.generateContent(enhancedPrompt);
     const jsonMatch = responseText.match(/\{[\s\S]*?\}/);
     
     if (jsonMatch) {
@@ -286,9 +285,7 @@ async function parseSingleIntent(query: string): Promise<ParsedIntent> {
     try {
       const intentPrompt = buildIntentPrompt(query);
 
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const result = await model.generateContent(intentPrompt);
-      const aiTool = result.response.text().trim();
+      const aiTool = await aiService.generateContent(intentPrompt);
       
       if (['loopCheck', 'traceVar', 'afterDebugFromCode'].includes(aiTool)) {
         tool = aiTool;
@@ -433,8 +430,7 @@ async function parseUserIntent(query: string): Promise<MultipleIntents> {
     const comparisonPrompt = buildComparisonPrompt(query);
 
     try {
-      const result = await model.generateContent(comparisonPrompt);
-      const responseText = result.response.text().trim();
+      const responseText = await aiService.generateContent(comparisonPrompt);
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       
       if (jsonMatch) {

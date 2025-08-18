@@ -1,10 +1,11 @@
 import { SGlobal } from "../config/SGlobal";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import fs from "fs";
 import path from "path";
 import { compileAndRunC } from "../services/compile";
+import { AIService } from "../utils/ai";
 
-const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
+// AI 서비스 인스턴스 생성 (기본 토큰 수 사용)
+const aiService = new AIService(); 
 
 
 // moonjeong's hw1   (code: string): Promise<string> {
@@ -49,36 +50,15 @@ const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
   
   `.trim();
   
-      // 2) 간단 재시도 + 지수 백오프(추가 함수 없이 루프만)
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        generationConfig: { temperature: 0.3, maxOutputTokens: 1000 },
-      });
-  
+            // 2) AI 서비스를 사용한 API 호출 (재시도 로직 포함)
       let lastErr: any = null;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          // 30초 타임아웃 가드
-          const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error("API timeout")), 30000));
-          const apiCall = model.generateContent(prompt);
-          const result: any = await Promise.race([apiCall, timeout]);
-          const text = result?.response?.text?.().trim?.();
-          if (text) return text;
-          throw new Error("Invalid API response");
-        } catch (err: any) {
-          lastErr = err;
-          const msg = String(err?.message || err);
-          // 429/503/쿼터/오버로드일 때만 백오프, 그 외는 즉시 중단
-          const transient = /429|quota|rate limit|503|overload/i.test(msg);
-          if (attempt < 3 && transient) {
-            // 백오프 (500ms, 1500ms)
-            await new Promise(r => setTimeout(r, attempt * 1000 + 500));
-            continue;
-          }
-          break;
-        }
-      }
+      try {
+        const text = await aiService.generateContentWithRetry(prompt, 3, 1000, 30000);
+        if (text) return text;
+        throw new Error("Invalid API response");
+      } catch (err: any) {
+        lastErr = err;
+        const msg = String(err?.message || err);
   
       // 3) 폴백: 쿼터/레이트리밋이면 로컬 요약으로 최소 분석 반환
       const isQuota = /429|quota|rate limit/i.test(String(lastErr));

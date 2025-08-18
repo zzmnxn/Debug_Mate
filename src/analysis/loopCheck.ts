@@ -1,13 +1,14 @@
 import { SGlobal } from "../config/SGlobal";
-import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
 import { extractLoopsFromCode, extractLoopsWithNesting, LoopInfo } from '../parsing/loopExtractor';
 import { execSync } from "child_process";
 import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { buildTargetSelectionPrompt, buildBatchAnalysisPrompt, generateHierarchicalNumber } from "../prompts/prompt_loopCheck";
+import { AIService } from "../utils/ai";
 
-const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || ""); 
+// AI 서비스 인스턴스 생성 (기본 토큰 수 사용)
+const aiService = new AIService(); 
 
 
 // 캐시 시스템 추가 (API 절약) - 전역으로 이동
@@ -64,27 +65,8 @@ export async function loopCheck({
       try {
         const targetSelectionPrompt = buildTargetSelectionPrompt(code, loopInfos, target, details);
 
-      const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
-        generationConfig: {
-          temperature: 0.3, // 더 일관된 응답을 위해 낮은 온도 설정
-          maxOutputTokens: 1000, // 응답 길이 제한
-        }
-      });
-      
-      // 타임아웃 설정 (30초) - 정리 가능하도록 수정
-      const timeoutPromise = new Promise((_, reject) => {
-        selectionTimeoutId = setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
-      });
-      
-      const selectionResult = await Promise.race([
-        model.generateContent(targetSelectionPrompt),
-        timeoutPromise
-      ]) as any;
-      
-      // 성공 시 타임아웃 정리
-      if (selectionTimeoutId) clearTimeout(selectionTimeoutId);
-      const responseText = selectionResult.response.text().trim();
+      // AI 서비스를 사용한 API 호출
+      const responseText = await aiService.generateContent(targetSelectionPrompt);
       
       if (!responseText) {
         throw new Error("AI 모델이 응답을 생성하지 못했습니다.");
@@ -187,33 +169,10 @@ export async function loopCheck({
 
   const batchPrompt = buildBatchAnalysisPrompt(targetLoopInfos, loopInfos);
 
-
-//모델 파라미터 추가 완료  
-  let timeoutId: NodeJS.Timeout | undefined;
-  
   try {
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      generationConfig: {
-        temperature: 0.3, // 더 일관된 응답을 위해 낮은 온도 설정
-        maxOutputTokens: 1000, // 응답 길이 제한
-      }
-    });
+    // AI 서비스를 사용한 API 호출
+    const batchAnalysis = await aiService.generateContent(batchPrompt);
     
-    // 타임아웃 설정 (30초) - 정리 가능하도록 수정
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error("AI 응답 타임아웃")), 30000);
-    });
-    
-    const result = await Promise.race([
-      model.generateContent(batchPrompt),
-      timeoutPromise
-    ]) as any;
-    
-    // 성공 시 타임아웃 정리
-    if (timeoutId) clearTimeout(timeoutId);
-  const batchAnalysis = result.response.text();
-  
     if (!batchAnalysis || batchAnalysis.trim().length === 0) {
       throw new Error("AI 모델이 분석 결과를 생성하지 못했습니다.");
     }
@@ -223,9 +182,6 @@ export async function loopCheck({
   const formattedResult = `[Result]\n검사한 반복문 수 : ${targetLoopInfos.length}\n\n${batchAnalysis}`;
   return { result: formattedResult };
   } catch (aiError: any) {
-    // 에러 시에도 타임아웃 정리
-    if (timeoutId) clearTimeout(timeoutId);
-    
     console.error(`AI 분석 실패: ${aiError.message}`);
     
     // 폴백: 간단한 패턴 분석 결과 반환

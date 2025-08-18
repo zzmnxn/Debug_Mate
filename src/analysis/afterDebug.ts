@@ -1,12 +1,13 @@
 import { SGlobal } from "../config/SGlobal";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { CompilerError, CompilerWarning, CompilerResultParser } from '../parsing/compilerResultParser';
 import fs from "fs";
 import path from "path";
 import { buildAfterDebugPrompt } from "../prompts/prompt_afterDebug";
 import { compileAndRunC } from "../services/compile";
+import { AIService } from "../utils/ai";
 
-const genAI = new GoogleGenerativeAI(SGlobal.env.GEMINI_API_KEY || "");
+// AI 서비스 인스턴스 생성 (기본 토큰 수 사용)
+const aiService = new AIService();
 
 /**
  * 1. afterDebug: 에러/경고 로그 + 요약을 받아 Gemini 분석 수행
@@ -30,34 +31,8 @@ export async function afterDebug(logSummary: string, errors: CompilerError[], wa
     // 3. 프롬프트 생성 (실행 결과 포함)
     const prompt = buildAfterDebugPrompt(logSummary, errors, warnings, executionOutput);
     
-    // 4. 모델 초기화 및 타임아웃 설정
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      generationConfig: {
-        temperature: 0.3, // 더 일관된 응답을 위해 낮은 온도 설정
-        maxOutputTokens: 1000, // 응답 길이 제한
-      }
-    });
-
-    // 5. API 호출 (타임아웃 포함)
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('API request timed out after 1 seconds')), 10000);
-    });
-
-    const apiPromise = model.generateContent(prompt);
-    const result = await Promise.race([apiPromise, timeoutPromise]) as any;
-
-    // 6. 응답 검증
-    if (!result || !result.response || !result.response.text) {
-      throw new Error('Invalid response from Gemini API');
-    }
-
-    const responseText = result.response.text().trim();
-    
-    // 7. 응답 형식 검증
-    if (!responseText) {
-      throw new Error('Empty response from Gemini API');
-    }
+    // 4. AI 서비스를 사용한 API 호출
+    const responseText = await aiService.generateContent(prompt, 10000);
 
     // 8. 응답 형식이 올바른지 확인
     const hasResult = /\[Result\]\s*[OX]/.test(responseText);
@@ -72,24 +47,10 @@ export async function afterDebug(logSummary: string, errors: CompilerError[], wa
     return responseText;
 
   } catch (error: any) {
-    // 9. 상세한 에러 처리
-    let errorMessage = 'Unknown error occurred';
-    
-    if (error.message.includes('API_KEY')) {
-      errorMessage = 'Gemini API 키가 설정되지 않았습니다. 환경 변수 GEMINI_API_KEY를 확인해주세요.';
-    } else if (error.message.includes('timed out')) {
-      errorMessage = 'API 요청이 시간 초과되었습니다. 네트워크 연결을 확인하고 다시 시도해주세요.';
-    } else if (error.message.includes('network') || error.message.includes('fetch')) {
-      errorMessage = '네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.';
-    } else if (error.message.includes('quota') || error.message.includes('rate limit')) {
-      errorMessage = 'API 할당량이 초과되었습니다. 잠시 후 다시 시도해주세요.';
-    } else {
-      errorMessage = `분석 중 오류가 발생했습니다: ${error.message}`;
-    }
-
+    // 9. AI 서비스에서 처리된 에러 메시지 사용
     console.error(' afterDebug 에러:', error);
     
-    return `[Result] X\n[Reason] ${errorMessage}\n[Suggestion] 시스템 오류로 인해 분석을 완료할 수 없습니다. 잠시 후 다시 시도해주세요.`;
+    return `[Result] X\n[Reason] ${error.message}\n[Suggestion] 시스템 오류로 인해 분석을 완료할 수 없습니다. 잠시 후 다시 시도해주세요.`;
   }
 }
 
