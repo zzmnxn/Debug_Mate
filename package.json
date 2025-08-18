@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "build": "rimraf lib && tsc",
-    "prepublishOnly": "npm run build && test -d lib && chmod +x generate-test.sh && chmod +x watch-and-debug.sh",
+    "prepublishOnly": "npm run build && chmod +x generate-test.sh && chmod +x watch-and-debug.sh",
     "postinstall": "chmod +x generate-test.sh && chmod +x watch-and-debug.sh",
     "dev": "ts-node --esm src/analysis/inprogress-run.ts",
     "start": "node lib",
