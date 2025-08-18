@@ -22,7 +22,7 @@ ${chalk.cyan.bold(`
 `)}`;
 
 // 버전 정보
-const VERSION = '1.2.1';
+const VERSION = '1.2.2';
 
 // .env 파일 경로 - 사용자 홈 디렉토리에 생성
 const ENV_FILE = join(process.env.HOME || process.env.USERPROFILE || process.cwd(), '.debug-mate.env');
