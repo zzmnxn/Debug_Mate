@@ -1,6 +1,7 @@
 {
   "name": "ctrz",
   "version": "1.2.0",
+  "type": "module",
   "description": "C/C++ 대화형 디버깅 CLI (Linux only, no server)",
   "bin": { 
     "ctrz": "debug-mate-cli.js"
