@@ -5,12 +5,12 @@ import { Command } from 'commander';
 import { spawn, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve, basename } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, writeFileSync, readFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// ASCII 아트 로고
+
 const LOGO = `
 ${chalk.cyan.bold(`
 ══════════════════════════════════════════════════════════════
@@ -22,7 +22,10 @@ ${chalk.cyan.bold(`
 `)}`;
 
 // 버전 정보
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
+
+// .env 파일 경로
+const ENV_FILE = join(__dirname, '.env');
 
 // CLI 설정
 const program = new Command();
@@ -35,6 +38,43 @@ program
   .usage(chalk.yellow('<command> [options]'))
   .helpOption('-h, --help', chalk.gray('도움말 표시'));
 
+// .env 파일 생성 함수
+function createEnvFile(apiKey) {
+  const envContent = `# Gemini API 설정
+GEMINI_API_KEY=${apiKey}
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent
+`;
+  
+  try {
+    writeFileSync(ENV_FILE, envContent, 'utf8');
+    return true;
+  } catch (error) {
+    console.error(chalk.red('환경 변수 파일 생성 오류:', error.message));
+    return false;
+  }
+}
+
+// .env 파일에서 환경 변수 로드
+function loadEnvFile() {
+  try {
+    if (existsSync(ENV_FILE)) {
+      const envContent = readFileSync(ENV_FILE, 'utf8');
+      const lines = envContent.split('\n');
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine && !trimmedLine.startsWith('#')) {
+          const [key, value] = trimmedLine.split('=');
+          if (key && value) {
+            process.env[key] = value;
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error(chalk.red('환경 변수 파일 읽기 오류:', error.message));
+  }
+}
 
 // 플랫폼 체크 함수
 function checkPlatform() {
@@ -49,9 +89,9 @@ function checkPlatform() {
     process.exit(1);
   }
 }
-// === REPLACE: tmuxDebug() ===
+
+// tmux 디버깅 함수
 async function tmuxDebug(file, options = {}) {
-  // CLI에서 --left 로 전달된 값과의 호환을 위해 leftSize 유지
   const { session, leftSize = 40 } = options;
 
   console.log(chalk.blue(`  tmux 분할 화면 모드 시작...`));
@@ -65,7 +105,6 @@ async function tmuxDebug(file, options = {}) {
 
   try { 
     execSync('which inotifywait', { encoding: 'utf8' });
-    // inotifywait가 설치되어 있는지만 확인하고, 실제 실행은 나중에
     console.log(chalk.green('✓ inotifywait 확인됨'));
   }
   catch { 
@@ -79,7 +118,6 @@ async function tmuxDebug(file, options = {}) {
   // 파일 경로 정규화
   const filePath = resolve(file);
   const fileName = basename(file);
-  const fileDir = dirname(filePath);
 
   // 세션명 안전화 (/, ., 공백, : → -)
   const cleanSession = (session || `dm-${fileName}`).replace(/[\/\.\s:]/g, '-');
@@ -102,7 +140,6 @@ EOF
   try { execSync(`tmux kill-session -t "${cleanSession}" 2>/dev/null`); } catch {}
 
   // 오른쪽 패널에서 실행할 "저장 감시 + 분석" 파이프라인
-  // watch-and-debug.sh 스크립트를 사용하여 더 안정적으로 실행
   const rightPaneCmd = `bash "${__dirname}/watch-and-debug.sh" "${filePath}"`;
 
   // tmux 스크립트 - 개별 명령어로 실행
@@ -145,16 +182,13 @@ EOF
   });
 }
 
-
-
-// 기본 디버깅 명령어 (tmux 분할 화면이 기본)
+// 메인 디버깅 명령어 (tmux 분할 화면)
 program
   .command('debug <file>')
   .alias('d')
   .description(chalk.cyan('tmux 분할 화면으로 파일 감시 및 자동 디버깅'))
   .option('-s, --session <name>', chalk.gray('tmux 세션 이름 지정'))
   .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 퍼센트 (기본: 40%)'), '40')
-  .option('-t, --timeout <ms>', chalk.gray('타임아웃 설정 (기본: 30000ms)'), '30000')
   .action(async (file, options) => {
     console.log(LOGO);
     checkPlatform();
@@ -167,37 +201,18 @@ program
     await tmuxDebug(file, options);
   });
 
-// tmux 분할 화면 명령어 (별도 옵션으로 유지)
-program
-  .command('tmux <file>')
-  .alias('t')
-  .description(chalk.cyan('tmux 분할 화면으로 디버깅 (debug 명령어와 동일)'))
-  .option('-s, --session <name>', chalk.gray('tmux 세션 이름 지정'))
-  .option('-l, --left <percent>', chalk.gray('왼쪽 패널 크기 퍼센트 (기본: 40%)'), '40')
-  .action(async (file, options) => {
-    console.log(LOGO);
-    checkPlatform();
-    
-    if (!existsSync(file)) {
-      console.log(chalk.yellow(` 파일이 존재하지 않습니다: ${file}`));
-      console.log(chalk.blue('기본 C 템플릿을 생성하고 시작합니다...'));
-    }
-
-    await tmuxDebug(file, options);
-  });
-
-// 테스트 코드 생성 명령어 (generate-test.sh 사용)
+// 테스트 코드 생성 명령어
 program
   .command('generate [name]')
   .alias('g')
   .description(chalk.cyan('테스트 코드 자동 생성'))
   .option('-t, --type <type>', chalk.gray('테스트 타입 (1-9)'))
-  .option('-l, --list', chalk.gray('사용 가능한 테스트 타입 목록'))
+  .option('--list-types', chalk.gray('사용 가능한 테스트 타입 목록'))
   .action(async (name = 'test', options) => {
     console.log(LOGO);
     checkPlatform();
 
-    if (options.list) {
+    if (options.listTypes) {
       console.log(chalk.blue('사용 가능한 테스트 타입:'));
       console.log(chalk.cyan('1. 기본 Hello World'));
       console.log(chalk.cyan('2. 루프 테스트 (for)'));
@@ -234,7 +249,7 @@ program
   .description(chalk.cyan('설정 관리'))
   .option('-s, --set <key=value>', chalk.gray('설정 값 설정'))
   .option('-g, --get <key>', chalk.gray('설정 값 조회'))
-  .option('-l, --list', chalk.gray('모든 설정 조회'))
+  .option('--list', chalk.gray('모든 설정 조회'))
   .action(async (options) => {
     console.log(LOGO);
     
@@ -268,8 +283,32 @@ program
   .command('status')
   .alias('s')
   .description(chalk.cyan('시스템 상태 확인'))
-  .action(async () => {
+  .option('-s, --set <key=value>', chalk.gray('API 키 설정 (예: --set KEY=your_api_key_here)'))
+  .action(async (options) => {
     console.log(LOGO);
+    
+    // API 키 설정 옵션이 있으면 처리
+    if (options.set) {
+      const [key, value] = options.set.split('=');
+      if (key === 'KEY' && value) {
+        // .env 파일 생성
+        if (createEnvFile(value)) {
+          console.log(chalk.green(`✓ API 키가 설정되었습니다.`));
+          console.log(chalk.blue(`  .env 파일이 생성되었습니다: ${ENV_FILE}`));
+          console.log(chalk.yellow('  참고: 이 설정은 영구적으로 저장됩니다.'));
+          console.log('');
+          
+          // 환경 변수 로드
+          loadEnvFile();
+        } else {
+          console.error(chalk.red('API 키 설정 실패'));
+          return;
+        }
+      } else {
+        console.error(chalk.red('올바른 형식: --set KEY=your_api_key_here'));
+        return;
+      }
+    }
     
     console.log(chalk.blue('시스템 상태 확인 중...\n'));
 
@@ -295,7 +334,6 @@ program
         if (tool.command === 'node') {
           console.log(chalk.green(`${tool.name}: ${tool.version}`));
         } else if (tool.command === 'inotifywait') {
-          // inotifywait가 설치되어 있는지만 확인
           execSync('which inotifywait', { encoding: 'utf8' });
           console.log(chalk.green(`${tool.name}: 설치됨`));
         } else {
@@ -316,9 +354,12 @@ program
 
     // API 키 확인
     console.log(chalk.cyan(`\n Gemini API Key: ${process.env.GEMINI_API_KEY ? '설정됨' : '설정되지 않음'}`));
+    console.log(chalk.cyan(` Gemini Base URL: ${process.env.GEMINI_BASE_URL ? '설정됨' : '설정되지 않음'}`));
     
     if (!process.env.GEMINI_API_KEY) {
-      console.log(chalk.yellow(' API 키 설정: export GEMINI_API_KEY="your_key_here"'));
+      console.log(chalk.yellow(' API 키 설정 방법:'));
+      console.log(chalk.cyan('   1. CLI 설정: debug-mate status --set KEY=your_api_key_here'));
+      console.log(chalk.cyan('   2. 환경변수: export GEMINI_API_KEY="your_api_key_here"'));
     }
   });
 
@@ -339,10 +380,10 @@ program
     console.log(chalk.blue('\n링크:'));
     console.log(chalk.cyan(`GitHub: ${chalk.underline('https://github.com/zzmnxn/Debug_Mate')}`));
     console.log(chalk.cyan(`Issues: ${chalk.underline('https://github.com/zzmnxn/Debug_Mate/issues')}`));
-    console.log(chalk.cyan(`NPM: ${chalk.underline('https://www.npmjs.com/package/@debugmate/cli')}`));
+    console.log(chalk.cyan(`NPM: ${chalk.underline('https://www.npmjs.com/package/ctrz')}`));
     
     console.log(chalk.blue('\n라이선스: MIT'));
-    console.log(chalk.gray('Made with ❤️ by DebugMate Team'));
+    console.log(chalk.gray('Made with ❤️ by Ctr_Z Team'));
   });
 
 // 기본 명령어 (파일명만 입력했을 때 - tmux 분할 화면이 기본)
@@ -367,7 +408,10 @@ program
     await tmuxDebug(file);
   });
 
-// 에러 처리
+// 시작 시 .env 파일 로드
+loadEnvFile();
+
+// 에러 처리 및 help 커스터마이징
 program.exitOverride();
 
 try {
@@ -380,20 +424,26 @@ try {
     console.log('');
     console.log(chalk.yellow('주요 명령어:'));
     console.log(chalk.cyan('  debug <file>     tmux 분할 화면으로 파일 감시 및 자동 디버깅'));
-    console.log(chalk.cyan('  tmux <file>      tmux 분할 화면으로 디버깅 (debug와 동일)'));
     console.log(chalk.cyan('  generate [name]  테스트 코드 자동 생성'));
     console.log(chalk.cyan('  status           시스템 상태 확인'));
     console.log(chalk.cyan('  info             프로그램 정보'));
+    console.log(chalk.cyan('  config           설정 관리'));
     console.log('');
     console.log(chalk.yellow('사용 예시:'));
     console.log(chalk.gray('  debug-mate debug test.c'));
+    console.log(chalk.gray('  debug-mate test.c              # 기본 명령어'));
     console.log(chalk.gray('  debug-mate generate my_test'));
     console.log(chalk.gray('  debug-mate status'));
+    console.log('');
+    console.log(chalk.yellow('API 키 설정:'));
+    console.log(chalk.gray('  debug-mate status --set KEY=your_api_key_here'));
+    console.log(chalk.gray('  export GEMINI_API_KEY="your_api_key_here"'));
     console.log('');
     console.log(chalk.yellow('자세한 도움말:'));
     console.log(chalk.gray('  debug-mate debug --help'));
     console.log(chalk.gray('  debug-mate generate --help'));
     console.log(chalk.gray('  debug-mate status --help'));
+    console.log(chalk.gray('  debug-mate config --help'));
     console.log('');
     console.log(chalk.blue('더 많은 정보: https://github.com/zzmnxn/Debug_Mate'));
   } else {
