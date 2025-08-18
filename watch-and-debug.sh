@@ -51,18 +51,13 @@ while IFS= read -r FULLPATH; do
       # (선택) 이전 프롬프트 대기 중인 프로세스 정리
       pkill -f "ts-node src/analysis/InProgressInteractive.ts" >/dev/null 2>&1
 
-      # lib 디렉토리가 있으면 미리 컴파일된 파일 사용, 없으면 컴파일
-      if [ -d "lib" ] && [ -f "lib/analysis/inprogress-run.js" ]; then
-        
-        node lib/analysis/inprogress-run.js "$FULLPATH" < /dev/tty
-      else
-        
-        # lib 디렉토리 생성
-        mkdir -p lib/analysis
-        # tsconfig.json을 사용하여 전체 프로젝트 컴파일
-        npx tsc
-        node lib/analysis/inprogress-run.js "$FULLPATH" < /dev/tty
-      fi
+            # lib 디렉토리 생성
+      mkdir -p lib/analysis
+
+      # 표준입력을 /dev/tty에 붙여야 readline이 동작함
+      # tsconfig.json을 사용하여 전체 프로젝트 컴파일
+      npx tsc
+      node lib/analysis/inprogress-run.js "$FULLPATH" < /dev/tty
     )
     
     if [ $? -eq 0 ]; then
