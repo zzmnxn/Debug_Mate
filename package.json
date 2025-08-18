@@ -1,9 +1,9 @@
 {
   "name": "ctrz",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "description": "C/C++ 대화형 디버깅 CLI (Linux only, no server)",
-  "bin": { 
+  "bin": {
     "ctrz": "debug-mate-cli.js"
   },
   "files": [
@@ -30,14 +30,25 @@
     "clean": "rimraf lib",
     "format": "prettier --write \"src/**/*.{ts,js}\" \"*.{ts,js,json,md}\""
   },
-  "keywords": ["debug", "c", "cpp", "analysis", "cli", "linux", "inotify", "tmux"],
+  "keywords": [
+    "debug",
+    "c",
+    "cpp",
+    "analysis",
+    "cli",
+    "linux",
+    "inotify",
+    "tmux"
+  ],
   "author": "Ctr_Z Team",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/zzmnxn/Debug_Mate.git"
   },
-  "bugs": { "url": "https://github.com/zzmnxn/Debug_Mate/issues" },
+  "bugs": {
+    "url": "https://github.com/zzmnxn/Debug_Mate/issues"
+  },
   "homepage": "https://github.com/zzmnxn/Debug_Mate#readme",
   "dependencies": {
     "@agentica/core": "^0.29.6",
@@ -75,8 +86,12 @@
     "esm": true,
     "experimentalSpecifierResolution": "node"
   },
-  "publishConfig": { "access": "public" },
-  "engines": { "node": ">=20" },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "prettier": {
     "semi": true,
     "trailingComma": "es5",
@@ -84,8 +99,13 @@
     "printWidth": 80,
     "tabWidth": 2
   },
-  "os": ["linux"],
-  "cpu": ["x64", "arm64"],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
   "systemRequirements": {
     "linux": {
       "required": [
