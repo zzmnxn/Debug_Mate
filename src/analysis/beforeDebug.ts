@@ -59,23 +59,24 @@ const aiService = new AIService();
       } catch (err: any) {
         lastErr = err;
         const msg = String(err?.message || err);
-  
-      // 3) 폴백: 쿼터/레이트리밋이면 로컬 요약으로 최소 분석 반환
-      const isQuota = /429|quota|rate limit/i.test(String(lastErr));
-      if (isQuota) {
-        // 로그만 기반의 안전한 최소 응답
-        const hasErrors = /error:|fatal error:|AddressSanitizer|LeakSanitizer|runtime error|segmentation fault/i.test(log);
-        const resultFlag = hasErrors ? "문제 있음" : "문제 없음";
-        const reason = hasErrors
-          ? "API 쿼터 초과로 AI 분석은 생략했지만, GCC/런타임 로그에 잠재적 오류 신호가 있습니다."
-          : "API 쿼터 초과로 AI 분석은 생략했습니다. 현재 로그만으로는 치명적 이슈가 확인되지 않습니다.";
-        const hint =
-          '프롬프트 축소 또는 모델 전환(GEMINI_MODEL=gemini-1.5-flash-8b 등), 호출 빈도 조절을 고려하세요. 필요 시 loopCheck()로 루프 조건만 빠르게 점검할 수 있습니다.';
-        return `[Result] ${resultFlag}\n[Reason] ${reason}\n[Suggestion] ${hint}`;
+        
+        // 3) 폴백: 쿼터/레이트리밋이면 로컬 요약으로 최소 분석 반환
+        const isQuota = /429|quota|rate limit/i.test(String(lastErr));
+        if (isQuota) {
+          // 로그만 기반의 안전한 최소 응답
+          const hasErrors = /error:|fatal error:|AddressSanitizer|LeakSanitizer|runtime error|segmentation fault/i.test(log);
+          const resultFlag = hasErrors ? "문제 있음" : "문제 없음";
+          const reason = hasErrors
+            ? "API 쿼터 초과로 AI 분석은 생략했지만, GCC/런타임 로그에 잠재적 오류 신호가 있습니다."
+            : "API 쿼터 초과로 AI 분석은 생략했습니다. 현재 로그만으로는 치명적 이슈가 확인되지 않습니다.";
+          const hint =
+            '프롬프트 축소 또는 모델 전환(GEMINI_MODEL=gemini-1.5-flash-8b 등), 호출 빈도 조절을 고려하세요. 필요 시 loopCheck()로 루프 조건만 빠르게 점검할 수 있습니다.';
+          return `[Result] ${resultFlag}\n[Reason] ${reason}\n[Suggestion] ${hint}`;
+        }
+        
+        // 그 외 에러
+        throw lastErr || new Error("Unknown error");
       }
-  
-      // 그 외 에러
-      throw lastErr || new Error("Unknown error");
     } catch (e: any) {
       return `[Result] 분석 실패\n[Reason] ${e.message || e.toString()}\n[Suggestion] 로그 확인 필요`;
     } finally {
