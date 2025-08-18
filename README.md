@@ -34,6 +34,13 @@ export GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta/models/
 ctrz status --set KEY=your_api_key_here
 ```
 
+#### 방법 3: .env 파일 직접 생성
+```bash
+# 홈 디렉토리에 .debug-mate.env 파일 생성
+echo "GEMINI_API_KEY=your_api_key_here" > ~/.debug-mate.env
+echo "GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent" >> ~/.debug-mate.env
+```
+
 
 
 > **API 키 발급 방법**: [Google AI Studio](https://makersuite.google.com/app/apikey)에서 무료로 발급받을 수 있습니다.

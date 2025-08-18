@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { spawnSync } from "child_process";
 import * as path from "path";
 import * as readline from "readline";
@@ -7,21 +7,45 @@ import { beforeDebug } from "./beforeDebug";
 async function main() {
   const targetFile = process.argv[2];
 
-  // watch-and-debug.sh에서 항상 인자를 넘겨주므로 유효성 검사는 생략
+  if (!targetFile) {
+    console.error("오류: 파일 경로가 제공되지 않았습니다.");
+    process.exit(1);
+  }
+
+  // 절대 경로로 변환
   const absPath = path.resolve(targetFile);
-  const code = readFileSync(absPath, "utf8");
+  
+  // 파일 존재 여부 확인
+  if (!existsSync(absPath)) {
+    console.error(`오류: 파일이 존재하지 않습니다: ${absPath}`);
+    process.exit(1);
+  }
 
-  // beforeDebug 실행 및 결과 출력
-  const result = await beforeDebug({ code });
+  console.log(`파일 분석 시작: ${absPath}`);
 
-  console.log("\n================================");
-  console.log("  *   beforeDebug 결과   *  ");
-  console.log("================================\n");
-  console.log(result);
-  console.log("\n================================\n");
+  try {
+    // 파일 읽기 시도
+    const code = readFileSync(absPath, "utf8");
+    console.log(`파일 크기: ${code.length} 문자`);
+
+    // beforeDebug 실행 및 결과 출력
+    console.log("AI 분석 실행 중...");
+    const result = await beforeDebug({ code });
+
+    console.log("\n================================");
+    console.log("  *   beforeDebug 결과   *  ");
+    console.log("================================\n");
+    console.log(result);
+    console.log("\n================================\n");
+
+  } catch (error) {
+    console.error("파일 읽기 또는 분석 중 오류 발생:", error);
+    process.exit(1);
+  }
 
   // 입력받을 수 없는 환경이면 즉시 종료
   if (!process.stdin.isTTY) {
+    console.log("TTY가 아닌 환경에서 실행 중 - 대화형 모드 건너뜀");
     process.exit(0);
   }
 
@@ -40,6 +64,8 @@ async function main() {
       console.log("\n(빈 입력 감지) 추가 디버깅 없이 종료합니다.\n");
       process.exit(0);
     }
+
+    console.log(`DebugAgent 실행 중: ${targetFile} - "${req}"`);
 
     // DebugAgent 동기 실행 → 종료 코드 반영하여 즉시 종료
     const r = spawnSync(
@@ -60,4 +86,7 @@ async function main() {
   });
 }
 
-main();
+main().catch((error) => {
+  console.error("예상치 못한 오류:", error);
+  process.exit(1);
+});
