@@ -70,6 +70,10 @@
     "ts-patch": "^3.3.0",
     "typescript": "~5.8.3"
   },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  },
   "publishConfig": { "access": "public" },
   "engines": { "node": ">=20" },
   "prettier": {
