@@ -11,6 +11,18 @@
 DebugMate는 **Linux 환경 전용 C/C++ AI 디버깅 CLI**입니다. 복잡한 컴파일·실행·로그 분석 과정을 자동화하고 Google Gemini 모델을 활용해 잠재적 문제를 진단하며 수정 방안을 제시합니다. 개발자는 코드 작성에 집중하고 DebugMate가 디버깅을 지원합니다.
 
 ---
+## 🖼 캡처 화면
+
+<p align="center">
+  <img width="1458" height="704" alt="image" src="https://github.com/user-attachments/assets/f27f4110-6b9f-4593-9bef-e9e3499ca15c" alt="DebugMate tmux demo" width="80%"/>
+  <img width="2176" height="1354" alt="image" src="https://github.com/user-attachments/assets/ef31ddaa-657c-4d75-b0b9-70f9a1830dd8" alt="DebugMate tmux demo" width="80%"/>
+
+</p>
+
+*왼쪽: 코드 편집 / 오른쪽: AI 분석 결과*
+
+
+---
 
 ## ⚙️ 동작 원리
 
@@ -27,15 +39,6 @@ DebugMate는 **Linux 환경 전용 C/C++ AI 디버깅 CLI**입니다. 복잡한 
 7. **결과 출력**: 분석 결과는 우측 패널에 구조화된 형식(Result / Reason / Suggestion)으로 제공된다.
 
 즉, **저장 → 초기 해석 제공 → 자연어 요청 → 심층 분석 → 결과 출력**의 순환 구조로 사용자가 직관적으로 AI와 협업하며 디버깅할 수 있다.
-
----
-## 🖼 캡처 화면
-
-<p align="center">
-  <img src="./assets/debugmate_demo.png" alt="DebugMate tmux demo" width="80%"/>
-</p>
-
-*왼쪽: 코드 편집 / 오른쪽: AI 분석 결과*
 
 ---
 
