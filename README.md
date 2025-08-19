@@ -91,7 +91,7 @@ DebugMate/
 
 * [시스템 구성 & 아키텍처](./ARCHITECTURE.md)
 * [설치 및 실행 가이드](./INSTALLATION.md)
-
+* [리팩토링 보고서](./Refactor_Report.md)
 ---
 
 
