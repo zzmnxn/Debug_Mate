@@ -1,27 +1,98 @@
-# [Me-mory] Backend
-TAVE 15기 연합프로젝트 "Me-mory" 백엔드 소개 페이지입니다🙌🏻
+# DebugMate CLI
 
-## 📝 About Me-mory
-### " 여행의 순간을 감성적으로 기록하고, 나만의 취향과 분위기에 맞춰 정리할 수 있는 맞춤형 다이어리 앱.  
-### &emsp;   한 편의 일기로 당신만의 이야기를 담을 수 있도록, 다양한 테마와 감정색으로 완성하는 나만의 일기 아카이브 "
+**C/C++ 코드를 AI로 분석·디버깅하는 Linux 전용 CLI 도구**
 
-  
-<img width="1920" height="1080" alt="#0" src="https://github.com/user-attachments/assets/3d3c3925-9113-4bea-8cfc-0521539350f5" />
+> 리눅스 터미널에서도 VSCode 수준의 디버깅 경험을 제공합니다. 저장과 동시에 AI가 코드를 분석하고, 문제 원인과 해결책을 직관적으로 제공합니다.
+
+---
+
+## 🔍 프로젝트 소개
+
+DebugMate는 **Linux 환경 전용 C/C++ AI 디버깅 CLI**입니다. 복잡한 컴파일·실행·로그 분석 과정을 자동화하고 Google Gemini 모델을 활용해 잠재적 문제를 진단하며 수정 방안을 제시합니다. 개발자는 코드 작성에 집중하고 DebugMate가 디버깅을 지원합니다.
+
+---
+
+## ⚙️ 동작 원리
+
+1. **tmux 분할 화면 실행**: `debug-mate debug <file>`을 실행하면 좌측에 `vi` 편집기가, 우측에 AI 분석 화면이 열린다.
+2. **파일 저장 이벤트 감지**: 사용자가 `:w`로 저장하면, `watch-and-debug.sh`가 이를 감지한다.
+3. **inprogress-run.ts 호출**: 파일 저장 이벤트가 감지되면 `inprogress-run.ts`가 실행된다.
+4. **초기 해석 (beforeDebug)**: 가장 먼저 `beforeDebug` 모듈이 호출되어 코드에 대한 AI의 초기 해석 및 전반적 진단을 사용자에게 제공한다.
+5. **자연어 요청 처리**: 사용자가 “이 변수의 흐름을 보고 싶어”와 같이 자연어로 요청하면 `DebugAgent`가 의도를 분석한다.
+6. **심층 분석 실행**: `DebugAgent`는 의도에 따라 적합한 모듈을 호출한다.
+
+   * `afterDebug`: 컴파일/런타임 로그 기반 종합 분석
+   * `traceVar`: 특정 변수의 선언 → 변경 → 최종 값 추적
+   * `loopCheck`: 반복문 종료 조건 및 무한 루프 여부 확인
+7. **결과 출력**: 분석 결과는 우측 패널에 구조화된 형식(Result / Reason / Suggestion)으로 제공된다.
+
+즉, **저장 → 초기 해석 제공 → 자연어 요청 → 심층 분석 → 결과 출력**의 순환 구조로 사용자가 직관적으로 AI와 협업하며 디버깅할 수 있다.
+
+---
+## 🖼 캡처 화면
+
+<p align="center">
+  <img src="./assets/debugmate_demo.png" alt="DebugMate tmux demo" width="80%"/>
+</p>
+
+*왼쪽: 코드 편집 / 오른쪽: AI 분석 결과*
+
+---
+
+## 📂 파일 구조
+
+```
+DebugMate/
+├─ debug-mate-cli.js        # CLI 엔트리포인트 (명령어 파싱, tmux 관리)
+├─ watch-and-debug.sh       # 파일 저장 이벤트 감지 및 분석 실행
+├─ generate-test.sh         # 테스트 코드 자동 생성 스크립트
+├─ src/
+│  ├─ analysis/             # 코드 분석 모듈
+│  │   ├─ afterDebug.ts     # 종합 코드 분석
+│  │   ├─ beforeDebug.ts    # 초기 해석 제공
+│  │   ├─ DebugAgent.ts     # 자연어 요청 라우팅
+│  │   ├─ inprogress-run.ts # 저장 이벤트 파이프라인
+│  │   ├─ loopCheck.ts      # 반복문 분석
+│  │   └─ traceVar.ts       # 변수 추적
+│  ├─ config/
+│  │   └─ SGlobal.ts        # 전역 설정
+│  ├─ parsing/              # 파서 모듈
+│  │   ├─ codeParser.ts
+│  │   ├─ compilerResultParser.ts
+│  │   └─ loopExtractor.ts
+│  ├─ prompts/              # 프롬프트 템플릿
+│  │   ├─ prompt_afterDebug.ts
+│  │   ├─ prompt_debugAgent.ts
+│  │   ├─ prompt_loopCheck.ts
+│  │   └─ prompt_traceVar.ts
+│  └─ services/
+│      └─ compile.ts        # GCC 빌드 및 실행 관리
+├─ .tmux.conf               # tmux 설정
+├─ tsconfig.json
+├─ package.json
+├─ README.md
+└─ 기타 환경 파일(.env, .gitignore 등)
+
+```
+---
+
+## ✨ 주요 기능 요약
+
+* **tmux 분할 화면**: 좌측 vi 편집기, 우측 AI 분석 결과 실시간 표시
+* **자동 분석**: 파일 저장 시 `beforeDebug`가 즉각 초기 해석 제공
+* **자연어 기반 심층 분석**: `DebugAgent`가 afterDebug / traceVar / loopCheck 중 적절한 모듈 실행
+* **테스트 코드 자동 생성**: 9가지 유형의 C 테스트 코드 생성
+* **의존성 자동 체크**: gcc, tmux, inotify-tools 등 필수 패키지 검증 및 설치 안내
 
 
-여행의 순간을 사진, 감정, 위치, 오디오 등 다양한 정보와 함께 기록하고,
-나만의 여행 타임라인과 회고를 만들어주는 감성 여행 기록 서비스입니다.
-이 프로젝트의 백엔드는 Spring Boot 기반의 REST API 서버로,
-다음과 같은 기능을 제공합니다:
+---
 
-- 여행 및 일기 관리 (사진/감정/위치 포함)
-- 방문 국가 및 감정/날씨 태깅
-- 카카오 로그인 기반 사용자 인증
-- AWS S3 파일 업로드, 마이페이지 통계
-- 타임라인 및 대표 이미지 기반 회고 지원
+## 📖 더 알아보기
 
-이 서비스는 여행의 감정과 순간을 풍부하게 남기고,
-기록을 바탕으로 한 나만의 여행 히스토리를 만들어줍니다.
+* [시스템 구성 & 아키텍처](./ARCHITECTURE.md)
+* [설치 및 실행 가이드](./INSTALLATION.md)
+
+---
 
 
 ## 🙋🏻‍♀️ Members
@@ -57,35 +128,3 @@ TAVE 15기 연합프로젝트 "Me-mory" 백엔드 소개 페이지입니다🙌�
     </tr>
   </tbody>
 </table>
-
-## 📄 Dependency
-
-| Dependency Tool | Version |
-|------------------|---------|
-| Gradle           | 8.7     |
-| Java             | 21      |
-| Spring Boot      | 3.5.0   |
-| MySQL            | 8.0.x   |
-| Swagger (springdoc-openapi) | 2.1.0   |
-| AWS SDK (S3)     | 2.20.89 |
-
-
-
-## 🛠️ Tech Stack
-
-| Category       | Stack                                                     |
-|----------------|-----------------------------------------------------------|
-| Framework      | Spring Boot                                               |
-| ORM            | Spring Data JPA                                           |
-| Authorization  | Kakao OAuth2.0 Login                                      |
-| Database       | AWS RDS (MySQL 8.0)                                       |
-| File Storage   | AWS S3                                                    |
-| CI/CD          | GitHub Actions + Docker Hub                               |
-| Deployment     | AWS EC2 (Docker Container)                                |
-| API Doc        | Swagger UI                                                |
-
----
-
-## 🛠️ Architecture
-<img width="1175" height="945" alt="Me-mory_diagram drawio" src="https://github.com/user-attachments/assets/4295f821-ba83-4e27-8cd3-855ea03d1f7a" />
-
