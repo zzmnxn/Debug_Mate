@@ -14,8 +14,8 @@ DebugMate는 **Linux 환경 전용 C/C++ AI 디버깅 CLI**입니다. 복잡한 
 ## 🖼 캡처 화면
 
 <p align="center">
-  <img width="1458" height="704" alt="image" src="https://github.com/user-attachments/assets/f27f4110-6b9f-4593-9bef-e9e3499ca15c" alt="DebugMate tmux demo" width="80%"/>
-  <img width="2176" height="1354" alt="image" src="https://github.com/user-attachments/assets/ef31ddaa-657c-4d75-b0b9-70f9a1830dd8" alt="DebugMate tmux demo" width="80%"/>
+  <img width="1458" height="704" alt="image" src="https://github.com/user-attachments/assets/f27f4110-6b9f-4593-9bef-e9e3499ca15c" alt="DebugMate tmux demo" width="50%"/>
+  <img width="2176" height="1354" alt="image" src="https://github.com/user-attachments/assets/ef31ddaa-657c-4d75-b0b9-70f9a1830dd8" alt="DebugMate tmux demo" width="50%"/>
 
 </p>
 
@@ -92,9 +92,9 @@ DebugMate/
 
 ## 📖 더 알아보기
 
-* [시스템 구성 & 아키텍처](./ARCHITECTURE.md)
-* [설치 및 실행 가이드](./INSTALLATION.md)
-* [리팩토링 보고서](./Refactor_Report.md)
+* [시스템 구성 & 아키텍처](././ARCHITECTURE.md)
+* [설치 및 실행 가이드](././INSTALLATION.md)
+* [리팩토링 보고서](././Refactor_Report.md)
 ---
 
 
